@@ -9,6 +9,7 @@ import resume_evidence
 import yaml
 from pydantic import ValidationError
 
+from app.config import settings
 from app.main import app, lifespan
 from resume_evidence import (
     DEFAULT_EVIDENCE_PATHS,
@@ -20,6 +21,7 @@ from resume_evidence import (
     ProjectsFile,
     SkillsFile,
     UserInfoFile,
+    default_evidence_paths,
     load_evidence_yaml,
     load_registered_evidence,
 )
@@ -707,6 +709,19 @@ def test_default_evidence_path_points_to_user_directory():
     assert str(DEFAULT_EVIDENCE_PATHS["projects"]).endswith("user/resume_evidence/projects.yaml")
     assert str(DEFAULT_EVIDENCE_PATHS["skills"]).endswith("user/resume_evidence/skills.yaml")
     assert str(DEFAULT_EVIDENCE_PATHS["user"]).endswith("user/resume_evidence/user.yaml")
+
+
+def test_default_evidence_paths_follow_settings(monkeypatch, tmp_path):
+    evidence_root = tmp_path / "resume_evidence"
+    monkeypatch.setattr(settings, "RESUME_EVIDENCE_ROOT", evidence_root)
+
+    paths = default_evidence_paths()
+
+    assert paths["education"] == evidence_root / "education.yaml"
+    assert paths["experience"] == evidence_root / "experience.yaml"
+    assert paths["projects"] == evidence_root / "projects.yaml"
+    assert paths["skills"] == evidence_root / "skills.yaml"
+    assert paths["user"] == evidence_root / "user.yaml"
 
 
 def test_app_startup_loads_resume_evidence(monkeypatch):

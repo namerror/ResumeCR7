@@ -8,12 +8,12 @@ from pydantic import field_validator
 
 from app.link_scanning.service import LinkScanningError
 from app.resume_evidence import load_registered_evidence
-from app.resume_generation.config import DEFAULT_GENERATION_CONFIG_PATH, load_generation_config
+from app.resume_generation.config import load_generation_config, resolve_generation_config_path
 from app.resume_generation.enrich import run_link_evidence_enrichment
 from app.resume_generation.latex import resolve_resume_latex_output_path
 from app.resume_generation.main import (
-    DEFAULT_RESUME_RESULT_ARTIFACT_PATH,
-    DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH,
+    resolve_resume_result_artifact_path,
+    resolve_resume_run_manifest_artifact_path,
     run_resume_generation_pipeline,
     write_resume_latex_from_config,
 )
@@ -174,8 +174,8 @@ async def generate_resume_tex(
 
     return ResumeTexGenerationResponse(
         resume_result=resume_result,
-        resume_result_path=str(DEFAULT_RESUME_RESULT_ARTIFACT_PATH),
-        manifest_path=str(DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH),
+        resume_result_path=str(resolve_resume_result_artifact_path()),
+        manifest_path=str(resolve_resume_run_manifest_artifact_path()),
         tex_path=str(tex_path),
         tex_content=tex_content,
     )
@@ -186,7 +186,7 @@ async def generate_resume_pdf(
     _payload: ResumePdfGenerationRequest | None = None,
 ) -> Response:
     try:
-        config = load_generation_config(DEFAULT_GENERATION_CONFIG_PATH)
+        config = load_generation_config(resolve_generation_config_path())
         tex_path = resolve_resume_latex_output_path(config.resume_output.path)
         pdf_path = render_latex_pdf(
             tex_path,

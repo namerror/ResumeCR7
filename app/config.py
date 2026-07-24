@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     PROJ_METHOD: ProjectSelectionMethod = "llm"
     DEV_MODE: bool = True
     LOG_LEVEL: str = "INFO"
-    RESUME_EVIDENCE_ROOT: Path = _REPO_ROOT / "user" / "resume_evidence"
+    RESUMECR7_DATA_DIR: Path = _REPO_ROOT / "user"
+    RESUME_EVIDENCE_ROOT: Path | None = None
+    RESUME_GENERATION_ROOT: Path | None = None
+    RESUMECR7_LOG_DIR: Path | None = None
 
     # Embedding-related settings, only relevant if SKILL_METHOD=embeddings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -49,6 +52,44 @@ class Settings(BaseSettings):
     LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT: int = 120
 
     OPENAI_API_KEY: str = "" # This should be set in the .env file or environment variable
+
+    @model_validator(mode="after")
+    def resolve_data_roots(self) -> "Settings":
+        if self.RESUME_EVIDENCE_ROOT is None:
+            self.RESUME_EVIDENCE_ROOT = self.RESUMECR7_DATA_DIR / "resume_evidence"
+        if self.RESUME_GENERATION_ROOT is None:
+            self.RESUME_GENERATION_ROOT = self.RESUMECR7_DATA_DIR / "resume_generation"
+        if self.RESUMECR7_LOG_DIR is None:
+            self.RESUMECR7_LOG_DIR = self.RESUMECR7_DATA_DIR / "logs"
+        return self
+
+    @property
+    def generation_config_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "config.yaml"
+
+    @property
+    def job_target_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "job_target.yaml"
+
+    @property
+    def resume_result_artifact_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "resume_result.json"
+
+    @property
+    def resume_run_manifest_artifact_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "resume_run_manifest.json"
+
+    @property
+    def resume_tex_artifact_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "resume.tex"
+
+    @property
+    def resume_pdf_artifact_path(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "resume.pdf"
+
+    @property
+    def log_file_path(self) -> Path:
+        return self.RESUMECR7_LOG_DIR / "resumecr7.log"
 
     @field_validator("SKILL_METHOD", "PROJ_METHOD", mode="before")
     @classmethod

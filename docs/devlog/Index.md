@@ -13,6 +13,8 @@
 
 ## Session Index
 
+- `07-24-2026-Codex-uv-readme-package-management.md` - 2026-07-24 - Document uv package management
+- `07-24-2026-Codex-phase-1-package-hygiene.md` - 2026-07-24 - Phase 1 package hygiene
 - `07-24-2026-Codex-rename-project-resumecr7.md` - 2026-07-24 - Rename project to ResumeCR7
 - `07-24-2026-Codex-desktop-packaging-release-adr.md` - 2026-07-24 - Document desktop packaging and release workflow
 - `07-23-2026-Codex-resume-generation-frontend-integration.md` - 2026-07-23 - Resume generation frontend integration

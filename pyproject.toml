@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resumecr7"
+dynamic = ["version"]
+description = "Local-first resume evidence and generation workbench."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.128,<0.129",
+    "httpx>=0.28,<0.29",
+    "numpy>=2.4,<2.5",
+    "openai>=2.24,<2.25",
+    "prompt_toolkit>=3.0,<3.1",
+    "pydantic>=2.12,<2.13",
+    "pydantic-settings>=2.13,<2.14",
+    "PyYAML>=6.0,<6.1",
+    "requests>=2.32,<2.33",
+    "tiktoken>=0.12,<0.13",
+    "uvicorn>=0.40,<0.41",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0,<9.1",
+]
+
+[project.scripts]
+resumecr7-api = "app.api_launcher:main"
+resumecr7-resume-evidence = "resume_evidence.cli:main"
+resumecr7-resume-generation = "app.resume_generation.main:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "app.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["app*", "resume_evidence*", "resume_generation*"]
+
+[tool.setuptools.package-data]
+app = [
+    "skill_selection/data/**/*.json",
+    "skill_selection/data/**/*.yaml",
+]

@@ -1,11 +1,13 @@
 # entry point for resume generation
 
+import argparse
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Any
 
+from app.config import settings
 from app.resume_evidence import (
     EducationFile,
     ExperienceFile,
@@ -13,10 +15,10 @@ from app.resume_evidence import (
     load_registered_evidence,
 )
 from app.resume_generation.config import (
-    DEFAULT_GENERATION_CONFIG_PATH,
-    DEFAULT_JOB_TARGET_PATH,
     load_generation_config,
     load_job_target,
+    resolve_generation_config_path,
+    resolve_job_target_path,
 )
 from app.resume_generation.assembly import assemble_intermediate_resume_result
 from app.resume_generation.bullet_points import (
@@ -36,14 +38,17 @@ from app.resume_generation.pdf import render_latex_pdf
 from app.resume_generation.selection import generate_selection_context
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RESUME_RESULT_ARTIFACT_PATH = (
-    _REPO_ROOT / "user" / "resume_generation" / "resume_result.json"
-)
-DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH = (
-    _REPO_ROOT / "user" / "resume_generation" / "resume_run_manifest.json"
-)
+DEFAULT_RESUME_RESULT_ARTIFACT_PATH = settings.resume_result_artifact_path
+DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH = settings.resume_run_manifest_artifact_path
 logger = logging.getLogger("resume_generation")
+
+
+def resolve_resume_result_artifact_path(path: Path | str | None = None) -> Path:
+    return Path(path) if path is not None else settings.resume_result_artifact_path
+
+
+def resolve_resume_run_manifest_artifact_path(path: Path | str | None = None) -> Path:
+    return Path(path) if path is not None else settings.resume_run_manifest_artifact_path
 
 
 def _token_usage_extra(usage: TokenUsage) -> dict[str, int | float]:
@@ -58,9 +63,9 @@ def _token_usage_extra(usage: TokenUsage) -> dict[str, int | float]:
 
 def write_resume_result_artifact(
     resume_result: IntermediateResumeResult,
-    path: Path | str = DEFAULT_RESUME_RESULT_ARTIFACT_PATH,
+    path: Path | str | None = None,
 ) -> Path:
-    artifact_path = Path(path)
+    artifact_path = resolve_resume_result_artifact_path(path)
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = artifact_path.with_suffix(artifact_path.suffix + ".tmp")
     tmp_path.write_text(
@@ -73,9 +78,9 @@ def write_resume_result_artifact(
 
 def write_resume_run_manifest_artifact(
     manifest: dict[str, Any],
-    path: Path | str = DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH,
+    path: Path | str | None = None,
 ) -> Path:
-    artifact_path = Path(path)
+    artifact_path = resolve_resume_run_manifest_artifact_path(path)
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = artifact_path.with_suffix(artifact_path.suffix + ".tmp")
     tmp_path.write_text(
@@ -125,32 +130,38 @@ def build_resume_run_manifest(
 
 def run_resume_generation_pipeline(
     *,
-    config_path: Path | str = DEFAULT_GENERATION_CONFIG_PATH,
-    job_target_path: Path | str = DEFAULT_JOB_TARGET_PATH,
+    config_path: Path | str | None = None,
+    job_target_path: Path | str | None = None,
     job_target_override: JobTarget | None = None,
     evidence_paths: dict[str, Path | str] | None = None,
-    resume_result_artifact_path: Path | str = DEFAULT_RESUME_RESULT_ARTIFACT_PATH,
-    resume_run_manifest_artifact_path: Path | str = (
-        DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH
-    ),
+    resume_result_artifact_path: Path | str | None = None,
+    resume_run_manifest_artifact_path: Path | str | None = None,
 ) -> IntermediateResumeResult:
+    resolved_config_path = resolve_generation_config_path(config_path)
+    resolved_job_target_path = resolve_job_target_path(job_target_path)
+    resolved_result_artifact_path = resolve_resume_result_artifact_path(
+        resume_result_artifact_path
+    )
+    resolved_manifest_artifact_path = resolve_resume_run_manifest_artifact_path(
+        resume_run_manifest_artifact_path
+    )
     logger.info(
         "resume_generation_pipeline_start",
         extra={
             "event": "resume_generation_pipeline_start",
-            "config_path": str(config_path),
-            "job_target_path": str(job_target_path),
+            "config_path": str(resolved_config_path),
+            "job_target_path": str(resolved_job_target_path),
         },
     )
-    config = load_generation_config(config_path)
+    config = load_generation_config(resolved_config_path)
     job_target_source = "request" if job_target_override is not None else "file"
     job_target = job_target_override
     if job_target is None:
-        job_target = load_job_target(job_target_path)
+        job_target = load_job_target(resolved_job_target_path)
     loaded_evidence = load_registered_evidence(evidence_paths)
     cache = ResumeGenerationStageCache.from_config(
         config.cache,
-        config_path=config_path,
+        config_path=resolved_config_path,
     )
     token_usage_monitor = ResumeGenerationTokenUsageMonitor()
     stage_response_records: list[dict[str, Any]] = []
@@ -176,8 +187,8 @@ def run_resume_generation_pipeline(
         loaded_evidence=loaded_evidence,
         config=config,
         job_target=job_target,
-        config_path=config_path,
-        job_target_path=job_target_path,
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
         evidence_paths=evidence_paths,
         cache=cache,
         token_usage_monitor=token_usage_monitor,
@@ -306,7 +317,10 @@ def run_resume_generation_pipeline(
         },
     )
 
-    artifact_path = write_resume_result_artifact(resume_result, resume_result_artifact_path)
+    artifact_path = write_resume_result_artifact(
+        resume_result,
+        resolved_result_artifact_path,
+    )
     logger.info(
         "resume_generation_artifact_written",
         extra={
@@ -315,8 +329,8 @@ def run_resume_generation_pipeline(
         },
     )
     manifest = build_resume_run_manifest(
-        config_path=config_path,
-        job_target_path=job_target_path,
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
         job_target_source=job_target_source,
         context=context,
         job_focus=job_focus,
@@ -326,7 +340,7 @@ def run_resume_generation_pipeline(
     )
     manifest_path = write_resume_run_manifest_artifact(
         manifest,
-        resume_run_manifest_artifact_path,
+        resolved_manifest_artifact_path,
     )
     logger.info(
         "resume_generation_artifact_written",
@@ -355,7 +369,7 @@ def run_resume_generation_pipeline(
 def write_resume_latex_from_config(
     resume_result: IntermediateResumeResult,
     *,
-    config_path: Path | str = DEFAULT_GENERATION_CONFIG_PATH,
+    config_path: Path | str | None = None,
 ) -> Path:
     config = load_generation_config(config_path)
     artifact_path = write_resume_latex_artifact(
@@ -375,7 +389,7 @@ def write_resume_latex_from_config(
 def write_resume_pdf_from_config(
     tex_path: Path | str,
     *,
-    config_path: Path | str = DEFAULT_GENERATION_CONFIG_PATH,
+    config_path: Path | str | None = None,
 ) -> Path | None:
     config = load_generation_config(config_path)
     if not config.resume_output.render_pdf:
@@ -403,7 +417,14 @@ def write_resume_pdf_from_config(
     return artifact_path
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Run the ResumeCR7 resume generation pipeline.")
+    parser.parse_args(argv)
     resume_result = run_resume_generation_pipeline()
     latex_path = write_resume_latex_from_config(resume_result)
     write_resume_pdf_from_config(latex_path)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

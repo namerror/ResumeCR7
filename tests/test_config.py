@@ -22,6 +22,10 @@ SCOPED_ENV_VARS = [
     "LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS",
     "LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT",
     "LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT",
+    "RESUMECR7_DATA_DIR",
+    "RESUME_EVIDENCE_ROOT",
+    "RESUME_GENERATION_ROOT",
+    "RESUMECR7_LOG_DIR",
 ]
 LEGACY_ENV_VARS = [
     "METHOD",
@@ -59,6 +63,17 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS == 1200
     assert settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT == 6
     assert settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT == 120
+    assert str(settings.RESUMECR7_DATA_DIR).endswith("user")
+    assert str(settings.RESUME_EVIDENCE_ROOT).endswith("user/resume_evidence")
+    assert str(settings.RESUME_GENERATION_ROOT).endswith("user/resume_generation")
+    assert str(settings.RESUMECR7_LOG_DIR).endswith("user/logs")
+    assert settings.generation_config_path.name == "config.yaml"
+    assert settings.job_target_path.name == "job_target.yaml"
+    assert settings.resume_result_artifact_path.name == "resume_result.json"
+    assert settings.resume_run_manifest_artifact_path.name == "resume_run_manifest.json"
+    assert settings.resume_tex_artifact_path.name == "resume.tex"
+    assert settings.resume_pdf_artifact_path.name == "resume.pdf"
+    assert settings.log_file_path.name == "resumecr7.log"
 
 
 def test_settings_generation_llm_env_overrides(monkeypatch):
@@ -82,6 +97,43 @@ def test_settings_generation_llm_env_overrides(monkeypatch):
     assert settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS == 888
     assert settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT == 9
     assert settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT == 80
+
+
+def test_settings_data_dir_derives_runtime_paths(monkeypatch, tmp_path):
+    _clear_selection_env(monkeypatch)
+    data_dir = tmp_path / "resumecr7-data"
+    monkeypatch.setenv("RESUMECR7_DATA_DIR", str(data_dir))
+
+    settings = Settings(_env_file=None)
+
+    assert settings.RESUMECR7_DATA_DIR == data_dir
+    assert settings.RESUME_EVIDENCE_ROOT == data_dir / "resume_evidence"
+    assert settings.RESUME_GENERATION_ROOT == data_dir / "resume_generation"
+    assert settings.RESUMECR7_LOG_DIR == data_dir / "logs"
+    assert settings.generation_config_path == data_dir / "resume_generation" / "config.yaml"
+    assert settings.resume_tex_artifact_path == data_dir / "resume_generation" / "resume.tex"
+    assert settings.log_file_path == data_dir / "logs" / "resumecr7.log"
+
+
+def test_settings_preserves_specific_path_overrides(monkeypatch, tmp_path):
+    _clear_selection_env(monkeypatch)
+    data_dir = tmp_path / "data"
+    evidence_root = tmp_path / "evidence"
+    generation_root = tmp_path / "generation"
+    log_dir = tmp_path / "runtime-logs"
+    monkeypatch.setenv("RESUMECR7_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("RESUME_EVIDENCE_ROOT", str(evidence_root))
+    monkeypatch.setenv("RESUME_GENERATION_ROOT", str(generation_root))
+    monkeypatch.setenv("RESUMECR7_LOG_DIR", str(log_dir))
+
+    settings = Settings(_env_file=None)
+
+    assert settings.RESUMECR7_DATA_DIR == data_dir
+    assert settings.RESUME_EVIDENCE_ROOT == evidence_root
+    assert settings.RESUME_GENERATION_ROOT == generation_root
+    assert settings.RESUMECR7_LOG_DIR == log_dir
+    assert settings.generation_config_path == generation_root / "config.yaml"
+    assert settings.log_file_path == log_dir / "resumecr7.log"
 
 
 def test_settings_validates_bulletpoints_defaults(monkeypatch):

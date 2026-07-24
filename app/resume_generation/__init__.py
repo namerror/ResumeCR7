@@ -11,6 +11,8 @@ from app.resume_generation.config import (
     DEFAULT_JOB_TARGET_PATH,
     load_generation_config,
     load_job_target,
+    resolve_generation_config_path,
+    resolve_job_target_path,
 )
 from app.resume_generation.assembly import assemble_intermediate_resume_result
 from app.resume_generation.models import (
@@ -64,6 +66,8 @@ from app.resume_generation.main import (
     DEFAULT_RESUME_RESULT_ARTIFACT_PATH,
     DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH,
     build_resume_run_manifest,
+    resolve_resume_result_artifact_path,
+    resolve_resume_run_manifest_artifact_path,
     run_resume_generation_pipeline,
     write_resume_pdf_from_config,
     write_resume_result_artifact,
@@ -141,6 +145,10 @@ __all__ = [
     "load_job_target",
     "render_resume_latex",
     "render_latex_pdf",
+    "resolve_generation_config_path",
+    "resolve_job_target_path",
+    "resolve_resume_result_artifact_path",
+    "resolve_resume_run_manifest_artifact_path",
     "resolve_resume_pdf_output_path",
     "resolve_resume_latex_output_path",
     "run_link_evidence_enrichment",

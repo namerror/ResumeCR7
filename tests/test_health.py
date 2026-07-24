@@ -40,6 +40,10 @@ def test_health():
     assert data["link_scanning"]["llm_max_output_tokens"] == 1200
     assert data["link_scanning"]["default_highlight_count"] == 6
     assert data["link_scanning"]["max_tokens_per_highlight"] == 120
+    assert data["paths"]["data_dir"].endswith("user")
+    assert data["paths"]["resume_evidence_root"].endswith("user/resume_evidence")
+    assert data["paths"]["resume_generation_root"].endswith("user/resume_generation")
+    assert data["paths"]["log_file"].endswith("user/logs/resumecr7.log")
 
 
 def test_health_method_not_allowed():

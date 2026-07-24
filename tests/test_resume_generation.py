@@ -13,6 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from app.bulletpoints_generation.models import BulletGenerationResponse
+from app.config import settings
 from app.job_focus_generation.models import JobFocus, JobFocusResponse
 from app.link_scanning.models import LinkScanHighlight, LinkScanResponse
 from app.main import app
@@ -45,6 +46,10 @@ from resume_generation import (
     latex_escape,
     load_generation_config,
     load_job_target,
+    resolve_generation_config_path,
+    resolve_job_target_path,
+    resolve_resume_result_artifact_path,
+    resolve_resume_run_manifest_artifact_path,
     render_latex_pdf,
     render_resume_latex,
     resolve_resume_pdf_output_path,
@@ -473,6 +478,21 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     assert resolve_resume_pdf_output_path(config.resume_output.pdf_path) == (
         DEFAULT_RESUME_PDF_ARTIFACT_PATH
     )
+
+
+def test_generation_default_paths_follow_settings(monkeypatch, tmp_path):
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+
+    assert resolve_generation_config_path() == generation_root / "config.yaml"
+    assert resolve_job_target_path() == generation_root / "job_target.yaml"
+    assert resolve_resume_result_artifact_path() == generation_root / "resume_result.json"
+    assert (
+        resolve_resume_run_manifest_artifact_path()
+        == generation_root / "resume_run_manifest.json"
+    )
+    assert resolve_resume_latex_output_path(None) == generation_root / "resume.tex"
+    assert resolve_resume_pdf_output_path(None) == generation_root / "resume.pdf"
 
 
 def test_load_generation_config_accepts_cache_config(tmp_path):

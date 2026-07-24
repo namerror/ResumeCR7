@@ -40,7 +40,7 @@ logger = logging.getLogger("app_main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_logging(settings.LOG_LEVEL)
+    setup_logging(settings.LOG_LEVEL, log_path=settings.log_file_path)
     app.state.resume_evidence = load_registered_evidence()
     yield
 
@@ -85,6 +85,12 @@ async def health():
             "llm_max_output_tokens": settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS,
             "default_highlight_count": settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT,
             "max_tokens_per_highlight": settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT,
+        },
+        "paths": {
+            "data_dir": str(settings.RESUMECR7_DATA_DIR),
+            "resume_evidence_root": str(settings.RESUME_EVIDENCE_ROOT),
+            "resume_generation_root": str(settings.RESUME_GENERATION_ROOT),
+            "log_file": str(settings.log_file_path),
         },
     }
 

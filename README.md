@@ -475,6 +475,11 @@ Example response:
 ResumeCR7 reads settings from environment variables via `app/config.py`.
 
 ```bash
+RESUMECR7_DATA_DIR=user # root for evidence, generation config/artifacts, and logs
+# RESUME_EVIDENCE_ROOT=user/resume_evidence # optional legacy evidence-root override
+# RESUME_GENERATION_ROOT=user/resume_generation # optional generation-root override
+# RESUMECR7_LOG_DIR=user/logs # optional log directory override
+
 SKILL_METHOD=baseline # available options: baseline, embeddings, llm
 SKILL_TOP_N=10 # how many top-ranked skills to return per category
 SKILL_BASELINE_FILTER=false # if true, deterministic skill matches bypass model-backed scoring
@@ -509,51 +514,56 @@ Baseline filtering is skill-selection-only; project selection does not define a 
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+uv sync --extra dev
 ```
 
 Start the FastAPI app:
 
 ```bash
-uvicorn app.main:app --reload
+uv run resumecr7-api --reload
 ```
 
 Run the evidence CLI:
 
 ```bash
-PYTHONPATH=. python -m resume_evidence.cli
+uv run resumecr7-resume-evidence
 ```
 
 Run a specific evidence schema CLI:
 
 ```bash
-PYTHONPATH=. python -m resume_evidence.cli --schema skills
-PYTHONPATH=. python -m resume_evidence.cli --schema education
-PYTHONPATH=. python -m resume_evidence.cli --schema experience
-PYTHONPATH=. python -m resume_evidence.cli --schema user
+uv run resumecr7-resume-evidence --schema skills
+uv run resumecr7-resume-evidence --schema education
+uv run resumecr7-resume-evidence --schema experience
+uv run resumecr7-resume-evidence --schema user
 ```
 
 Run resume generation after the app is running:
 
 ```bash
-PYTHONPATH=. python -m resume_generation.main
+uv run resumecr7-resume-generation
 ```
+
+After `uv sync --extra dev`, the installed `resumecr7-*` commands can also be run
+directly from the active virtual environment. The legacy
+`uvicorn app.main:app --reload`, `PYTHONPATH=. python -m resume_evidence.cli`, and
+`PYTHONPATH=. python -m resume_generation.main` commands remain supported for local
+development.
 
 ## Tests
 
 Tests assume the repo root is on `PYTHONPATH`:
 
 ```bash
-export PYTHONPATH=.
-pytest
+uv run pytest
 ```
 
 Useful targeted runs:
 
 ```bash
-PYTHONPATH=. pytest tests/test_resume_evidence.py
-PYTHONPATH=. pytest tests/test_resume_evidence_cli.py
-PYTHONPATH=. pytest tests/test_integration.py
+uv run pytest tests/test_resume_evidence.py
+uv run pytest tests/test_resume_evidence_cli.py
+uv run pytest tests/test_integration.py
 ```
 
 ## Planned Next

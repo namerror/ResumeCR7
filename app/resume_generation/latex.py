@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from app.config import settings
 from app.resume_generation.models import (
     IntermediateResumeResult,
     ResumeEducationItem,
@@ -13,10 +14,7 @@ from app.resume_generation.models import (
     ResumeTopSection,
 )
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RESUME_TEX_ARTIFACT_PATH = (
-    _REPO_ROOT / "user" / "resume_generation" / "resume.tex"
-)
+DEFAULT_RESUME_TEX_ARTIFACT_PATH = settings.resume_tex_artifact_path
 
 _LATEX_HEADER = r"""\documentclass[letterpaper,9pt]{article}
 
@@ -164,9 +162,9 @@ def display_url(url: str) -> str:
 
 def resolve_resume_latex_output_path(path: Path | str | None) -> Path:
     if path is None:
-        return DEFAULT_RESUME_TEX_ARTIFACT_PATH
+        return settings.resume_tex_artifact_path
     normalized = str(path).strip()
-    return Path(normalized) if normalized else DEFAULT_RESUME_TEX_ARTIFACT_PATH
+    return Path(normalized) if normalized else settings.resume_tex_artifact_path
 
 
 def resolve_resume_latex_output_path_from_config(config: ResumeOutputConfig) -> Path:

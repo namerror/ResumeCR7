@@ -107,6 +107,17 @@ def test_setup_logging_clears_previous_handlers():
     assert len(root.handlers) == 1
 
 
+def test_setup_logging_can_attach_file_handler(tmp_path):
+    log_path = tmp_path / "logs" / "resumecr7.log"
+
+    setup_logging("INFO", log_path=log_path)
+    logging.getLogger("test").info("hello")
+
+    assert log_path.is_file()
+    parsed = json.loads(log_path.read_text(encoding="utf-8").strip())
+    assert parsed["msg"] == "hello"
+
+
 def test_setup_logging_sets_level_info():
     setup_logging("INFO")
     assert logging.getLogger().level == logging.INFO

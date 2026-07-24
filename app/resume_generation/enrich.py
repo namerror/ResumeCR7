@@ -19,7 +19,10 @@ from app.resume_evidence.models import (
     ProjectRecord,
     ProjectsFile,
 )
-from app.resume_generation.config import DEFAULT_GENERATION_CONFIG_PATH, load_generation_config
+from app.resume_generation.config import (
+    load_generation_config,
+    resolve_generation_config_path,
+)
 from app.resume_generation.models import ResumeGenerationConfig
 
 EvidenceSchema = Literal["projects", "experience", "all"]
@@ -237,7 +240,7 @@ def run_link_evidence_enrichment(
     evidence_type: EvidenceSchema = "all",
     evidence_id: str | None = None,
     evidence_paths: Mapping[str, Path | str] | None = None,
-    config_path: Path | str = DEFAULT_GENERATION_CONFIG_PATH,
+    config_path: Path | str | None = None,
     config: ResumeGenerationConfig | None = None,
     dry_run: bool = False,
     dev_mode: bool | None = None,
@@ -298,7 +301,7 @@ def run_link_evidence_enrichment(
 
 def _build_config_path_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--config-path", default=str(DEFAULT_GENERATION_CONFIG_PATH))
+    parser.add_argument("--config-path", default=str(resolve_generation_config_path()))
     return parser
 
 
@@ -313,7 +316,7 @@ def _build_arg_parser(config: ResumeGenerationConfig | None = None) -> argparse.
         choices=("projects", "experience", "all"),
         default="all",
     )
-    parser.add_argument("--config-path", default=str(DEFAULT_GENERATION_CONFIG_PATH))
+    parser.add_argument("--config-path", default=str(resolve_generation_config_path()))
     parser.add_argument("--projects-path", default=str(evidence_paths["projects"]))
     parser.add_argument("--experience-path", default=str(evidence_paths["experience"]))
     parser.add_argument(

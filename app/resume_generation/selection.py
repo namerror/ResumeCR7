@@ -22,8 +22,8 @@ from app.project_selection.models import ProjectSelectRequest
 from app.project_selection.service import select_projects_service
 from app.resume_evidence import ProjectsFile, SkillsFile, default_evidence_paths
 from app.resume_generation.config import (
-    DEFAULT_GENERATION_CONFIG_PATH,
-    DEFAULT_JOB_TARGET_PATH,
+    resolve_generation_config_path,
+    resolve_job_target_path,
 )
 from app.resume_generation.cache import ResumeGenerationStageCache
 from app.resume_generation.models import (
@@ -401,13 +401,15 @@ def generate_selection_context(
     loaded_evidence: Mapping[str, BaseModel],
     config: ResumeGenerationConfig,
     job_target: JobTarget,
-    config_path: Path | str = DEFAULT_GENERATION_CONFIG_PATH,
-    job_target_path: Path | str = DEFAULT_JOB_TARGET_PATH,
+    config_path: Path | str | None = None,
+    job_target_path: Path | str | None = None,
     evidence_paths: Mapping[str, Path | str] | None = None,
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
 ) -> ResumeSelectionContext:
+    resolved_config_path = resolve_generation_config_path(config_path)
+    resolved_job_target_path = resolve_job_target_path(job_target_path)
     merged_evidence_paths = default_evidence_paths()
     if evidence_paths is not None:
         merged_evidence_paths.update(
@@ -497,7 +499,7 @@ def generate_selection_context(
         selected_skills=SkillSelectionResult.model_validate(skill_response),
         project_selection=project_selection,
         selected_projects=selected_projects,
-        config_path=Path(config_path),
-        job_target_path=Path(job_target_path),
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
         evidence_paths=merged_evidence_paths,
     )

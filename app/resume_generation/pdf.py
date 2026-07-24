@@ -7,14 +7,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from app.config import settings
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_RESUME_PDF_ARTIFACT_PATH = (
-    _REPO_ROOT / "user" / "resume_generation" / "resume.pdf"
-)
-DEFAULT_RESUME_TEX_INPUT_PATH = (
-    _REPO_ROOT / "user" / "resume_generation" / "resume.tex"
-)
+DEFAULT_RESUME_PDF_ARTIFACT_PATH = settings.resume_pdf_artifact_path
+DEFAULT_RESUME_TEX_INPUT_PATH = settings.resume_tex_artifact_path
 DEFAULT_LATEX_PDF_TIMEOUT_SECONDS = 60.0
 DEFAULT_LATEX_LOCAL_COMMAND = "latexmk"
 
@@ -25,9 +21,9 @@ class LatexPdfRenderError(RuntimeError):
 
 def resolve_resume_pdf_output_path(path: Path | str | None) -> Path:
     if path is None:
-        return DEFAULT_RESUME_PDF_ARTIFACT_PATH
+        return settings.resume_pdf_artifact_path
     normalized = str(path).strip()
-    return Path(normalized) if normalized else DEFAULT_RESUME_PDF_ARTIFACT_PATH
+    return Path(normalized) if normalized else settings.resume_pdf_artifact_path
 
 
 def render_latex_pdf(
@@ -36,7 +32,7 @@ def render_latex_pdf(
     *,
     timeout_seconds: float = DEFAULT_LATEX_PDF_TIMEOUT_SECONDS,
 ) -> Path:
-    source_path = Path(tex_path) if tex_path is not None else DEFAULT_RESUME_TEX_INPUT_PATH
+    source_path = Path(tex_path) if tex_path is not None else settings.resume_tex_artifact_path
     output_path = resolve_resume_pdf_output_path(pdf_path)
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be greater than 0")
@@ -128,12 +124,12 @@ def main() -> Path:
     )
     parser.add_argument(
         "--tex-path",
-        default=str(DEFAULT_RESUME_TEX_INPUT_PATH),
+        default=str(settings.resume_tex_artifact_path),
         help="Path to the LaTeX source file.",
     )
     parser.add_argument(
         "--pdf-path",
-        default=str(DEFAULT_RESUME_PDF_ARTIFACT_PATH),
+        default=str(settings.resume_pdf_artifact_path),
         help="Path where the rendered PDF will be written.",
     )
     parser.add_argument(
