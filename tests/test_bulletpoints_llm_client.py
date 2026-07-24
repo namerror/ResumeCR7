@@ -20,8 +20,8 @@ from resume_evidence.models import ExperienceRecord, ProjectRecord, ProjectSkill
 
 def _project() -> ProjectRecord:
     return ProjectRecord(
-        id="jobforge",
-        name="JobForge",
+        id="resumecr7",
+        name="ResumeCR7",
         summary="FastAPI resume engine for grounded resume generation.",
         highlights=[
             "Built project and skill selection APIs with deterministic fallbacks.",
@@ -33,7 +33,7 @@ def _project() -> ProjectRecord:
             programming=["Python"],
             concepts=["API", "Grounded Generation"],
         ),
-        links=["https://example.com/jobforge"],
+        links=["https://example.com/resumecr7"],
     )
 
 
@@ -99,7 +99,7 @@ def test_build_bulletpoint_prompt_payload_excludes_links():
     assert payload["project"]["highlights"][0].startswith("Built project")
     assert payload["project"]["skills"]["programming"] == ["Python"]
     assert "links" not in payload["project"]
-    assert "https://example.com/jobforge" not in json.dumps(payload)
+    assert "https://example.com/resumecr7" not in json.dumps(payload)
 
 
 def test_build_bulletpoint_prompt_payload_prefers_job_focus_over_description():
@@ -195,7 +195,7 @@ def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
     assert kwargs["text"]["format"]["name"] == "project_bullet_points"
     assert kwargs["text"]["format"]["strict"] is True
     assert kwargs["text"]["format"]["schema"]["properties"]["bullet_points"]["minItems"] == 2
-    assert json.loads(kwargs["input"])["project"]["id"] == "jobforge"
+    assert json.loads(kwargs["input"])["project"]["id"] == "resumecr7"
     assert result.bullet_points[0].startswith("Built FastAPI")
     assert result.metadata["total_tokens"] == 30
 

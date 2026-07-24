@@ -333,23 +333,23 @@ I investigated the note and reproduced the baseline pre-pass locally with the sa
 
 The key flow is:
 
-- Baseline filter runs baseline with `include_zero=True` in [baseline_filter.py](/home/leon/Documents/proj/JobForge/app/services/baseline_filter.py):147.
-- If a skill’s baseline `score > 0`, it is marked `source: baseline` in [baseline_filter.py](/home/leon/Documents/proj/JobForge/app/services/baseline_filter.py):177.
-- If baseline score is `0`, it is added to `unrecognized_inputs` in [baseline_filter.py](/home/leon/Documents/proj/JobForge/app/services/baseline_filter.py):188.
-- The unrecognized skills are sent to the requested second pass, and because the request used `method: llm`, those details are marked `source: llm` in [baseline_filter.py](/home/leon/Documents/proj/JobForge/app/services/baseline_filter.py):250.
+- Baseline filter runs baseline with `include_zero=True` in [baseline_filter.py](/home/leon/Documents/proj/ResumeCR7/app/services/baseline_filter.py):147.
+- If a skill’s baseline `score > 0`, it is marked `source: baseline` in [baseline_filter.py](/home/leon/Documents/proj/ResumeCR7/app/services/baseline_filter.py):177.
+- If baseline score is `0`, it is added to `unrecognized_inputs` in [baseline_filter.py](/home/leon/Documents/proj/ResumeCR7/app/services/baseline_filter.py):188.
+- The unrecognized skills are sent to the requested second pass, and because the request used `method: llm`, those details are marked `source: llm` in [baseline_filter.py](/home/leon/Documents/proj/ResumeCR7/app/services/baseline_filter.py):250.
 
 So the real question is why baseline scores some profile-defined skills as zero.
 
 There are three causes:
 
 1. **Profile keywords are not normalized before matching.**  
-   Incoming skills are normalized in [baseline.py](/home/leon/Documents/proj/JobForge/app/scoring/baseline.py):15, but profile keywords are used raw in [baseline.py](/home/leon/Documents/proj/JobForge/app/scoring/baseline.py):20.  
-   Example: `AWS` normalizes to `amazon web services` via [synonym_to_normalized.json](/home/leon/Documents/proj/JobForge/app/data/synonym_to_normalized.json):14, but backend profile contains raw `aws` in [backend.yaml](/home/leon/Documents/proj/JobForge/app/data/role_profiles/backend.yaml):23. Those do not match, so `AWS` is sent to LLM.  
-   Same issue for `Node.JS`: it normalizes to `nodejs`, while backend has `node.js` in [backend.yaml](/home/leon/Documents/proj/JobForge/app/data/role_profiles/backend.yaml):12.
+   Incoming skills are normalized in [baseline.py](/home/leon/Documents/proj/ResumeCR7/app/scoring/baseline.py):15, but profile keywords are used raw in [baseline.py](/home/leon/Documents/proj/ResumeCR7/app/scoring/baseline.py):20.  
+   Example: `AWS` normalizes to `amazon web services` via [synonym_to_normalized.json](/home/leon/Documents/proj/ResumeCR7/app/data/synonym_to_normalized.json):14, but backend profile contains raw `aws` in [backend.yaml](/home/leon/Documents/proj/ResumeCR7/app/data/role_profiles/backend.yaml):23. Those do not match, so `AWS` is sent to LLM.  
+   Same issue for `Node.JS`: it normalizes to `nodejs`, while backend has `node.js` in [backend.yaml](/home/leon/Documents/proj/ResumeCR7/app/data/role_profiles/backend.yaml):12.
 
 2. **Partial matching only works in one direction.**  
-   Current code checks `normalized_skill in keyword` in [baseline.py](/home/leon/Documents/proj/JobForge/app/scoring/baseline.py):34. That misses cases where the profile keyword is shorter than the input.  
-   Example: `Database Management` normalizes to `database management`, while backend has `database` in [backend.yaml](/home/leon/Documents/proj/JobForge/app/data/role_profiles/backend.yaml):3. Since `database management in database` is false, it scores zero. The likely intended partial check would also allow `keyword in normalized_skill`.
+   Current code checks `normalized_skill in keyword` in [baseline.py](/home/leon/Documents/proj/ResumeCR7/app/scoring/baseline.py):34. That misses cases where the profile keyword is shorter than the input.  
+   Example: `Database Management` normalizes to `database management`, while backend has `database` in [backend.yaml](/home/leon/Documents/proj/ResumeCR7/app/data/role_profiles/backend.yaml):3. Since `database management in database` is false, it scores zero. The likely intended partial check would also allow `keyword in normalized_skill`.
 
 3. **Some expected skills are not actually in the Backend profile/category.**  
    `Kubernetes` is correctly marked `source: baseline` in the note. But `Google Cloud` is not in backend `technology`; backend only has concept keyword `cloud`, not technology `gcp` or `google cloud`. `Rust` is in `general`, `devops`, and `security`, but not backend programming. `TypeScript` is frontend programming. Several concepts like `Caching`, `Distributed Computing`, `rate limiting`, and `session management` are not currently backend profile keywords.

@@ -59,13 +59,13 @@ def _projects_payload() -> dict:
         "schema_version": 1,
         "projects": [
             {
-                "id": "jobforge",
-                "name": "JobForge",
+                "id": "resumecr7",
+                "name": "ResumeCR7",
                 "summary": "Grounded resume tooling.",
                 "highlights": ["Built deterministic evidence workflows."],
                 "active": True,
                 "skills": _skill_buckets(),
-                "links": ["https://github.com/example/jobforge"],
+                "links": ["https://github.com/example/resumecr7"],
             }
         ],
     }
@@ -177,7 +177,7 @@ def test_resume_evidence_api_lists_all_registered_evidence(evidence_root):
     assert response.status_code == 200
     data = response.json()
     assert set(data) == {"education", "experience", "projects", "skills", "user"}
-    assert data["projects"]["projects"][0]["id"] == "jobforge"
+    assert data["projects"]["projects"][0]["id"] == "resumecr7"
     assert data["education"]["education"][0]["id"] == "example-university"
     assert isinstance(app.state.resume_evidence["projects"], ProjectsFile)
 
@@ -256,7 +256,7 @@ def test_resume_evidence_api_cruds_projects_by_id_and_persists_yaml(evidence_roo
 
     projects = load_evidence_yaml(evidence_root / "projects.yaml", "projects")
     assert isinstance(projects, ProjectsFile)
-    assert [project.id for project in projects.projects] == ["jobforge"]
+    assert [project.id for project in projects.projects] == ["resumecr7"]
 
 
 def test_resume_evidence_api_generates_unique_project_ids(evidence_root):

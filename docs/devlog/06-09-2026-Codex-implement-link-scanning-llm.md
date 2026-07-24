@@ -20,4 +20,4 @@ Link scanning now collects grounded project facts from every configured project 
 - `PYTHONPATH=. .venv/bin/python -m pytest tests/test_link_scanning_llm_client.py tests/test_link_scanning_api.py tests/test_resume_generation.py tests/test_health.py tests/test_config.py`: 45 passed.
 
 **Impact:**
-JobForge can now enrich selected projects with link-backed factual highlights before bullet generation. The implementation scans all project links, keeps provenance visible through source URLs, and preserves grounded resume behavior by failing closed when the model/web scan cannot produce trusted output.
+ResumeCR7 can now enrich selected projects with link-backed factual highlights before bullet generation. The implementation scans all project links, keeps provenance visible through source URLs, and preserves grounded resume behavior by failing closed when the model/web scan cannot produce trusted output.

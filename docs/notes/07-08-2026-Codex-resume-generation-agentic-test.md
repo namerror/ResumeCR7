@@ -5,12 +5,12 @@
 - Pipeline under test: `resume_generation.run_resume_generation_pipeline`
 - Job target: `user/resume_generation/job_target.yaml`
 - Evidence root: `user/resume_evidence/`
-- API health: `version=0.2.0`, `service=jobforge-resume-engine`, `dev_mode=true`
+- API health: `version=0.2.0`, `service=resumecr7-resume-engine`, `dev_mode=true`
 - Local API: `http://127.0.0.1:8765`
 - Final artifact inspected: `user/resume_generation/resume_result.json`
 - LaTeX output: intentionally not inspected
 
-The default port `8000` was not bindable from the sandboxed session, so the API was started outside the sandbox on port `8765`. I used a temporary config at `/tmp/jobforge-resume-generation-config.yaml` to avoid modifying `user/resume_generation/config.yaml`.
+The default port `8000` was not bindable from the sandboxed session, so the API was started outside the sandbox on port `8765`. I used a temporary config at `/tmp/resumecr7-resume-generation-config.yaml` to avoid modifying `user/resume_generation/config.yaml`.
 
 ## Summary
 

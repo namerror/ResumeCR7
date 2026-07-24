@@ -2,7 +2,7 @@
 
 ## Context
 
-JobForge now has both skill selection and project selection. The older runtime settings
+ResumeCR7 now has both skill selection and project selection. The older runtime settings
 `METHOD`, `TOP_N`, and `BASELINE_FILTER` were created when skill selection was the only
 selection subsystem, so their names now imply application-wide behavior even though their
 semantics are skill-specific.

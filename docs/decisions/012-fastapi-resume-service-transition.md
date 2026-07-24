@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge started as a skill-selection API and has since grown into a grounded resume engine. The repo now has three important layers:
+ResumeCR7 started as a skill-selection API and has since grown into a grounded resume engine. The repo now has three important layers:
 
 - `app/` exposes FastAPI-backed selection, focus derivation, bullet generation, link enrichment, health, and metrics capabilities.
 - `resume_evidence/` owns strict user-authored evidence schemas, deterministic loading, staged CRUD/session logic, and the local evidence CLI.

@@ -37,7 +37,7 @@ def _request_payload(**overrides) -> dict:
             "description": "Build Python Django APIs.",
         },
         "candidates": [
-            _project_payload("jobforge", "JobForge"),
+            _project_payload("resumecr7", "ResumeCR7"),
             _project_payload("portfolio", "Portfolio", programming=["JavaScript"]),
         ],
         "method": "baseline",
@@ -53,10 +53,10 @@ def test_select_projects_api_baseline_success_with_top_n_and_details():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["selected_project_ids"] == ["jobforge"]
-    assert [project["project_id"] for project in data["ranked_projects"]] == ["jobforge"]
+    assert data["selected_project_ids"] == ["resumecr7"]
+    assert [project["project_id"] for project in data["ranked_projects"]] == ["resumecr7"]
     assert data["details"]["method"] == "baseline"
-    assert "jobforge" in data["details"]["projects"]
+    assert "resumecr7" in data["details"]["projects"]
 
 
 def test_select_projects_api_uses_scoped_settings_when_request_omits_overrides(monkeypatch):
@@ -70,7 +70,7 @@ def test_select_projects_api_uses_scoped_settings_when_request_omits_overrides(m
 
     assert response.status_code == 200
     data = response.json()
-    assert data["selected_project_ids"] == ["jobforge"]
+    assert data["selected_project_ids"] == ["resumecr7"]
     assert len(data["ranked_projects"]) == 1
     assert data["ranked_projects"][0]["method"] == "baseline"
 
@@ -128,7 +128,7 @@ def test_select_projects_api_records_project_metrics_and_tokens(monkeypatch):
         project_llm,
         "score_projects_with_llm",
         lambda **_kwargs: LLMProjectScoreResult(
-            scores={"jobforge": 3, "portfolio": 1},
+            scores={"resumecr7": 3, "portfolio": 1},
             metadata={
                 "model": "test-model",
                 "api_calls": 1,

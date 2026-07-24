@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Small agentic testing dataset for human-like review of JobForge API results without excessive token use.",
+  "purpose": "Small agentic testing dataset for human-like review of ResumeCR7 API results without excessive token use.",
   "base_url": "http://127.0.0.1:8000",
   "skill_selection": {
     "endpoint": "/select-skills",
@@ -171,8 +171,8 @@
           },
           "candidates": [
             {
-              "id": "jobforge",
-              "name": "JobForge Resume Engine",
+              "id": "resumecr7",
+              "name": "ResumeCR7 Resume Engine",
               "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
               "skills": {
                 "technology": ["FastAPI", "PostgreSQL", "Docker", "AWS"],
@@ -215,9 +215,9 @@
           }
         ],
         "expected_review_anchors": {
-          "best_fit": ["jobforge"],
+          "best_fit": ["resumecr7"],
           "acceptable_second_fit": ["vision-lab", "design-system"],
-          "notes": "jobforge should be first. The second slot is less important, but the report should explain why the chosen runner-up is weaker."
+          "notes": "resumecr7 should be first. The second slot is less important, but the report should explain why the chosen runner-up is weaker."
         }
       },
       {
@@ -240,8 +240,8 @@
               }
             },
             {
-              "id": "jobforge",
-              "name": "JobForge Resume Engine",
+              "id": "resumecr7",
+              "name": "ResumeCR7 Resume Engine",
               "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
               "skills": {
                 "technology": ["FastAPI", "Docker", "AWS"],
@@ -275,8 +275,8 @@
         ],
         "expected_review_anchors": {
           "best_fit": ["design-system"],
-          "acceptable_second_fit": ["jobforge", "analytics-pipeline"],
-          "notes": "design-system should be first. jobforge can be justified as API-adjacent; analytics-pipeline should only rank high if data/dashboard framing is strongly credited."
+          "acceptable_second_fit": ["resumecr7", "analytics-pipeline"],
+          "notes": "design-system should be first. resumecr7 can be justified as API-adjacent; analytics-pipeline should only rank high if data/dashboard framing is strongly credited."
         }
       }
     ]

@@ -18,8 +18,8 @@ def api_request(method: str, path: str, **kwargs):
 
 def _project_payload() -> dict:
     return {
-        "id": "jobforge",
-        "name": "JobForge",
+        "id": "resumecr7",
+        "name": "ResumeCR7",
         "summary": "FastAPI resume engine for grounded resume generation.",
         "highlights": ["Built project and skill selection APIs."],
         "active": True,
@@ -28,7 +28,7 @@ def _project_payload() -> dict:
             "programming": ["Python"],
             "concepts": ["API"],
         },
-        "links": ["https://example.com/jobforge", "https://docs.example.com/jobforge"],
+        "links": ["https://example.com/resumecr7", "https://docs.example.com/resumecr7"],
     }
 
 
@@ -72,14 +72,14 @@ def test_enrich_link_evidence_api_returns_llm_highlight_patch_with_details(monke
             highlights=[
                 LinkScanHighlight(
                     text="Scanned page confirms grounded resume orchestration.",
-                    source_url="https://example.com/jobforge",
+                    source_url="https://example.com/resumecr7",
                 )
             ],
             metadata={
                 "model": kwargs["model"],
                 "api_calls": 1,
                 "scanned_links": kwargs["evidence"].links,
-                "source_urls": ["https://example.com/jobforge"],
+                "source_urls": ["https://example.com/resumecr7"],
                 "total_tokens": 42,
             },
         )
@@ -94,23 +94,23 @@ def test_enrich_link_evidence_api_returns_llm_highlight_patch_with_details(monke
     assert response.status_code == 200
     data = response.json()
     assert data["evidence_type"] == "project"
-    assert data["evidence_id"] == "jobforge"
+    assert data["evidence_id"] == "resumecr7"
     assert data["added_highlights"] == [
         {
             "text": "Scanned page confirms grounded resume orchestration.",
-            "source_url": "https://example.com/jobforge",
+            "source_url": "https://example.com/resumecr7",
         }
     ]
     assert "added_skills" not in data
     assert data["details"]["method"] == "llm"
     assert data["details"]["scanned_links"] == [
-        "https://example.com/jobforge",
-        "https://docs.example.com/jobforge",
+        "https://example.com/resumecr7",
+        "https://docs.example.com/resumecr7",
     ]
     assert data["details"]["requested_highlight_count"] == 4
     assert data["details"]["_link_scanning_llm"]["total_tokens"] == 42
     assert captured["evidence_type"] == "project"
-    assert captured["evidence"].id == "jobforge"
+    assert captured["evidence"].id == "resumecr7"
     assert captured["requested_highlight_count"] == 4
 
 

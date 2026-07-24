@@ -10,7 +10,7 @@
 The user requested an agentic testing session for the whole `resume_generation` pipeline, focused on the intermediate JSON artifact rather than LaTeX output. I followed the existing agentic testing style while adapting it to the pipeline entrypoint and stage cache. Because the sandbox could not bind or reach local API sockets, I ran the API and pipeline outside the sandbox on an alternate port and used a temporary config under `/tmp` so the tracked user config was not modified.
 
 **Tests:**
-- `run_resume_generation_pipeline(config_path=/tmp/jobforge-resume-generation-config.yaml)` - Exercised the full pipeline against `user/resume_generation/job_target.yaml` and `user/resume_evidence/`.
+- `run_resume_generation_pipeline(config_path=/tmp/resumecr7-resume-generation-config.yaml)` - Exercised the full pipeline against `user/resume_generation/job_target.yaml` and `user/resume_evidence/`.
 - `IntermediateResumeResult.model_validate(...)` - Validated `user/resume_generation/resume_result.json` against the intermediate artifact schema.
 - Stage cache inspection with `jq` - Reviewed skill-selection fallback, project ranking, bullet-generation details, and token usage for the final assessment.
 

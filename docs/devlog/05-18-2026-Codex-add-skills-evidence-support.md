@@ -21,4 +21,4 @@ The request was to add skills evidence with minimal scope, so I kept the schema 
 - Verification note: `python3 -m py_compile ...` passed for the touched Python files, but `pytest` collection is blocked locally because `pydantic` is not installed in this environment.
 
 **Impact:**
-JobForge now has a grounded, validated source of truth for resume skills in addition to projects. Future synthesis work can consume `resume_evidence["skills"]` without inventing a schema on the fly, and users can manage skills through the same staged CLI entrypoint they already use for projects.
+ResumeCR7 now has a grounded, validated source of truth for resume skills in addition to projects. Future synthesis work can consume `resume_evidence["skills"]` without inventing a schema on the fly, and users can manage skills through the same staged CLI entrypoint they already use for projects.

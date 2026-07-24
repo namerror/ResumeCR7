@@ -40,8 +40,8 @@ def _valid_projects_payload() -> dict:
         "schema_version": 1,
         "projects": [
             {
-                "id": "jobforge",
-                "name": "JobForge",
+                "id": "resumecr7",
+                "name": "ResumeCR7",
                 "summary": "Grounded resume tooling for deterministic resume generation.",
                 "highlights": [
                     "Built a deterministic baseline skill selector.",
@@ -54,8 +54,8 @@ def _valid_projects_payload() -> dict:
                     "concepts": ["Deterministic systems", "Schema validation"],
                 },
                 "links": [
-                    "https://github.com/example/jobforge",
-                    "https://jobforge.example.com",
+                    "https://github.com/example/resumecr7",
+                    "https://resumecr7.example.com",
                 ],
             }
         ],
@@ -148,8 +148,8 @@ def test_load_projects_yaml_returns_typed_runtime_object(tmp_path):
     assert isinstance(parsed, ProjectsFile)
     assert isinstance(parsed.projects[0], ProjectRecord)
     assert parsed.schema_version == 1
-    assert [project.id for project in parsed.iter_projects()] == ["jobforge"]
-    assert parsed.projects_by_id()["jobforge"].name == "JobForge"
+    assert [project.id for project in parsed.iter_projects()] == ["resumecr7"]
+    assert parsed.projects_by_id()["resumecr7"].name == "ResumeCR7"
 
 
 def test_load_experience_yaml_returns_typed_runtime_object(tmp_path):
@@ -623,14 +623,14 @@ def test_load_user_yaml_rejects_empty_optional_links_when_provided(tmp_path, fie
 def test_load_projects_yaml_rejects_duplicate_project_ids(tmp_path):
     payload = _valid_projects_payload()
     duplicate = deepcopy(payload["projects"][0])
-    duplicate["name"] = "JobForge Clone"
+    duplicate["name"] = "ResumeCR7 Clone"
     payload["projects"].append(duplicate)
     path = _write_yaml(tmp_path, payload)
 
     with pytest.raises(ValidationError) as exc_info:
         load_evidence_yaml(path, "projects")
 
-    assert "Duplicate project ids are not allowed: jobforge" in str(exc_info.value)
+    assert "Duplicate project ids are not allowed: resumecr7" in str(exc_info.value)
 
 
 def test_load_experience_yaml_rejects_duplicate_experience_ids(tmp_path):
@@ -692,7 +692,7 @@ def test_load_registered_evidence_loads_registered_schemas(tmp_path):
     assert isinstance(loaded["user"], UserInfoFile)
     assert loaded["education"].education[0].degree.startswith("Bachelor")
     assert loaded["experience"].experience_by_id()["backend-engineer"].start == "2024"
-    assert loaded["projects"].projects_by_id()["jobforge"].summary.startswith("Grounded resume")
+    assert loaded["projects"].projects_by_id()["resumecr7"].summary.startswith("Grounded resume")
     assert loaded["skills"].skills.programming == ["Python"]
     assert loaded["user"].email == "candidate@example.com"
 

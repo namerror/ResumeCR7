@@ -43,8 +43,8 @@ export function sampleEvidence(): ResumeEvidenceRegistry {
       schema_version: 1,
       projects: [
         {
-          id: "jobforge",
-          name: "JobForge",
+          id: "resumecr7",
+          name: "ResumeCR7",
           summary: "Grounded resume tooling.",
           highlights: ["Built deterministic evidence workflows."],
           active: true,
@@ -53,7 +53,7 @@ export function sampleEvidence(): ResumeEvidenceRegistry {
             programming: ["Python"],
             concepts: ["Schema validation"],
           },
-          links: ["https://github.com/example/jobforge"],
+          links: ["https://github.com/example/resumecr7"],
         },
       ],
     },

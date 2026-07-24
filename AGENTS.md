@@ -1,6 +1,6 @@
 # AGENTS.md — Agent Playbook
 
-This repo is designed to be edited by coding agents (Claude Code, Codex, etc.) safely. JobForge now spans both the legacy skill-selection API and a newer grounded resume-evidence foundation.
+This repo is designed to be edited by coding agents (Claude Code, Codex, etc.) safely. ResumeCR7 now spans both the legacy skill-selection API and a newer grounded resume-evidence foundation.
 
 ## Agent context index
 - Start here for navigation: `docs/agent-context-index.md`

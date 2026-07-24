@@ -5,7 +5,7 @@ import { ApiError, createEvidenceApi } from "./api";
 describe("evidence api client", () => {
   it("updates project records through the ID route with an ID-free payload", async () => {
     const payload = {
-      name: "JobForge",
+      name: "ResumeCR7",
       summary: "Updated summary.",
       highlights: ["Built APIs."],
       active: true,
@@ -18,17 +18,17 @@ describe("evidence api client", () => {
     };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue({ id: "jobforge", ...payload }),
+      json: vi.fn().mockResolvedValue({ id: "resumecr7", ...payload }),
     });
     const api = createEvidenceApi({
       baseUrl: "http://127.0.0.1:8000",
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
-    await api.updateProject("jobforge", payload);
+    await api.updateProject("resumecr7", payload);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/resume-evidence/projects/jobforge",
+      "http://127.0.0.1:8000/resume-evidence/projects/resumecr7",
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify(payload),
@@ -112,7 +112,7 @@ describe("evidence api client", () => {
   it("posts targeted resume link enrichment requests", async () => {
     const payload = {
       evidence_type: "projects" as const,
-      evidence_id: "jobforge",
+      evidence_id: "resumecr7",
       dry_run: false,
     };
     const fetchMock = vi.fn().mockResolvedValue({

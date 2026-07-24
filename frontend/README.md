@@ -1,4 +1,4 @@
-# JobForge Frontend
+# ResumeCR7 Frontend
 
 Local-first resume evidence workbench for the FastAPI backend.
 

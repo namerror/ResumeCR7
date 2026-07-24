@@ -44,9 +44,9 @@ describe("resume evidence apply diff", () => {
       {
         action: "update",
         resource: "projects",
-        id: "jobforge",
+        id: "resumecr7",
         payload: {
-          name: "JobForge",
+          name: "ResumeCR7",
           summary: "Updated grounded resume tooling.",
           highlights: ["Built deterministic evidence workflows."],
           active: true,
@@ -55,7 +55,7 @@ describe("resume evidence apply diff", () => {
             programming: ["Python"],
             concepts: ["Schema validation"],
           },
-          links: ["https://github.com/example/jobforge"],
+          links: ["https://github.com/example/resumecr7"],
         },
       },
       {

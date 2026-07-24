@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge is expanding from a skill-selection microservice into a resume engine with multiple subsystems. Skill-selection code was previously spread across root-level `app/models.py`, `app/scoring/`, `app/services/`, and `app/data/`, while project selection already lived under `app/project_selection/`.
+ResumeCR7 is expanding from a skill-selection microservice into a resume engine with multiple subsystems. Skill-selection code was previously spread across root-level `app/models.py`, `app/scoring/`, `app/services/`, and `app/data/`, while project selection already lived under `app/project_selection/`.
 
 That layout made skill selection look like the whole application and left future resume subsystems without a consistent package boundary.
 
@@ -28,7 +28,7 @@ Project selection is also exposed through `POST /select-projects` so API callers
 
 ### Positive
 
-- The package tree now reflects JobForge's resume-engine shape.
+- The package tree now reflects ResumeCR7's resume-engine shape.
 - Skill-specific code and data move together, reducing accidental cross-subsystem coupling.
 - Project selection has the same API/service/metrics shape as skill selection.
 - Existing external imports keep working through shims while new code can use canonical subsystem paths.

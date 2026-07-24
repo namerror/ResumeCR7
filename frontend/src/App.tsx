@@ -442,10 +442,10 @@ export default function App({ client = evidenceApi }: AppProps) {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-block">
-          <span className="brand-mark">JF</span>
+          <span className="brand-mark">RC7</span>
           <div>
             <h1>Resume Evidence</h1>
-            <span className="subtle-text">JobForge Workbench</span>
+            <span className="subtle-text">ResumeCR7 Workbench</span>
           </div>
         </div>
 

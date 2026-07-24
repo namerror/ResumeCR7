@@ -28,4 +28,4 @@ The backend should own the evidence HTTP boundary while the current YAML files r
 - `python -m pytest` - 512 passed, 4 skipped, 1 failed in `tests/test_baseline_filter.py::test_baseline_filter_embedding_failure_returns_full_baseline`; this failure is outside the resume-evidence migration and reflects the existing baseline-filter fallback/zero-score fill expectation mismatch.
 
 **Impact:**
-JobForge now exposes file-backed resume evidence through FastAPI CRUD endpoints while preserving legacy CLI workflows. The repo is closer to a product-facing backend service without introducing database dependencies or changing existing stage endpoints.
+ResumeCR7 now exposes file-backed resume evidence through FastAPI CRUD endpoints while preserving legacy CLI workflows. The repo is closer to a product-facing backend service without introducing database dependencies or changing existing stage endpoints.

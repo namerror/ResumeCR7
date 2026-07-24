@@ -21,8 +21,8 @@ from resume_evidence.models import ExperienceRecord, ProjectRecord, ProjectSkill
 
 def _project() -> ProjectRecord:
     return ProjectRecord(
-        id="jobforge",
-        name="JobForge",
+        id="resumecr7",
+        name="ResumeCR7",
         summary="FastAPI resume engine for grounded resume generation.",
         highlights=["Built project and skill selection APIs."],
         active=True,
@@ -31,14 +31,14 @@ def _project() -> ProjectRecord:
             programming=["Python"],
             concepts=["API"],
         ),
-        links=["https://example.com/jobforge", "https://docs.example.com/jobforge"],
+        links=["https://example.com/resumecr7", "https://docs.example.com/resumecr7"],
     )
 
 
 def _github_project() -> ProjectRecord:
     return ProjectRecord(
-        id="jobforge",
-        name="JobForge",
+        id="resumecr7",
+        name="ResumeCR7",
         summary="FastAPI resume engine for grounded resume generation.",
         highlights=["Built project and skill selection APIs."],
         active=True,
@@ -48,8 +48,8 @@ def _github_project() -> ProjectRecord:
             concepts=["API"],
         ),
         links=[
-            "https://github.com/openai/jobforge",
-            "https://example.com/jobforge",
+            "https://github.com/openai/resumecr7",
+            "https://example.com/resumecr7",
         ],
     )
 
@@ -75,18 +75,18 @@ def _experience() -> ExperienceRecord:
 
 
 def test_classify_link_scan_target_detects_github_repo_roots_and_subpaths():
-    root = classify_link_scan_target("https://github.com/openai/jobforge")
+    root = classify_link_scan_target("https://github.com/openai/resumecr7")
     blob = classify_link_scan_target(
-        "https://github.com/openai/jobforge/blob/main/README.md"
+        "https://github.com/openai/resumecr7/blob/main/README.md"
     )
-    tree = classify_link_scan_target("https://www.github.com/openai/jobforge/tree/main/app")
+    tree = classify_link_scan_target("https://www.github.com/openai/resumecr7/tree/main/app")
 
     assert root.mode == "github_repo"
-    assert root.repo_scope == "https://github.com/openai/jobforge"
+    assert root.repo_scope == "https://github.com/openai/resumecr7"
     assert blob.mode == "github_repo"
-    assert blob.repo_scope == "https://github.com/openai/jobforge"
+    assert blob.repo_scope == "https://github.com/openai/resumecr7"
     assert tree.mode == "github_repo"
-    assert tree.repo_scope == "https://github.com/openai/jobforge"
+    assert tree.repo_scope == "https://github.com/openai/resumecr7"
 
 
 def test_classify_link_scan_target_keeps_non_repo_github_urls_single_page():
@@ -94,7 +94,7 @@ def test_classify_link_scan_target_keeps_non_repo_github_urls_single_page():
     topics = classify_link_scan_target("https://github.com/topics/python")
     gist = classify_link_scan_target("https://gist.github.com/openai/abc123")
     raw = classify_link_scan_target(
-        "https://raw.githubusercontent.com/openai/jobforge/main/README.md"
+        "https://raw.githubusercontent.com/openai/resumecr7/main/README.md"
     )
 
     assert owner_only.mode == "single_page"
@@ -126,8 +126,8 @@ def test_build_link_scan_prompt_payload_includes_links_and_grounding_rules():
     assert payload["enrichment_goal"]["requested_highlight_count"] == 5
     assert payload["evidence"]["type"] == "project"
     assert payload["evidence"]["links"] == [
-        "https://example.com/jobforge",
-        "https://docs.example.com/jobforge",
+        "https://example.com/resumecr7",
+        "https://docs.example.com/resumecr7",
     ]
     assert [target["mode"] for target in payload["scan_targets"]] == [
         "single_page",
@@ -162,9 +162,9 @@ def test_build_link_scan_prompt_payload_marks_github_repo_targets():
     )
 
     assert payload["scan_targets"][0] == {
-        "url": "https://github.com/openai/jobforge",
+        "url": "https://github.com/openai/resumecr7",
         "mode": "github_repo",
-        "repo_scope": "https://github.com/openai/jobforge",
+        "repo_scope": "https://github.com/openai/resumecr7",
         "instructions": (
             "Inspect the GitHub repository under repo_scope. You may move between "
             "repository pages such as README, source tree, docs, manifests, tests, "
@@ -238,7 +238,7 @@ def test_scan_evidence_links_with_llm_sends_web_search_request(monkeypatch):
                         "highlights": [
                             {
                                 "text": "Scanned README confirms grounded resume orchestration.",
-                                "source_url": "https://example.com/jobforge",
+                                "source_url": "https://example.com/resumecr7",
                             }
                         ]
                     }
@@ -246,7 +246,7 @@ def test_scan_evidence_links_with_llm_sends_web_search_request(monkeypatch):
                 output=[
                     SimpleNamespace(
                         action=SimpleNamespace(
-                            sources=[SimpleNamespace(url="https://example.com/jobforge")]
+                            sources=[SimpleNamespace(url="https://example.com/resumecr7")]
                         )
                     )
                 ],
@@ -276,11 +276,11 @@ def test_scan_evidence_links_with_llm_sends_web_search_request(monkeypatch):
     assert kwargs["tools"] == [{"type": "web_search"}]
     assert kwargs["tool_choice"] == "required"
     payload = json.loads(kwargs["input"])
-    assert payload["evidence"]["id"] == "jobforge"
+    assert payload["evidence"]["id"] == "resumecr7"
     assert payload["enrichment_goal"]["requested_highlight_count"] == 5
     assert len(payload["evidence"]["links"]) == 2
     assert result.highlights[0].text.startswith("Scanned README")
-    assert result.metadata["source_urls"] == ["https://example.com/jobforge"]
+    assert result.metadata["source_urls"] == ["https://example.com/resumecr7"]
     assert result.metadata["total_tokens"] == 30
 
 
@@ -293,7 +293,7 @@ def test_scan_evidence_links_with_llm_accepts_same_github_repo_source(monkeypatc
                         "highlights": [
                             {
                                 "text": "README and tests show a FastAPI orchestration layer with deterministic evidence validation.",
-                                "source_url": "https://github.com/openai/jobforge/blob/main/README.md",
+                                "source_url": "https://github.com/openai/resumecr7/blob/main/README.md",
                             }
                         ]
                     }
@@ -325,11 +325,11 @@ def test_scan_evidence_links_with_llm_accepts_same_github_repo_source(monkeypatc
     )
 
     assert result.highlights[0].source_url == (
-        "https://github.com/openai/jobforge/blob/main/README.md"
+        "https://github.com/openai/resumecr7/blob/main/README.md"
     )
     assert result.metadata["scan_targets"][0]["mode"] == "github_repo"
     assert result.metadata["scan_targets"][0]["repo_scope"] == (
-        "https://github.com/openai/jobforge"
+        "https://github.com/openai/resumecr7"
     )
 
 
@@ -408,7 +408,7 @@ def test_scan_evidence_links_with_llm_reads_structured_output_when_output_text_m
                                         "highlights": [
                                             {
                                                 "text": "README documents a FastAPI link scanning workflow.",
-                                                "source_url": "https://github.com/openai/jobforge/blob/main/README.md",
+                                                "source_url": "https://github.com/openai/resumecr7/blob/main/README.md",
                                             }
                                         ]
                                     }
@@ -420,7 +420,7 @@ def test_scan_evidence_links_with_llm_reads_structured_output_when_output_text_m
                         action=SimpleNamespace(
                             sources=[
                                 SimpleNamespace(
-                                    url="https://github.com/openai/jobforge/blob/main/README.md"
+                                    url="https://github.com/openai/resumecr7/blob/main/README.md"
                                 )
                             ]
                         )

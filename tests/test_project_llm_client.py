@@ -31,7 +31,7 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
         def create(self, **kwargs):
             captured["kwargs"] = kwargs
             return SimpleNamespace(
-                output_text='{"jobforge":3,"portfolio":1}',
+                output_text='{"resumecr7":3,"portfolio":1}',
                 usage=SimpleNamespace(input_tokens=12, output_tokens=5, total_tokens=17),
             )
 
@@ -47,7 +47,7 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
 
     result = score_projects_with_llm(
         context=ProjectJobContext(title="Backend Engineer", description="Build APIs."),
-        candidates=[_candidate("jobforge", "JobForge"), _candidate("portfolio", "Portfolio")],
+        candidates=[_candidate("resumecr7", "ResumeCR7"), _candidate("portfolio", "Portfolio")],
     )
 
     assert captured["init"]["api_key"] == "test-key"
@@ -58,14 +58,14 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     assert kwargs["text"]["format"]["name"] == "project_scores"
     assert kwargs["text"]["format"]["strict"] is True
     schema = kwargs["text"]["format"]["schema"]
-    assert schema["required"] == ["jobforge", "portfolio"]
-    assert schema["properties"]["jobforge"]["minimum"] == 0
-    assert schema["properties"]["jobforge"]["maximum"] == 3
+    assert schema["required"] == ["resumecr7", "portfolio"]
+    assert schema["properties"]["resumecr7"]["minimum"] == 0
+    assert schema["properties"]["resumecr7"]["maximum"] == 3
     payload = json.loads(kwargs["input"])
     assert payload["job"]["title"] == "Backend Engineer"
-    assert payload["projects"][0]["id"] == "jobforge"
+    assert payload["projects"][0]["id"] == "resumecr7"
     assert payload["projects"][0]["skills"]["programming"] == ["Python"]
-    assert result.scores == {"jobforge": 3, "portfolio": 1}
+    assert result.scores == {"resumecr7": 3, "portfolio": 1}
     assert result.metadata["total_tokens"] == 17
     assert result.metadata["model"] == "test-model"
 
@@ -76,7 +76,7 @@ def test_score_projects_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):
     class DummyResponses:
         def create(self, **kwargs):
             captured["kwargs"] = kwargs
-            return SimpleNamespace(output_text='{"jobforge":3}', usage=None)
+            return SimpleNamespace(output_text='{"resumecr7":3}', usage=None)
 
     class DummyOpenAI:
         def __init__(self, **_kwargs):
@@ -88,7 +88,7 @@ def test_score_projects_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):
 
     score_projects_with_llm(
         context=ProjectJobContext(title="Backend Engineer"),
-        candidates=[_candidate("jobforge", "JobForge")],
+        candidates=[_candidate("resumecr7", "ResumeCR7")],
     )
 
     assert "temperature" not in captured["kwargs"]
@@ -109,7 +109,7 @@ def test_score_projects_with_llm_rejects_invalid_json(monkeypatch):
     with pytest.raises(ProjectLLMClientError, match="valid JSON"):
         score_projects_with_llm(
             context=ProjectJobContext(title="Backend Engineer"),
-            candidates=[_candidate("jobforge", "JobForge")],
+            candidates=[_candidate("resumecr7", "ResumeCR7")],
         )
 
 
@@ -119,5 +119,5 @@ def test_score_projects_with_llm_requires_api_key(monkeypatch):
     with pytest.raises(ProjectLLMClientError, match="OPENAI_API_KEY"):
         score_projects_with_llm(
             context=ProjectJobContext(title="Backend Engineer"),
-            candidates=[_candidate("jobforge", "JobForge")],
+            candidates=[_candidate("resumecr7", "ResumeCR7")],
         )

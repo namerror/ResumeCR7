@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge's evidence domain has already moved into `app/resume_evidence/`, with
+ResumeCR7's evidence domain has already moved into `app/resume_evidence/`, with
 top-level `resume_evidence` kept as a compatibility layer for the local CLI.
 The resume-generation pipeline was still implemented as a top-level
 `resume_generation/` package and called the running FastAPI app over HTTP for

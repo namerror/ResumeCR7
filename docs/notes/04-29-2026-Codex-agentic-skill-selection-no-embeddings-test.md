@@ -6,7 +6,7 @@ This test used the agentic testing dataset to evaluate `/select-skills` without 
 
 - API base URL: `http://127.0.0.1:8000`
 - Server command: `.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
-- Runner command: `.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --suite skill_selection --exclude-variant embeddings_with_filter --output /tmp/jobforge-skill-no-embeddings-results.json --fail-on-error`
+- Runner command: `.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --suite skill_selection --exclude-variant embeddings_with_filter --output /tmp/resumecr7-skill-no-embeddings-results.json --fail-on-error`
 - Health response: `status=ok`, `version=0.2.0`, default `method=llm`, default `top_n=5`, default `baseline_filter=false`, `dev_mode=true`
 - Dataset: `docs/agentic-testing/dataset.json`
 
@@ -212,7 +212,7 @@ This result was strong overall and used fewer tokens than the unfiltered LLM. It
 - Treat unfiltered LLM as the best qualitative result for this no-embeddings skill-selection run.
 - Keep baseline filter as a token-saving option, but review whether baseline-recognized weak programming skills such as `C#` for backend and `Java` for frontend should be allowed to bypass second-pass scoring.
 - Improve the baseline method's coverage for exact job-text matches such as `PostgreSQL`, `Redis`, `Caching`, `CI/CD`, `Observability`, `Rate Limiting`, `Next.js`, `Figma`, and `GraphQL`.
-- Keep the runner workflow. It produced a clean, reproducible result JSON at `/tmp/jobforge-skill-no-embeddings-results.json`.
+- Keep the runner workflow. It produced a clean, reproducible result JSON at `/tmp/resumecr7-skill-no-embeddings-results.json`.
 
 ## Raw Result Excerpts
 

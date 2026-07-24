@@ -23,4 +23,4 @@ ADR 016 calls for a local-first web workbench that can later be packaged as a de
 - `.venv/bin/python -m pytest tests/test_resume_evidence_api.py`: validates the existing backend evidence CRUD contract still passes.
 
 **Impact:**
-JobForge now has its first local-first frontend surface for editing user, skills, projects, experience, and education evidence. The app keeps YAML persistence backend-owned, prepares the UI for loopback desktop packaging through configurable API base/proxy settings, and gives future resume-generation workflow work a concrete frontend foundation.
+ResumeCR7 now has its first local-first frontend surface for editing user, skills, projects, experience, and education evidence. The app keeps YAML persistence backend-owned, prepares the UI for loopback desktop packaging through configurable API base/proxy settings, and gives future resume-generation workflow work a concrete frontend foundation.

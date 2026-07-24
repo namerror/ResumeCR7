@@ -75,7 +75,7 @@ def _config_payload(**overrides) -> dict:
     payload = {
         "schema_version": 1,
         "app": {
-            "base_url": "http://jobforge.test",
+            "base_url": "http://resumecr7.test",
             "timeout_seconds": 5,
         },
         "skill_selection": {
@@ -343,7 +343,7 @@ def _sample_intermediate_resume_result() -> IntermediateResumeResult:
 def _install_successful_pipeline_client(monkeypatch, calls: list[dict]) -> None:
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -440,7 +440,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     config = load_generation_config(path)
 
     assert isinstance(config, ResumeGenerationConfig)
-    assert config.app.base_url == "http://jobforge.test"
+    assert config.app.base_url == "http://resumecr7.test"
     assert config.skill_selection.llm_model == "skill-model"
     assert config.project_selection.llm_max_output_tokens == 880
     assert config.job_focus_generation.dev_mode is True
@@ -761,7 +761,7 @@ def test_generate_selection_context_posts_evidence_payloads(monkeypatch, tmp_pat
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -835,7 +835,7 @@ def test_generate_project_bullet_points_posts_once_per_selected_project(monkeypa
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -917,7 +917,7 @@ def test_generate_experience_bullet_points_posts_once_per_active_experience(
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -971,7 +971,7 @@ def test_derive_job_focus_posts_job_target_once(monkeypatch, tmp_path):
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -2611,7 +2611,7 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -2809,7 +2809,7 @@ def test_resume_generation_pipeline_reuses_cached_stage_results(monkeypatch, tmp
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -2931,7 +2931,7 @@ def test_selection_cache_reuses_scores_across_response_shaping_fields(
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -3054,7 +3054,7 @@ def test_resume_generation_pipeline_does_not_cache_skill_llm_fallback(
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -3230,7 +3230,7 @@ def test_selection_context_bypasses_cached_skill_llm_fallback(monkeypatch, tmp_p
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -3312,7 +3312,7 @@ def test_selection_cache_does_not_store_project_llm_fallback(
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -3951,7 +3951,7 @@ def test_resume_generation_pipeline_does_not_scan_links_before_bullet_generation
 
     class FakeClient:
         def __init__(self, *, base_url: str, timeout: float):
-            assert base_url == "http://jobforge.test"
+            assert base_url == "http://resumecr7.test"
             assert timeout == 5
 
         def __enter__(self):
@@ -4131,7 +4131,7 @@ def test_project_selection_api_uses_request_llm_overrides(monkeypatch):
     def fake_score_projects_with_llm(**kwargs):
         captured.update(kwargs)
         return LLMProjectScoreResult(
-            scores={"jobforge": 3},
+            scores={"resumecr7": 3},
             metadata={"model": kwargs["model"], "total_tokens": 0},
         )
 
@@ -4150,8 +4150,8 @@ def test_project_selection_api_uses_request_llm_overrides(monkeypatch):
             },
             "candidates": [
                 {
-                    "id": "jobforge",
-                    "name": "JobForge",
+                    "id": "resumecr7",
+                    "name": "ResumeCR7",
                     "summary": "FastAPI backend API.",
                     "skills": {
                         "technology": ["FastAPI"],
@@ -4185,8 +4185,8 @@ def test_resume_generation_enrich_link_evidence_route_returns_batch_result_and_r
             records=(
                 resume_enrich.LinkEvidenceEnrichmentRecordResult(
                     evidence_type="project",
-                    evidence_id="jobforge",
-                    name="JobForge",
+                    evidence_id="resumecr7",
+                    name="ResumeCR7",
                     scanned=True,
                     added_highlights=("Scanned project highlight.",),
                     details={"method": "llm"},
@@ -4248,8 +4248,8 @@ def test_resume_generation_enrich_link_evidence_route_passes_target_record_id(
             records=(
                 resume_enrich.LinkEvidenceEnrichmentRecordResult(
                     evidence_type="project",
-                    evidence_id="jobforge",
-                    name="JobForge",
+                    evidence_id="resumecr7",
+                    name="ResumeCR7",
                     scanned=True,
                     added_highlights=("Scanned project highlight.",),
                 ),
@@ -4271,15 +4271,15 @@ def test_resume_generation_enrich_link_evidence_route_passes_target_record_id(
         "/resume-generation/enrich-link-evidence",
         json={
             "evidence_type": "projects",
-            "evidence_id": "jobforge",
+            "evidence_id": "resumecr7",
             "dry_run": False,
         },
     )
 
     assert response.status_code == 200
     assert captured["evidence_type"] == "projects"
-    assert captured["evidence_id"] == "jobforge"
-    assert response.json()["records"][0]["evidence_id"] == "jobforge"
+    assert captured["evidence_id"] == "resumecr7"
+    assert response.json()["records"][0]["evidence_id"] == "resumecr7"
     assert app.state.resume_evidence == {"projects": "reloaded"}
 
 
@@ -4287,7 +4287,7 @@ def test_resume_generation_enrich_link_evidence_route_rejects_all_with_target_id
     response = api_request(
         "POST",
         "/resume-generation/enrich-link-evidence",
-        json={"evidence_type": "all", "evidence_id": "jobforge"},
+        json={"evidence_type": "all", "evidence_id": "resumecr7"},
     )
 
     assert response.status_code == 400
@@ -4417,8 +4417,8 @@ def test_resume_generation_pdf_route_returns_rendered_pdf(monkeypatch, tmp_path)
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert response.headers["x-jobforge-tex-path"] == str(tex_path)
-    assert response.headers["x-jobforge-pdf-path"] == str(pdf_path)
+    assert response.headers["x-resumecr7-tex-path"] == str(tex_path)
+    assert response.headers["x-resumecr7-pdf-path"] == str(pdf_path)
     assert response.content == b"%PDF-1.4\n"
     assert calls == [
         {

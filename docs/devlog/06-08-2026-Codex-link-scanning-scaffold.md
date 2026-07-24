@@ -24,4 +24,4 @@ Link scanning is now modeled as a standalone evidence-enrichment utility instead
 - `PYTHONPATH=. pytest tests/test_link_scanning_api.py tests/test_bulletpoints_generation_api.py tests/test_health.py tests/test_config.py tests/test_resume_generation.py`
 
 **Impact:**
-JobForge now has the API and orchestration seam needed for future real link scanning without coupling the scanner to bullet prompt logic or persisting unverified scanned evidence.
+ResumeCR7 now has the API and orchestration seam needed for future real link scanning without coupling the scanner to bullet prompt logic or persisting unverified scanned evidence.

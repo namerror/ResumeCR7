@@ -21,8 +21,8 @@ def api_request(method: str, path: str, **kwargs):
 
 def _project_payload() -> dict:
     return {
-        "id": "jobforge",
-        "name": "JobForge",
+        "id": "resumecr7",
+        "name": "ResumeCR7",
         "summary": "FastAPI resume engine for grounded resume generation.",
         "highlights": [
             "Built project and skill selection APIs with deterministic fallbacks.",
@@ -35,7 +35,7 @@ def _project_payload() -> dict:
             "programming": ["Python"],
             "concepts": ["API", "Grounded Generation"],
         },
-        "links": ["https://example.com/jobforge"],
+        "links": ["https://example.com/resumecr7"],
     }
 
 

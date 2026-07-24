@@ -12,8 +12,8 @@ from app.job_focus_generation.models import JobFocus
 
 def _project_payload(**overrides):
     payload = {
-        "id": "jobforge",
-        "name": "JobForge",
+        "id": "resumecr7",
+        "name": "ResumeCR7",
         "summary": "Resume engine for grounded, job-targeted resume generation.",
         "highlights": [
             "Built a FastAPI service for deterministic skill and project selection.",
@@ -25,7 +25,7 @@ def _project_payload(**overrides):
             "programming": ["Python"],
             "concepts": ["API", "Resume Generation"],
         },
-        "links": ["https://example.com/jobforge"],
+        "links": ["https://example.com/resumecr7"],
     }
     payload.update(overrides)
     return payload

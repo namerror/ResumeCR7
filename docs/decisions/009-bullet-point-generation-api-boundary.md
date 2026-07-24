@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge already has FastAPI-backed skill and project selection capabilities plus a top-level
+ResumeCR7 already has FastAPI-backed skill and project selection capabilities plus a top-level
 `resume_generation/` orchestration package. The next grounded resume milestone needs a
 minimal prose-generation capability that can refine a selected project into tailored resume
 bullet points without turning the whole system into full resume synthesis.

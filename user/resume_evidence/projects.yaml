@@ -103,7 +103,7 @@ projects:
     - data processing
     - logging
   links:
-  - https://github.com/namerror/JobForge
+  - https://github.com/namerror/ResumeCR7
 - id: capital-ready-business-lending-tool
   name: Capital Ready - Business Lending Tool
   summary: This is a fullstack web app that I developed for a non-profit to enable

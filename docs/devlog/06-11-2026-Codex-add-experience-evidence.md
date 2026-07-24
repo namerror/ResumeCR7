@@ -20,4 +20,4 @@ Experience is now a first-class grounded resume evidence file, but the implement
 - `.venv/bin/python -m pytest tests/test_resume_evidence.py tests/test_resume_generation.py`: 88 passed.
 
 **Impact:**
-JobForge can now load and validate work experience from `user/resume_evidence/experience.yaml` alongside user info, education, skills, and projects. Future resume draft generation can consume experience evidence without inventing a schema at generation time.
+ResumeCR7 can now load and validate work experience from `user/resume_evidence/experience.yaml` alongside user info, education, skills, and projects. Future resume draft generation can consume experience evidence without inventing a schema at generation time.

@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-24-2026-Codex-rename-project-resumecr7.md` - 2026-07-24 - Rename project to ResumeCR7
 - `07-24-2026-Codex-desktop-packaging-release-adr.md` - 2026-07-24 - Document desktop packaging and release workflow
 - `07-23-2026-Codex-resume-generation-frontend-integration.md` - 2026-07-23 - Resume generation frontend integration
 - `07-23-2026-Codex-resume-evidence-frontend.md` - 2026-07-23 - Add resume evidence frontend workbench
@@ -79,7 +80,7 @@
 - `04-27-2026-Codex-add-ci-version-guard.md` - 2026-04-27 - Add CI workflow and version guard
 - `04-26-2026-Codex-refactor-subsystem-packages.md` - 2026-04-26 - Refactor app into subsystem packages
 - `04-26-2026-Codex-add-project-selection-module.md` - 2026-04-26 - Add internal project selection module
-- `04-23-2026-Codex-refresh-jobforge-docs-for-grounded-resume-engine.md` - 2026-04-23 - Refresh JobForge docs around the grounded resume engine
+- `04-23-2026-Codex-refresh-resumecr7-docs-for-grounded-resume-engine.md` - 2026-04-23 - Refresh ResumeCR7 docs around the grounded resume engine
 - `04-22-2026-Codex-add-projects-evidence-cli.md` - 2026-04-22 - Add staged projects evidence CLI
 - `04-21-2026-Codex-add-projects-evidence-parser.md` - 2026-04-21 - Add reusable projects evidence parser
 - `04-20-2026-Codex-document-branch-03-resume-architecture.md` - 2026-04-20 - Document Branch 03 grounded resume architecture

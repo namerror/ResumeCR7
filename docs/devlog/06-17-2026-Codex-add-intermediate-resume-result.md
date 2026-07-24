@@ -21,4 +21,4 @@ The generation pipeline needed a typed intermediary result before any final resu
 - `.venv/bin/python -m pytest`: 383 passed, 4 skipped.
 
 **Impact:**
-JobForge now has a concrete in-memory resume draft schema that later rendering or artifact-generation steps can consume without changing existing selection, link scanning, or bullet-point APIs.
+ResumeCR7 now has a concrete in-memory resume draft schema that later rendering or artifact-generation steps can consume without changing existing selection, link scanning, or bullet-point APIs.

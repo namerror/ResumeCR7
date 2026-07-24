@@ -13,7 +13,7 @@
 - `docs/CHANGELOG.md` - Added the new endpoint under Unreleased user-facing additions.
 
 **Rationale:**
-Bullet generation is the first grounded prose-writing capability in JobForge, so it needs a narrow service boundary rather than being mixed into full resume orchestration. The implementation follows the existing selection-service pattern while intentionally avoiding deterministic prose fallbacks and external link scanning in v1.
+Bullet generation is the first grounded prose-writing capability in ResumeCR7, so it needs a narrow service boundary rather than being mixed into full resume orchestration. The implementation follows the existing selection-service pattern while intentionally avoiding deterministic prose fallbacks and external link scanning in v1.
 
 **Tests:**
 - `test_bullet_count_range_accepts_exact_and_flexible_ranges`: validates exact and flexible range inputs.
@@ -24,4 +24,4 @@ Bullet generation is the first grounded prose-writing capability in JobForge, so
 - Full suite: `.venv/bin/python -m pytest` passed with 308 passed and 4 skipped.
 
 **Impact:**
-JobForge can now generate job-tailored project bullet points from grounded project evidence through a minimal REST API, with explicit configuration, observability, and tests before broader resume synthesis is wired in.
+ResumeCR7 can now generate job-tailored project bullet points from grounded project evidence through a minimal REST API, with explicit configuration, observability, and tests before broader resume synthesis is wired in.

@@ -26,7 +26,7 @@ def _valid_projects_payload() -> dict:
         "projects": [
             {
                 "id": "project-123",
-                "name": "JobForge",
+                "name": "ResumeCR7",
                 "summary": "Grounded resume tooling for deterministic resume generation.",
                 "highlights": [
                     "Built a deterministic baseline skill selector.",
@@ -39,7 +39,7 @@ def _valid_projects_payload() -> dict:
                     "concepts": ["Deterministic systems", "Schema validation"],
                 },
                 "links": [
-                    "https://github.com/example/jobforge",
+                    "https://github.com/example/resumecr7",
                 ],
             }
         ],
@@ -283,9 +283,9 @@ def _run_experience_cli_with_action_picker(
 
 
 def test_generate_project_id_adds_numeric_suffix_for_duplicates():
-    existing_ids = {"jobforge", "jobforge-2"}
+    existing_ids = {"resumecr7", "resumecr7-2"}
 
-    assert generate_project_id("JobForge", existing_ids) == "jobforge-3"
+    assert generate_project_id("ResumeCR7", existing_ids) == "resumecr7-3"
 
 
 def test_generate_experience_id_adds_numeric_suffix_for_duplicates():
@@ -321,18 +321,18 @@ def test_session_update_keeps_original_id_on_rename(tmp_path):
 
     updated = session.update_project(
         1,
-        name="JobForge CLI",
+        name="ResumeCR7 CLI",
         summary="Updated summary",
         highlights=["Built a deterministic baseline skill selector."],
         active=True,
         technology=["FastAPI"],
         programming=["Python"],
         concepts=["Schema validation"],
-        links=["https://github.com/example/jobforge"],
+        links=["https://github.com/example/resumecr7"],
     )
 
     assert updated.id == "project-123"
-    assert updated.name == "JobForge CLI"
+    assert updated.name == "ResumeCR7 CLI"
 
 
 def test_session_delete_removes_project_from_staged_state(tmp_path):
@@ -341,7 +341,7 @@ def test_session_delete_removes_project_from_staged_state(tmp_path):
 
     deleted = session.delete_project(1)
 
-    assert deleted.name == "JobForge"
+    assert deleted.name == "ResumeCR7"
     assert session.list_projects() == []
 
 
@@ -353,7 +353,7 @@ def test_session_rejects_invalid_edit_without_mutating_staged_state(tmp_path):
     with pytest.raises(ValueError):
         session.update_project(
             1,
-            name="JobForge",
+            name="ResumeCR7",
             summary="Updated summary",
             highlights=[],
             active=True,
@@ -385,7 +385,7 @@ def test_session_apply_writes_schema_valid_yaml_and_clears_dirty_flag(tmp_path):
 
     reloaded = load_evidence_yaml(path, "projects")
     assert reloaded.schema_version == 1
-    assert [project.name for project in reloaded.projects] == ["JobForge", "Portfolio Tracker"]
+    assert [project.name for project in reloaded.projects] == ["ResumeCR7", "Portfolio Tracker"]
     assert session.dirty is False
 
 
@@ -640,7 +640,7 @@ def test_cli_list_shows_numbered_projects(tmp_path):
 
     output = _run_cli(path, ["list", "quit"])
 
-    assert "1. JobForge [active]" in output
+    assert "1. ResumeCR7 [active]" in output
 
 
 def test_projects_cli_action_menu_lists_projects_at_startup(tmp_path):
@@ -649,7 +649,7 @@ def test_projects_cli_action_menu_lists_projects_at_startup(tmp_path):
 
     output = _run_projects_cli_with_action_picker(path, ["quit"], action_picker)
 
-    assert "1. JobForge [active]" in output
+    assert "1. ResumeCR7 [active]" in output
     assert action_picker.calls == [
         (
             "Choose project action",
@@ -673,7 +673,7 @@ def test_projects_cli_action_menu_list_matches_list_command(tmp_path):
 
     output = _run_projects_cli_with_action_picker(path, [], action_picker)
 
-    assert output.count("1. JobForge [active]") >= 2
+    assert output.count("1. ResumeCR7 [active]") >= 2
     assert output.endswith("Goodbye.\n")
 
 
@@ -689,7 +689,7 @@ def test_projects_cli_action_menu_show_matches_show_command(tmp_path):
         picker=project_picker,
     )
 
-    assert project_picker.calls == [("Choose a project to show", ["1. JobForge [active]"])]
+    assert project_picker.calls == [("Choose a project to show", ["1. ResumeCR7 [active]"])]
     assert "Summary: Grounded resume tooling for deterministic resume generation." in output
 
 
@@ -717,9 +717,9 @@ def test_projects_cli_action_menu_edit_matches_edit_command(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert project_picker.calls == [("Choose a project to edit", ["1. JobForge [active]"])]
+    assert project_picker.calls == [("Choose a project to edit", ["1. ResumeCR7 [active]"])]
     assert loaded.model_dump() == _valid_projects_payload()
-    assert "Staged updates for 'JobForge'. Run 'apply' to save." in output
+    assert "Staged updates for 'ResumeCR7'. Run 'apply' to save." in output
 
 
 def test_projects_cli_action_menu_apply_saves_after_menu_edit(tmp_path):
@@ -746,7 +746,7 @@ def test_projects_cli_action_menu_apply_saves_after_menu_edit(tmp_path):
 
     loaded = load_evidence_yaml(path, "projects")
     assert loaded.projects[0].summary == "Updated and saved from action menu"
-    assert "Staged updates for 'JobForge'. Run 'apply' to save." in output
+    assert "Staged updates for 'ResumeCR7'. Run 'apply' to save." in output
     assert f"Saved staged changes to {path}" in output
 
 
@@ -773,7 +773,7 @@ def test_projects_cli_action_menu_create_matches_create_command(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Staged new project 'Portfolio Tracker'. Run 'apply' to save." in output
 
 
@@ -790,9 +790,9 @@ def test_projects_cli_action_menu_delete_matches_delete_command(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert project_picker.calls == [("Choose a project to delete", ["1. JobForge [active]"])]
+    assert project_picker.calls == [("Choose a project to delete", ["1. ResumeCR7 [active]"])]
     assert loaded.model_dump() == _valid_projects_payload()
-    assert "Staged deletion for 'JobForge'. Run 'apply' to save." in output
+    assert "Staged deletion for 'ResumeCR7'. Run 'apply' to save." in output
 
 
 def test_projects_cli_action_menu_quit_uses_existing_dirty_confirmation(tmp_path):
@@ -819,7 +819,7 @@ def test_projects_cli_action_menu_quit_uses_existing_dirty_confirmation(tmp_path
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Quit canceled." in output
     assert output.endswith("Goodbye.\n")
 
@@ -846,7 +846,7 @@ def test_projects_cli_action_menu_reload_matches_reload_command(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Reloaded projects evidence from disk." in output
 
 
@@ -858,7 +858,7 @@ def test_projects_cli_action_menu_cancellation_returns_to_typed_prompt(tmp_path)
 
     loaded = load_evidence_yaml(path, "projects")
     assert loaded.model_dump() == _valid_projects_payload()
-    assert output.count("1. JobForge [active]") >= 2
+    assert output.count("1. ResumeCR7 [active]") >= 2
     assert output.endswith("Goodbye.\n")
 
 
@@ -867,7 +867,7 @@ def test_projects_cli_without_action_picker_still_accepts_typed_commands(tmp_pat
 
     output = _run_cli(path, ["list", "quit"])
 
-    assert "1. JobForge [active]" in output
+    assert "1. ResumeCR7 [active]" in output
     assert output.endswith("Goodbye.\n")
 
 
@@ -878,7 +878,7 @@ def test_cli_show_without_index_uses_project_picker(tmp_path):
     output = _run_projects_cli_with_picker(path, ["show", "quit"], picker)
 
     assert picker.calls == [
-        ("Choose a project to show", ["1. JobForge [active]"]),
+        ("Choose a project to show", ["1. ResumeCR7 [active]"]),
     ]
     assert "Summary: Grounded resume tooling for deterministic resume generation." in output
 
@@ -907,7 +907,7 @@ def test_cli_edit_without_index_uses_project_picker(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert picker.calls[0] == ("Choose a project to edit", ["1. JobForge [active]"])
+    assert picker.calls[0] == ("Choose a project to edit", ["1. ResumeCR7 [active]"])
     assert loaded.projects[0].summary == "Updated from picker"
 
 
@@ -923,7 +923,7 @@ def test_cli_delete_without_index_uses_project_picker(tmp_path):
 
     loaded = load_evidence_yaml(path, "projects")
     assert picker.calls == [
-        ("Choose a project to delete", ["1. JobForge [active]"]),
+        ("Choose a project to delete", ["1. ResumeCR7 [active]"]),
     ]
     assert loaded.projects == []
 
@@ -972,7 +972,7 @@ def test_cli_create_stages_changes_without_persisting_before_apply(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Run 'apply' to save." in output
 
 
@@ -1225,7 +1225,7 @@ def test_cli_apply_requires_confirmation_before_writing(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Apply canceled." in output
 
 
@@ -1253,7 +1253,7 @@ def test_cli_reload_discards_dirty_changes_only_after_confirmation(tmp_path):
     )
 
     loaded = load_evidence_yaml(path, "projects")
-    assert [project.name for project in loaded.projects] == ["JobForge"]
+    assert [project.name for project in loaded.projects] == ["ResumeCR7"]
     assert "Portfolio Tracker" not in output.split("Reloaded projects evidence from disk.")[-1]
 
 

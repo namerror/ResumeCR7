@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-ADR 016 established JobForge's first product surface as a local-first web
+ADR 016 established ResumeCR7's first product surface as a local-first web
 workbench over the existing FastAPI backend, with desktop distribution as the
 first packaging target after the workflow is proven.
 
@@ -28,7 +28,7 @@ forcing a backend rewrite before the product workflow is stable.
 
 ## Decision
 
-Package JobForge as a desktop app by wrapping the existing React/Vite frontend
+Package ResumeCR7 as a desktop app by wrapping the existing React/Vite frontend
 and FastAPI backend rather than rewriting the application into a native UI.
 
 Use Tauri v2 as the preferred desktop shell and package the Python backend as a
@@ -39,7 +39,7 @@ through a loopback address or equivalent local runtime bridge.
 The target runtime shape is:
 
 ```text
-JobForge desktop app
+ResumeCR7 desktop app
   -> Tauri shell
   -> bundled React/Vite frontend
   -> packaged Python FastAPI sidecar
@@ -61,8 +61,8 @@ Make the Python backend and frontend build outputs cleanly packageable before
 building installers.
 
 - Add Python package metadata, preferably in `pyproject.toml`.
-- Expose stable backend entrypoints, such as `jobforge-api`,
-  `jobforge-resume-evidence`, and `jobforge-resume-generation`.
+- Expose stable backend entrypoints, such as `resumecr7-api`,
+  `resumecr7-resume-evidence`, and `resumecr7-resume-generation`.
 - Keep runtime dependencies separate from development and test dependencies.
 - Ensure `app.main` is importable and runnable consistently.
 - Maintain a stable health endpoint for desktop startup checks.
@@ -87,7 +87,7 @@ bundle.
 The packaged runtime should converge on a layout like:
 
 ```text
-JOBFORGE_DATA_DIR/
+RESUMECR7_DATA_DIR/
   resume_evidence/
     user.yaml
     skills.yaml
@@ -195,7 +195,7 @@ The update path should progress in this order:
 - This decision does not choose PyInstaller versus Nuitka permanently.
 - This decision does not prevent a later hosted service, database adapter, or
   async run lifecycle.
-- Electron remains a fallback if Tauri proves unsuitable for JobForge's
+- Electron remains a fallback if Tauri proves unsuitable for ResumeCR7's
   sidecar/runtime needs.
 
 ## Alternatives Considered

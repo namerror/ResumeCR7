@@ -12,7 +12,7 @@ Long skill suffixes, dates, and locations were rendered in `l`/`r` table columns
 **Tests:**
 - `test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffixes`: validates long experience and project skill suffixes are retained and rendered through wrapping columns.
 - `PYTHONPATH=. pytest tests/test_resume_generation.py`
-- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/jobforge-latex-wrap-check/out /tmp/jobforge-latex-wrap-check/resume.tex`
+- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/resumecr7-latex-wrap-check/out /tmp/resumecr7-latex-wrap-check/resume.tex`
 
 **Impact:**
 Generated LaTeX resumes can now wrap long experience and project heading metadata instead of hiding content past the page boundary.

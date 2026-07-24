@@ -142,8 +142,8 @@ Content-Type: application/json
   },
   "candidates": [
     {
-      "id": "jobforge",
-      "name": "JobForge Resume Engine",
+      "id": "resumecr7",
+      "name": "ResumeCR7 Resume Engine",
       "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
       "skills": {
         "technology": ["FastAPI", "PostgreSQL", "Docker", "AWS"],
@@ -188,8 +188,8 @@ Content-Type: application/json
   },
   "candidates": [
     {
-      "id": "jobforge",
-      "name": "JobForge Resume Engine",
+      "id": "resumecr7",
+      "name": "ResumeCR7 Resume Engine",
       "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
       "skills": {
         "technology": ["FastAPI", "PostgreSQL", "Docker", "AWS"],
@@ -244,8 +244,8 @@ Content-Type: application/json
       }
     },
     {
-      "id": "jobforge",
-      "name": "JobForge Resume Engine",
+      "id": "resumecr7",
+      "name": "ResumeCR7 Resume Engine",
       "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
       "skills": {
         "technology": ["FastAPI", "Docker", "AWS"],
@@ -290,8 +290,8 @@ Content-Type: application/json
       }
     },
     {
-      "id": "jobforge",
-      "name": "JobForge Resume Engine",
+      "id": "resumecr7",
+      "name": "ResumeCR7 Resume Engine",
       "summary": "FastAPI service that ranks skills and projects for job-targeted resumes with deterministic fallbacks.",
       "skills": {
         "technology": ["FastAPI", "Docker", "AWS"],

@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="JobForge Resume Engine", lifespan=lifespan)
+app = FastAPI(title="ResumeCR7 Resume Engine", lifespan=lifespan)
 app.include_router(resume_evidence_router)
 app.include_router(resume_generation_router)
 
@@ -55,7 +55,7 @@ async def health():
     return {
         "status": "ok",
         "version": __version__,
-        "service": "jobforge-resume-engine",
+        "service": "resumecr7-resume-engine",
         "dev_mode": settings.DEV_MODE,
         "skill_selection": {
             "method": settings.SKILL_METHOD,

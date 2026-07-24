@@ -22,4 +22,4 @@ The next resume-generation interface needs to load evidence, call skill/project 
 - `.venv/bin/python -m pytest`: 278 passed, 4 skipped.
 
 **Impact:**
-JobForge now has the intended top-level evidence and generation package structure. Selection services remain under `app/`, evidence management is standalone, and future resume-generation work has a clear home for evidence-to-selection orchestration without adding synthesis behavior prematurely.
+ResumeCR7 now has the intended top-level evidence and generation package structure. Selection services remain under `app/`, evidence management is standalone, and future resume-generation work has a clear home for evidence-to-selection orchestration without adding synthesis behavior prematurely.

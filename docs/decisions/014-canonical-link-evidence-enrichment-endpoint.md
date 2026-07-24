@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge exposed two semantically equivalent link enrichment endpoints:
+ResumeCR7 exposed two semantically equivalent link enrichment endpoints:
 `POST /scan-link` and `POST /enrich-link-evidence`. Both routes called the same
 service function, but `/scan-link` carried the older project-only naming and a
 legacy request shape that accepted `project` plus optional `context` fields.

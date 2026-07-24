@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge has grown from a skill-selection microservice into a resume engine with separate selection services and a grounded evidence foundation. ADR 005 organized `app/resume_evidence/` as a peer runtime subsystem under the FastAPI app, which was appropriate while evidence loading was only a startup hook and local CLI.
+ResumeCR7 has grown from a skill-selection microservice into a resume engine with separate selection services and a grounded evidence foundation. ADR 005 organized `app/resume_evidence/` as a peer runtime subsystem under the FastAPI app, which was appropriate while evidence loading was only a startup hook and local CLI.
 
 The next resume-generation layer needs to load user evidence, adapt it into skill-selection and project-selection requests, call those services, and combine their outputs into structured resume fill data. Keeping that orchestration inside `app/resume_evidence/` would make evidence management depend conceptually on the FastAPI services that also import evidence. That weakens the boundary between user-authored source data, service capabilities, and downstream resume assembly.
 

@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge is moving from a backend resume engine toward an application that can
+ResumeCR7 is moving from a backend resume engine toward an application that can
 be used directly. The desired product workflow is interactive: users edit
 resume evidence, paste or edit a job description, generate a targeted resume,
 review and adjust resume items, then export a final PDF.

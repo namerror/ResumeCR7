@@ -10,7 +10,7 @@
 The project-selection baseline needed a focused agentic review using the local dataset. The report keeps the run scoped to deterministic baseline behavior, confirms schema and grounding requirements, and records observed ranking concerns without changing scoring behavior in the same evaluation session.
 
 **Tests:**
-- `.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --base-url http://127.0.0.1:8001 --suite project_selection --variant baseline --output /tmp/jobforge-project-baseline-agentic-results.json --fail-on-error`: ran the two project-selection baseline dataset requests against the local API and received HTTP 200 for both.
+- `.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --base-url http://127.0.0.1:8001 --suite project_selection --variant baseline --output /tmp/resumecr7-project-baseline-agentic-results.json --fail-on-error`: ran the two project-selection baseline dataset requests against the local API and received HTTP 200 for both.
 
 **Impact:**
 Documents that baseline project selection picks the expected best-fit projects but has score-calibration concerns when sparse and dense matches receive equal normalized scores. This gives future scoring work a concrete regression target.

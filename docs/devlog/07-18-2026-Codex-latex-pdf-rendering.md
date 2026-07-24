@@ -21,4 +21,4 @@ The renderer stays outside the LaTeX template module so `.tex` generation remain
 - `test_resume_pdf_main_uses_default_paths`: validates standalone script defaults.
 
 **Impact:**
-JobForge can now turn generated LaTeX resume artifacts into PDF files through a minimal, deployable renderer boundary without making PDF compilation mandatory for normal resume generation.
+ResumeCR7 can now turn generated LaTeX resume artifacts into PDF files through a minimal, deployable renderer boundary without making PDF compilation mandatory for normal resume generation.

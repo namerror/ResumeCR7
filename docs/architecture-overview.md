@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document maps the current JobForge structure so agents can move quickly across the resume-engine subsystems: FastAPI backend capabilities, grounded resume evidence, local resume-generation orchestration, and the planned service facade.
+This document maps the current ResumeCR7 structure so agents can move quickly across the resume-engine subsystems: FastAPI backend capabilities, grounded resume evidence, local resume-generation orchestration, and the planned service facade.
 
 ## 1) High-Level Structure
 

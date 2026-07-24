@@ -28,4 +28,4 @@ The full-suite run also exposed that baseline-filter fallback was not matching n
 - `test_baseline_filter_embedding_failure_returns_full_baseline`: validates failed model-backed baseline-filter second passes return the same selections as normal baseline.
 
 **Impact:**
-JobForge now exposes synchronous backend resume-generation endpoints for enrichment, `.tex`, and PDF output while preserving existing local workflows. Future async run/status APIs can build above this app-owned boundary without clients coordinating low-level stage endpoints.
+ResumeCR7 now exposes synchronous backend resume-generation endpoints for enrichment, `.tex`, and PDF output while preserving existing local workflows. Future async run/status APIs can build above this app-owned boundary without clients coordinating low-level stage endpoints.

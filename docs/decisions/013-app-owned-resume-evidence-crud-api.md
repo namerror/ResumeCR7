@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-JobForge is transitioning from a prototype with standalone local orchestration
+ResumeCR7 is transitioning from a prototype with standalone local orchestration
 into a FastAPI-backed resume service. Resume evidence had been moved to a
 top-level `resume_evidence/` package so CLI and local generation code could use
 it independently, but the next product boundary needs evidence to be exposed

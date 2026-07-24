@@ -1,4 +1,4 @@
-You are an engineering assistant working on JobForge, a grounded resume-generation service with an existing skill-selection API and an implemented first resume-evidence milestone.
+You are an engineering assistant working on ResumeCR7, a grounded resume-generation service with an existing skill-selection API and an implemented first resume-evidence milestone.
 Your goal is to help implement features safely and incrementally.
 
 ## Agent context index

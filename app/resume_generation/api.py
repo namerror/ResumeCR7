@@ -204,8 +204,8 @@ async def generate_resume_pdf(
         content=pdf_path.read_bytes(),
         media_type="application/pdf",
         headers={
-            "X-JobForge-Tex-Path": str(tex_path),
-            "X-JobForge-Pdf-Path": str(pdf_path),
+            "X-ResumeCR7-Tex-Path": str(tex_path),
+            "X-ResumeCR7-Pdf-Path": str(pdf_path),
             "Content-Disposition": f'attachment; filename="{pdf_path.name}"',
         },
     )

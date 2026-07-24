@@ -95,14 +95,14 @@ describe("App", () => {
     render(<App client={client} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Projects" }));
-    fireEvent.click(screen.getByLabelText("Delete JobForge"));
+    fireEvent.click(screen.getByLabelText("Delete ResumeCR7"));
 
     expect(client.deleteProject).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /apply/i }));
 
     await waitFor(() => {
-      expect(client.deleteProject).toHaveBeenCalledWith("jobforge");
+      expect(client.deleteProject).toHaveBeenCalledWith("resumecr7");
     });
   });
 
@@ -178,7 +178,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(client.enrichResumeLinkEvidence).toHaveBeenCalledWith({
         evidence_type: "projects",
-        evidence_id: "jobforge",
+        evidence_id: "resumecr7",
         dry_run: false,
       });
     });

@@ -1,6 +1,6 @@
 # Agentic API Testing Guide
 
-Use this guide when an agent runs the testing dataset against the local JobForge API and writes a human-style review report. The goal is not to prove the API is perfect. The goal is to make a careful, reproducible judgment about whether the returned selections are useful for a resume reviewer.
+Use this guide when an agent runs the testing dataset against the local ResumeCR7 API and writes a human-style review report. The goal is not to prove the API is perfect. The goal is to make a careful, reproducible judgment about whether the returned selections are useful for a resume reviewer.
 
 ## Scope
 
@@ -22,7 +22,7 @@ Use `docs/agentic-testing/dataset.json` as the source of truth. The dataset is i
 Examples:
 
 ```bash
-.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --suite skill_selection --exclude-variant embeddings_with_filter --output /tmp/jobforge-skill-results.json
+.venv/bin/python docs/agentic-testing/run_agentic_dataset.py --suite skill_selection --exclude-variant embeddings_with_filter --output /tmp/resumecr7-skill-results.json
 ```
 
 ```bash

@@ -12,7 +12,7 @@ Experience headings need a right-side column for date and location, but project 
 **Tests:**
 - `test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffixes`: validates distinct wrapping layouts for experience and project headings.
 - `PYTHONPATH=. pytest tests/test_resume_generation.py`
-- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/jobforge-latex-project-fullwidth-check/out /tmp/jobforge-latex-project-fullwidth-check/resume.tex`
+- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/resumecr7-latex-project-fullwidth-check/out /tmp/resumecr7-latex-project-fullwidth-check/resume.tex`
 
 **Impact:**
 Project skill suffixes now use the full available heading width and wrap only near the actual page edge.

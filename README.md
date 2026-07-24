@@ -1,6 +1,6 @@
-# JobForge Resume Engine
+# ResumeCR7 Resume Engine
 
-JobForge is in a transition from a resume-generation prototype into a FastAPI-backed resume service and local-first resume workbench. The current repo can already run grounded resume generation locally, and the recommended service direction is to keep the FastAPI backend as the integration point for product-facing APIs.
+ResumeCR7 is in a transition from a resume-generation prototype into a FastAPI-backed resume service and local-first resume workbench. The current repo can already run grounded resume generation locally, and the recommended service direction is to keep the FastAPI backend as the integration point for product-facing APIs.
 
 Today the repo ships three capability tracks:
 
@@ -178,11 +178,11 @@ The repo also includes utilities for skill-selection evaluation and data prepara
 - `scripts/eval.py`
   - runs skill-selection evaluation against case files
 
-See [scripts/README.md](/home/leon/Documents/proj/JobForge/scripts/README.md) for command details.
+See [scripts/README.md](/scripts/README.md) for command details.
 
 ## How The Pieces Fit Together
 
-JobForge now has a broader resume-engine shape:
+ResumeCR7 now has a broader resume-engine shape:
 
 - the FastAPI `app/` layer provides reusable backend capabilities for selection, focus derivation, bullet generation, enrichment, metrics, and health checks
 - the skills API helps prioritize and rank skills for the Skills section
@@ -327,7 +327,7 @@ Example response:
 {
   "status": "ok",
   "version": "0.3.0",
-  "service": "jobforge-resume-engine",
+  "service": "resumecr7-resume-engine",
   "dev_mode": true,
   "skill_selection": {
     "method": "baseline",
@@ -395,8 +395,8 @@ Example request:
   },
   "candidates": [
     {
-      "id": "jobforge",
-      "name": "JobForge",
+      "id": "resumecr7",
+      "name": "ResumeCR7",
       "summary": "Resume engine with deterministic selection and grounded evidence.",
       "skills": {
         "technology": ["Django", "PostgreSQL"],
@@ -415,10 +415,10 @@ Example response:
 
 ```json
 {
-  "selected_project_ids": ["jobforge"],
+  "selected_project_ids": ["resumecr7"],
   "ranked_projects": [
     {
-      "project_id": "jobforge",
+      "project_id": "resumecr7",
       "score": 0.75,
       "method": "baseline"
     }
@@ -472,7 +472,7 @@ Example response:
 
 ## Configuration
 
-JobForge reads settings from environment variables via `app/config.py`.
+ResumeCR7 reads settings from environment variables via `app/config.py`.
 
 ```bash
 SKILL_METHOD=baseline # available options: baseline, embeddings, llm
@@ -568,13 +568,13 @@ The next backend transition should focus on service integration rather than addi
 
 See:
 
-- [docs/architecture-overview.md](/home/leon/Documents/proj/JobForge/docs/architecture-overview.md)
-- [docs/decisions/003-grounded-resume-evidence-pipeline.md](/home/leon/Documents/proj/JobForge/docs/decisions/003-grounded-resume-evidence-pipeline.md)
-- [docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md](/home/leon/Documents/proj/JobForge/docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md)
-- [docs/decisions/005-subsystem-package-organization.md](/home/leon/Documents/proj/JobForge/docs/decisions/005-subsystem-package-organization.md)
-- [docs/decisions/008-standalone-resume-evidence-and-generation-layers.md](/home/leon/Documents/proj/JobForge/docs/decisions/008-standalone-resume-evidence-and-generation-layers.md)
-- [docs/decisions/012-fastapi-resume-service-transition.md](/home/leon/Documents/proj/JobForge/docs/decisions/012-fastapi-resume-service-transition.md)
-- [docs/decisions/015-app-owned-resume-generation-api.md](/home/leon/Documents/proj/JobForge/docs/decisions/015-app-owned-resume-generation-api.md)
+- [docs/architecture-overview.md](/home/leon/Documents/proj/ResumeCR7/docs/architecture-overview.md)
+- [docs/decisions/003-grounded-resume-evidence-pipeline.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/003-grounded-resume-evidence-pipeline.md)
+- [docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md)
+- [docs/decisions/005-subsystem-package-organization.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/005-subsystem-package-organization.md)
+- [docs/decisions/008-standalone-resume-evidence-and-generation-layers.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/008-standalone-resume-evidence-and-generation-layers.md)
+- [docs/decisions/012-fastapi-resume-service-transition.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/012-fastapi-resume-service-transition.md)
+- [docs/decisions/015-app-owned-resume-generation-api.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/015-app-owned-resume-generation-api.md)
 
 ## Current Limitations
 

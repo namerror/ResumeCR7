@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run selected JobForge agentic-testing dataset requests."""
+"""Run selected ResumeCR7 agentic-testing dataset requests."""
 
 from __future__ import annotations
 

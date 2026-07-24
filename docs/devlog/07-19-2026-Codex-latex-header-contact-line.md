@@ -13,7 +13,7 @@ The previous heading renderer forced profile links onto a second line after emai
 **Tests:**
 - `test_render_resume_latex_keeps_contact_and_profiles_on_one_header_line`: validates that all contact and profile fields render into one `\resumeHeaderLine` with compact spacing.
 - `PYTHONPATH=. pytest tests/test_resume_generation.py`
-- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/jobforge-latex-header-check/out /tmp/jobforge-latex-header-check/resume.tex`
+- `latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir=/tmp/resumecr7-latex-header-check/out /tmp/resumecr7-latex-header-check/resume.tex`
 
 **Impact:**
 Generated LaTeX resumes now keep the main contact and profile metadata together under the candidate name, with automatic shrink-to-fit behavior for unusually long rows.

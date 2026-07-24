@@ -3,7 +3,7 @@
 **Agent:** Codex (GPT-5)
 
 **Changes:**
-- `README.md:1-11` - Reframed JobForge as a resume-generation prototype transitioning into a FastAPI-backed resume service.
+- `README.md:1-11` - Reframed ResumeCR7 as a resume-generation prototype transitioning into a FastAPI-backed resume service.
 - `README.md:147-206` - Added the recommended service architecture: product-facing facade, internal capability APIs, file-backed storage adapter transition, and async generation runs.
 - `README.md:208-239` - Updated local resume-generation usage to include job-focus generation and standalone link enrichment.
 - `README.md:499-515` - Replaced the stale planned-next list with service-integration next steps and linked ADR 012.

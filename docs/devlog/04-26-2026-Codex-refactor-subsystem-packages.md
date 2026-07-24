@@ -6,7 +6,7 @@
 - `app/skill_selection/` - Moved skill-selection models, selector orchestration, baseline filter, model clients, scoring logic, role profiles, synonym data, and embedding caches into a dedicated subsystem package.
 - `app/project_selection/service.py` - Added API-facing project-selection service orchestration with defaults, structured logging, fallback-method metrics, and token accounting.
 - `app/project_selection/models.py` - Added `ProjectSelectRequest` for the new API route.
-- `app/main.py` - Renamed the FastAPI app to JobForge Resume Engine, added `POST /select-projects`, and expanded `/metrics-lite` with per-subsystem metrics.
+- `app/main.py` - Renamed the FastAPI app to ResumeCR7 Resume Engine, added `POST /select-projects`, and expanded `/metrics-lite` with per-subsystem metrics.
 - `app/models.py`, `app/scoring/*`, `app/services/*` - Added compatibility shims for legacy imports.
 - `tests/test_project_selection_api.py` and `tests/test_compat_imports.py` - Added route and compatibility coverage.
 - `docs/architecture-overview.md`, `README.md`, `docs/agent-context-index.md`, `docs/project-selection-plan.md`, `docs/decisions/005-subsystem-package-organization.md` - Updated architecture docs and recorded the subsystem organization decision.
@@ -22,4 +22,4 @@ The repo is now a resume engine with multiple subsystems, but skill-selection co
 - `.venv/bin/python -m pytest -q`: full suite passes.
 
 **Impact:**
-JobForge now has a clearer subsystem layout for skill selection, project selection, and resume evidence. Project selection is available through a public route, and metrics can distinguish skill-selection and project-selection traffic while keeping existing aggregate fields.
+ResumeCR7 now has a clearer subsystem layout for skill selection, project selection, and resume evidence. Project selection is available through a public route, and metrics can distinguish skill-selection and project-selection traffic while keeping existing aggregate fields.
