@@ -11,6 +11,7 @@ from app.config import settings
 from app.skill_selection.selector import select_skills_service
 from app.metrics import metrics
 from app.logging_config import setup_logging
+from app.runtime_data import bootstrap_runtime_data
 from app.project_selection.models import ProjectSelectRequest, ProjectSelectionResult
 from app.project_selection.service import record_project_selection_error, select_projects_service
 from app.bulletpoints_generation.models import (
@@ -40,6 +41,13 @@ logger = logging.getLogger("app_main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    bootstrap_runtime_data(
+        data_dir=settings.RESUMECR7_DATA_DIR,
+        evidence_root=settings.RESUME_EVIDENCE_ROOT,
+        generation_root=settings.RESUME_GENERATION_ROOT,
+        artifacts_root=settings.resume_generation_artifacts_root,
+        log_dir=settings.RESUMECR7_LOG_DIR,
+    )
     setup_logging(settings.LOG_LEVEL, log_path=settings.log_file_path)
     app.state.resume_evidence = load_registered_evidence()
     yield

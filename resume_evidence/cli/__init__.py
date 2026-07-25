@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 from typing import Callable, TextIO
 
+from app.config import settings
+from app.runtime_data import bootstrap_runtime_data
 from resume_evidence.cli.education import EducationEvidenceCLI
 from resume_evidence.cli.experience import ExperienceEvidenceCLI
 from resume_evidence.cli.projects import ProjectsEvidenceCLI
@@ -43,6 +45,15 @@ def main(
 ) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+
+    if args.path is None:
+        bootstrap_runtime_data(
+            data_dir=settings.RESUMECR7_DATA_DIR,
+            evidence_root=settings.RESUME_EVIDENCE_ROOT,
+            generation_root=settings.RESUME_GENERATION_ROOT,
+            artifacts_root=settings.resume_generation_artifacts_root,
+            log_dir=settings.RESUMECR7_LOG_DIR,
+        )
 
     if args.schema == "education":
         session = EducationEvidenceSession.load(args.path)

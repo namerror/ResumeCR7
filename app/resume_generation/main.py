@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from app.runtime_data import bootstrap_runtime_data
 from app.resume_evidence import (
     EducationFile,
     ExperienceFile,
@@ -420,6 +421,13 @@ def write_resume_pdf_from_config(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the ResumeCR7 resume generation pipeline.")
     parser.parse_args(argv)
+    bootstrap_runtime_data(
+        data_dir=settings.RESUMECR7_DATA_DIR,
+        evidence_root=settings.RESUME_EVIDENCE_ROOT,
+        generation_root=settings.RESUME_GENERATION_ROOT,
+        artifacts_root=settings.resume_generation_artifacts_root,
+        log_dir=settings.RESUMECR7_LOG_DIR,
+    )
     resume_result = run_resume_generation_pipeline()
     latex_path = write_resume_latex_from_config(resume_result)
     write_resume_pdf_from_config(latex_path)

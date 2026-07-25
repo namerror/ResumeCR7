@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-25-2026-Codex-phase-2-runtime-data-model.md` - 2026-07-25 - Phase 2 runtime data model
 - `07-24-2026-Codex-reproducible-uv-ci.md` - 2026-07-24 - Reproducible uv CI
 - `07-24-2026-Codex-uv-readme-package-management.md` - 2026-07-24 - Document uv package management
 - `07-24-2026-Codex-phase-1-package-hygiene.md` - 2026-07-24 - Phase 1 package hygiene

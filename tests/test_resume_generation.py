@@ -486,13 +486,20 @@ def test_generation_default_paths_follow_settings(monkeypatch, tmp_path):
 
     assert resolve_generation_config_path() == generation_root / "config.yaml"
     assert resolve_job_target_path() == generation_root / "job_target.yaml"
-    assert resolve_resume_result_artifact_path() == generation_root / "resume_result.json"
+    assert (
+        resolve_resume_result_artifact_path()
+        == generation_root / "artifacts" / "resume_result.json"
+    )
     assert (
         resolve_resume_run_manifest_artifact_path()
-        == generation_root / "resume_run_manifest.json"
+        == generation_root / "artifacts" / "resume_run_manifest.json"
     )
-    assert resolve_resume_latex_output_path(None) == generation_root / "resume.tex"
-    assert resolve_resume_pdf_output_path(None) == generation_root / "resume.pdf"
+    assert resolve_resume_latex_output_path(None) == (
+        generation_root / "artifacts" / "resume.tex"
+    )
+    assert resolve_resume_pdf_output_path(None) == (
+        generation_root / "artifacts" / "resume.pdf"
+    )
 
 
 def test_load_generation_config_accepts_cache_config(tmp_path):
@@ -4349,8 +4356,12 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     assert data["resume_result"]["top"]["name"] == "Example Candidate"
     assert data["tex_path"] == str(tex_path)
     assert data["tex_content"] == "rendered tex\n"
-    assert data["resume_result_path"].endswith("user/resume_generation/resume_result.json")
-    assert data["manifest_path"].endswith("user/resume_generation/resume_run_manifest.json")
+    assert data["resume_result_path"].endswith(
+        "user/resume_generation/artifacts/resume_result.json"
+    )
+    assert data["manifest_path"].endswith(
+        "user/resume_generation/artifacts/resume_run_manifest.json"
+    )
 
 
 def test_resume_generation_tex_route_accepts_job_target_override(

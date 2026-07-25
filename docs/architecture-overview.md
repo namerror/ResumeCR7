@@ -132,15 +132,16 @@ legacy compatibility shims
 
 ```mermaid
 flowchart TD
-    A[FastAPI lifespan start] --> B[setup_logging]
-    B --> C[load_registered_evidence]
-    C --> D[loader resolves paths from RESUME_EVIDENCE_ROOT]
-    D --> E[load all registered user/resume_evidence/*.yaml]
-    E --> F[validate into strict evidence models]
-    F --> G[store on app.state.resume_evidence]
+    A[FastAPI lifespan start] --> B[bootstrap_runtime_data]
+    B --> C[setup_logging]
+    C --> D[load_registered_evidence]
+    D --> E[loader resolves paths from RESUME_EVIDENCE_ROOT]
+    E --> F[load all registered resume_evidence/*.yaml]
+    F --> G[validate into strict evidence models]
+    G --> H[store on app.state.resume_evidence]
 ```
 
-- Startup currently loads the registered evidence set into `app.state.resume_evidence`.
+- Startup creates missing runtime directories and schema-valid default YAML files before loading the registered evidence set into `app.state.resume_evidence`.
 - Today that registry contains `education`, `experience`, `projects`, `skills`, and `user`.
 - This startup hook validates local file-backed evidence for the current backend runtime. The product-facing evidence CRUD API now routes access through `app.resume_evidence` service helpers while still using configurable local YAML storage by default.
 
@@ -434,10 +435,10 @@ The recommended service path is to keep FastAPI and add a product-facing facade 
   - `user/resume_generation/config.yaml`
   - `user/resume_generation/job_target.yaml`
   - `user/resume_generation/cache/`
-  - `user/resume_generation/resume_result.json`
-  - `user/resume_generation/resume_run_manifest.json`
-  - `user/resume_generation/resume.tex`
-  - `user/resume_generation/resume.pdf`
+  - `user/resume_generation/artifacts/resume_result.json`
+  - `user/resume_generation/artifacts/resume_run_manifest.json`
+  - `user/resume_generation/artifacts/resume.tex`
+  - `user/resume_generation/artifacts/resume.pdf`
 
 ## 10) Routes And Interfaces
 

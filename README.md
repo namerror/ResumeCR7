@@ -260,9 +260,10 @@ PYTHONPATH=. python -m resume_generation.main
 
 The direct module entrypoint writes:
 
-- `user/resume_generation/resume_result.json` - intermediate structured resume data
-- `user/resume_generation/resume.tex` - LaTeX resume output, unless `resume_output.path` overrides it
-- `user/resume_generation/resume.pdf` - optional rendered PDF when `resume_output.render_pdf: true`
+- `user/resume_generation/artifacts/resume_result.json` - intermediate structured resume data
+- `user/resume_generation/artifacts/resume_run_manifest.json` - generation inputs, stage metadata, and token usage
+- `user/resume_generation/artifacts/resume.tex` - LaTeX resume output, unless `resume_output.path` overrides it
+- `user/resume_generation/artifacts/resume.pdf` - optional rendered PDF when `resume_output.render_pdf: true`
 
 To render an existing `.tex` file without rerunning the full pipeline:
 
@@ -476,6 +477,7 @@ ResumeCR7 reads settings from environment variables via `app/config.py`.
 
 ```bash
 RESUMECR7_DATA_DIR=user # root for evidence, generation config/artifacts, and logs
+RESUMECR7_PACKAGED=false # use OS app-data defaults when true and DATA_DIR is unset
 # RESUME_EVIDENCE_ROOT=user/resume_evidence # optional legacy evidence-root override
 # RESUME_GENERATION_ROOT=user/resume_generation # optional generation-root override
 # RESUMECR7_LOG_DIR=user/logs # optional log directory override
@@ -503,6 +505,14 @@ LINK_SCANNING_ENABLED=false
 LINK_SCANNING_LLM_MODEL=gpt-5-mini
 LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS=1200
 ```
+
+When `RESUMECR7_PACKAGED=true` and `RESUMECR7_DATA_DIR` is not set,
+ResumeCR7 resolves the data root from the OS app-data location:
+`$XDG_DATA_HOME/resumecr7` or `~/.local/share/resumecr7` on Linux,
+`~/Library/Application Support/ResumeCR7` on macOS, and
+`%LOCALAPPDATA%\ResumeCR7` on Windows. Startup bootstraps missing evidence and
+generation YAML files with schema-valid placeholder defaults, creates
+`resume_generation/artifacts/`, and never overwrites existing runtime files.
 
 `OPENAI_API_KEY` is only required for skill-selection `embeddings`, skill-selection `llm`, project-selection `llm`, bullet-point generation, and enabled link-scanning requests.
 Link scanning treats normal URLs as single-page sources; `github.com/{owner}/{repo}` links allow repository-scoped exploration for technical project evidence.

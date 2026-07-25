@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.data_paths import resolve_default_data_dir
+
 
 SkillSelectionMethod = Literal["baseline", "embeddings", "llm"]
 ProjectSelectionMethod = Literal["baseline", "llm"]
@@ -25,7 +27,8 @@ class Settings(BaseSettings):
     PROJ_METHOD: ProjectSelectionMethod = "llm"
     DEV_MODE: bool = True
     LOG_LEVEL: str = "INFO"
-    RESUMECR7_DATA_DIR: Path = _REPO_ROOT / "user"
+    RESUMECR7_PACKAGED: bool = False
+    RESUMECR7_DATA_DIR: Path | None = None
     RESUME_EVIDENCE_ROOT: Path | None = None
     RESUME_GENERATION_ROOT: Path | None = None
     RESUMECR7_LOG_DIR: Path | None = None
@@ -55,6 +58,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_data_roots(self) -> "Settings":
+        if self.RESUMECR7_DATA_DIR is None:
+            self.RESUMECR7_DATA_DIR = resolve_default_data_dir(
+                repo_root=_REPO_ROOT,
+                packaged=self.RESUMECR7_PACKAGED,
+            )
         if self.RESUME_EVIDENCE_ROOT is None:
             self.RESUME_EVIDENCE_ROOT = self.RESUMECR7_DATA_DIR / "resume_evidence"
         if self.RESUME_GENERATION_ROOT is None:
@@ -72,20 +80,24 @@ class Settings(BaseSettings):
         return self.RESUME_GENERATION_ROOT / "job_target.yaml"
 
     @property
+    def resume_generation_artifacts_root(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "artifacts"
+
+    @property
     def resume_result_artifact_path(self) -> Path:
-        return self.RESUME_GENERATION_ROOT / "resume_result.json"
+        return self.resume_generation_artifacts_root / "resume_result.json"
 
     @property
     def resume_run_manifest_artifact_path(self) -> Path:
-        return self.RESUME_GENERATION_ROOT / "resume_run_manifest.json"
+        return self.resume_generation_artifacts_root / "resume_run_manifest.json"
 
     @property
     def resume_tex_artifact_path(self) -> Path:
-        return self.RESUME_GENERATION_ROOT / "resume.tex"
+        return self.resume_generation_artifacts_root / "resume.tex"
 
     @property
     def resume_pdf_artifact_path(self) -> Path:
-        return self.RESUME_GENERATION_ROOT / "resume.pdf"
+        return self.resume_generation_artifacts_root / "resume.pdf"
 
     @property
     def log_file_path(self) -> Path:
