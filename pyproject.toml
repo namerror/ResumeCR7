@@ -26,9 +26,13 @@ dependencies = [
 dev = [
     "pytest>=9.0,<9.1",
 ]
+desktop = [
+    "pyinstaller>=6.17,<6.18",
+]
 
 [project.scripts]
 resumecr7-api = "app.api_launcher:main"
+resumecr7-desktop-backend = "app.desktop_backend:main"
 resumecr7-resume-evidence = "resume_evidence.cli:main"
 resumecr7-resume-generation = "app.resume_generation.main:main"
 

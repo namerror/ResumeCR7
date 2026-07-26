@@ -3,6 +3,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from pydantic import ValidationError
 
@@ -38,6 +39,15 @@ from app.resume_generation.api import router as resume_generation_router
 
 logger = logging.getLogger("app_main")
 
+DESKTOP_CORS_ORIGINS = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "tauri://localhost",
+    "http://tauri.localhost",
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,6 +64,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ResumeCR7 Resume Engine", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=DESKTOP_CORS_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(resume_evidence_router)
 app.include_router(resume_generation_router)
 

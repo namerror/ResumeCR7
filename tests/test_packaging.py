@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import tomllib
 import importlib
 from pathlib import Path
 
 from app import __version__
 from app import api_launcher
+from app import desktop_backend
+from scripts import build_desktop_sidecar
 
 resume_generation_main = importlib.import_module("app.resume_generation.main")
 
@@ -26,9 +29,17 @@ def test_pyproject_exposes_expected_console_scripts():
 
     assert pyproject["project"]["scripts"] == {
         "resumecr7-api": "app.api_launcher:main",
+        "resumecr7-desktop-backend": "app.desktop_backend:main",
         "resumecr7-resume-evidence": "resume_evidence.cli:main",
         "resumecr7-resume-generation": "app.resume_generation.main:main",
     }
+
+
+def test_pyproject_exposes_desktop_optional_dependencies():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    desktop_dependencies = pyproject["project"]["optional-dependencies"]["desktop"]
+    assert any(dependency.startswith("pyinstaller") for dependency in desktop_dependencies)
 
 
 def test_api_launcher_dispatches_uvicorn(monkeypatch):
@@ -50,6 +61,62 @@ def test_api_launcher_dispatches_uvicorn(monkeypatch):
             "reload": True,
         }
     ]
+
+
+def test_desktop_backend_launcher_sets_packaged_runtime_environment(monkeypatch, tmp_path):
+    calls: list[dict[str, object]] = []
+
+    def fake_run(app_path: str, **kwargs: object) -> None:
+        calls.append({"app_path": app_path, **kwargs})
+
+    monkeypatch.delenv("RESUMECR7_PACKAGED", raising=False)
+    monkeypatch.delenv("RESUMECR7_DATA_DIR", raising=False)
+    monkeypatch.setattr("uvicorn.run", fake_run)
+
+    exit_code = desktop_backend.main(
+        [
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "43210",
+            "--packaged",
+            "--data-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == [
+        {
+            "app_path": "app.main:app",
+            "host": "127.0.0.1",
+            "port": 43210,
+            "reload": False,
+            "access_log": False,
+        }
+    ]
+    assert os.environ["RESUMECR7_PACKAGED"] == "true"
+    assert os.environ["RESUMECR7_DATA_DIR"] == str(tmp_path)
+
+
+def test_sidecar_executable_name_includes_target_triple():
+    assert (
+        build_desktop_sidecar.executable_name(
+            "resumecr7-backend",
+            "x86_64-unknown-linux-gnu",
+        )
+        == "resumecr7-backend-x86_64-unknown-linux-gnu"
+    )
+
+
+def test_sidecar_executable_name_uses_windows_extension():
+    assert (
+        build_desktop_sidecar.executable_name(
+            "resumecr7-backend",
+            "x86_64-pc-windows-msvc",
+        )
+        == "resumecr7-backend-x86_64-pc-windows-msvc.exe"
+    )
 
 
 def test_resume_generation_console_script_dispatches_pipeline(monkeypatch):

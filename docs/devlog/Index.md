@@ -13,6 +13,9 @@
 
 ## Session Index
 
+- `07-26-2026-Codex-tauri-cors-desktop-backend.md` - 2026-07-26 - Allow Tauri desktop backend CORS
+- `07-25-2026-Codex-readme-product-developer-refresh.md` - 2026-07-25 - README product and developer refresh
+- `07-25-2026-Codex-phase-3-desktop-shell.md` - 2026-07-25 - Phase 3 desktop shell
 - `07-25-2026-Codex-phase-2-runtime-data-model.md` - 2026-07-25 - Phase 2 runtime data model
 - `07-24-2026-Codex-reproducible-uv-ci.md` - 2026-07-24 - Reproducible uv CI
 - `07-24-2026-Codex-uv-readme-package-management.md` - 2026-07-24 - Document uv package management

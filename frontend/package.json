@@ -6,16 +6,21 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
+    "sidecar:build": "uv run --project .. --extra desktop python ../scripts/build_desktop_sidecar.py",
+    "desktop:dev": "npm run sidecar:build && tauri dev",
+    "desktop:build": "npm run sidecar:build && tauri build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

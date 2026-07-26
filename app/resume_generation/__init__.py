@@ -62,34 +62,32 @@ from app.resume_generation.pdf import (
     render_latex_pdf,
     resolve_resume_pdf_output_path,
 )
-from app.resume_generation.main import (
-    DEFAULT_RESUME_RESULT_ARTIFACT_PATH,
-    DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH,
-    build_resume_run_manifest,
-    resolve_resume_result_artifact_path,
-    resolve_resume_run_manifest_artifact_path,
-    run_resume_generation_pipeline,
-    write_resume_pdf_from_config,
-    write_resume_result_artifact,
-    write_resume_run_manifest_artifact,
-)
 from app.resume_generation.selection import (
     ResumeGenerationError,
     build_skill_selection_payload,
     generate_selection_context,
 )
 
-_LAZY_ENRICH_EXPORTS = {
-    "LinkEvidenceEnrichmentRecordResult",
-    "LinkEvidenceEnrichmentResult",
-    "run_link_evidence_enrichment",
+_LAZY_EXPORT_MODULES = {
+    "LinkEvidenceEnrichmentRecordResult": ".enrich",
+    "LinkEvidenceEnrichmentResult": ".enrich",
+    "run_link_evidence_enrichment": ".enrich",
+    "DEFAULT_RESUME_RESULT_ARTIFACT_PATH": ".main",
+    "DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH": ".main",
+    "build_resume_run_manifest": ".main",
+    "resolve_resume_result_artifact_path": ".main",
+    "resolve_resume_run_manifest_artifact_path": ".main",
+    "run_resume_generation_pipeline": ".main",
+    "write_resume_pdf_from_config": ".main",
+    "write_resume_result_artifact": ".main",
+    "write_resume_run_manifest_artifact": ".main",
 }
 
 
 def __getattr__(name: str):
-    if name in _LAZY_ENRICH_EXPORTS:
-        enrich = importlib.import_module(".enrich", __name__)
-        value = getattr(enrich, name)
+    if module_name := _LAZY_EXPORT_MODULES.get(name):
+        module = importlib.import_module(module_name, __name__)
+        value = getattr(module, name)
         globals()[name] = value
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

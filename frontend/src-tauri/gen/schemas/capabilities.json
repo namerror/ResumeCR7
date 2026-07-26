@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default desktop app permissions.","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"shell:allow-spawn","allow":[{"args":["--host",{"validator":"^127\\.0\\.0\\.1$"},"--port",{"validator":"^[0-9]+$"},"--packaged","--data-dir",{"validator":"^.+$"}],"name":"binaries/resumecr7-backend","sidecar":true}]}]}}

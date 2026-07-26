@@ -1,406 +1,380 @@
-# ResumeCR7 Resume Engine
+# ResumeCR7
 
-ResumeCR7 is in a transition from a resume-generation prototype into a FastAPI-backed resume service and local-first resume workbench. The current repo can already run grounded resume generation locally, and the recommended service direction is to keep the FastAPI backend as the integration point for product-facing APIs.
+ResumeCR7 is a local-first resume workbench and FastAPI resume engine. It helps
+maintain grounded resume evidence, select relevant skills and projects for a
+target role, generate `.tex` resume output, and render a PDF without inventing
+claims outside the user-authored evidence.
 
-Today the repo ships three capability tracks:
-
-- a FastAPI backend in `app/` with reusable data-processing and generation capabilities
-- a grounded evidence engine in `app/resume_evidence/` for strict schemas, deterministic loading, REST CRUD, and local YAML-backed workflows
-- a backend-owned resume orchestration pipeline in `app/resume_generation/` that reads `user/resume_generation/` and `user/resume_evidence/`, calls in-process backend services, and assembles resume artifacts
-
-The current `user/` tree is local development data and runtime output. It is useful for prototyping and file-backed operation, but it should be treated as a storage adapter target rather than the final production persistence model.
-
-## Product Direction
-
-The first official app model is a local-first web workbench over the existing FastAPI backend, with desktop packaging as the first distribution target once the workflow is proven.
-
-Planned product shape:
+The current product shape is:
 
 ```text
-frontend workbench
-  -> localhost FastAPI backend
-  -> local evidence and generation adapters
+Tauri desktop app or Vite web workbench
+  -> local FastAPI backend
+  -> YAML-backed evidence and generation config
   -> structured resume result
   -> local LaTeX/PDF artifacts
 ```
 
-The initial frontend should live in this monorepo, for example under `frontend/`, so UI work can stay aligned with the still-evolving backend API schemas. The backend remains the source of truth for evidence validation, generation orchestration, artifact rendering, and writes to local storage.
+ResumeCR7 is intentionally local-first today. Hosted multi-user auth,
+database-backed persistence, background queues, signing, and auto-update are
+future work after the local workflow and adapter boundaries are stable.
 
-The first app should support editing resume evidence, editing a target job description, generating a targeted resume, reviewing or editing generated resume items, and exporting a PDF. It should preserve the product distinction between user-authored source evidence, generated draft content, and final user edits.
+## Features
 
-The project is intentionally not starting as a hosted multi-user web service. Remote hosting, auth, database-backed persistence, account-level artifact storage, and background workers remain future work after the local product workflow and storage adapter boundaries are stable. See `docs/decisions/016-local-first-web-workbench-desktop-distribution.md`.
+- Desktop app shell with Tauri v2, bundled React/Vite frontend, and a
+  PyInstaller-built FastAPI sidecar.
+- Local web workbench for editing resume evidence, staging changes, generating
+  `.tex`, downloading PDFs, and enriching project/experience links.
+- File-backed evidence CRUD for user info, skills, projects, experience, and
+  education.
+- Grounded resume-generation facade under `/resume-generation`.
+- Deterministic baseline skill and project selection, with optional LLM-backed
+  selection and baseline fallback behavior.
+- Local schema validation, first-launch runtime data bootstrap, atomic YAML
+  writes, and structured runtime logs.
 
-## Vision
+## Quick Start
 
-The long-term goal is a resume service that assembles targeted (job-specific) resumes from user-authored evidence without inventing claims. The intended pipeline is:
+### Desktop App
+
+Build and run the desktop app from the frontend directory:
+
+```bash
+cd frontend
+npm install
+npm run desktop:build
+./src-tauri/target/release/bundle/appimage/ResumeCR7_0.3.0_amd64.AppImage
+```
+
+During desktop startup, Tauri starts the bundled backend sidecar on an available
+`127.0.0.1` port, waits for `/health`, then gives the frontend the backend URL.
+Packaged runtime data is stored under the OS app-data directory, for example
+`~/.local/share/com.resumecr7.desktop/` for the current Linux AppImage.
+
+On Ubuntu, Tauri builds require native WebView/GTK dependencies:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  pkg-config \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+### Local Web + Backend
+
+Install backend and frontend dependencies:
+
+```bash
+uv sync --extra dev
+cd frontend
+npm install
+```
+
+Run the backend in one terminal:
+
+```bash
+uv run resumecr7-api --reload
+```
+
+Run the Vite workbench in another:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The Vite dev server proxies `/api/*` to `http://127.0.0.1:8000` by default.
+Set `VITE_BACKEND_PROXY_TARGET` to point at another local backend.
+
+## Repository Structure
 
 ```text
-user-authored evidence files
-  -> deterministic load/validate/index
-  -> grounded synthesis/extraction
-  -> deterministic assembly
-  -> generated resume artifact
+app/
+  main.py                    FastAPI app composition and public routes
+  config.py                  environment-driven runtime settings
+  data_paths.py              OS app-data resolution
+  runtime_data.py            first-launch data bootstrap
+  resume_evidence/           evidence schemas, loaders, services, REST API
+  resume_generation/         generation orchestration and facade API
+  skill_selection/           skill scoring and selection service
+  project_selection/         project ranking service
+  job_focus_generation/      job-focus derivation capability
+  bulletpoints_generation/   grounded bullet generation capability
+  link_scanning/             link enrichment capability
+
+frontend/
+  src/                       React/Vite workbench
+  src-tauri/                 Tauri v2 desktop shell and sidecar lifecycle
+
+resume_evidence/
+resume_generation/           legacy compatibility shims and CLI entrypoints
+
+user/
+  resume_evidence/           local development evidence YAML
+  resume_generation/         local generation config and artifacts
+
+docs/
+  decisions/                 ADRs
+  devlog/                    agent session logs
+  architecture-overview.md   subsystem map and runtime flows
 ```
 
-Job descriptions can influence prioritization, but they are not evidence. Supported claims must trace back to user-authored source files.
+Start new architecture work by reading [docs/agent-context-index.md](docs/agent-context-index.md)
+and [docs/architecture-overview.md](docs/architecture-overview.md).
 
-## Implemented Today
+## Runtime Data
 
-### Skill selection API
+Local development defaults to `RESUMECR7_DATA_DIR=user`. Packaged desktop runs
+set `RESUMECR7_PACKAGED=true` and use an OS app-data root unless
+`RESUMECR7_DATA_DIR` is explicitly supplied.
 
-The current public API is a FastAPI service for ranking user-provided skills by category for a target role.
-
-- `POST /select-skills`
-  - deterministic `baseline` method
-  - `embeddings` method with cached OpenAI embeddings
-  - `llm` method with local validation and deterministic ranking
-  - optional `baseline_filter` that lets deterministic matches bypass model-backed scoring
-  - required fallback to baseline behavior when model-backed methods fail
-- `GET /health`
-  - reports service liveness and effective config
-- `GET /metrics-lite`
-  - reports request totals, error totals, average latency, total model tokens, and effective method usage
-
-Skill selection remains constrained by the repo invariants:
-
-- outputs must stay within the user-provided skill set
-- category boundaries remain `technology`, `programming`, and `concepts`
-- deterministic ordering is required
-- baseline must remain functional even if embeddings or LLM methods fail
-
-### Grounded resume evidence foundation
-
-The first implemented milestone is the app-owned resume evidence package with legacy CLI compatibility.
-
-- `app/resume_evidence/models.py`
-  - strict Pydantic models for all registered evidence YAML schemas
-- `app/resume_evidence/loader.py`
-  - schema registry and deterministic YAML loading from `RESUME_EVIDENCE_ROOT`
-- `app/resume_evidence/session.py`
-  - staged in-memory CRUD with validation-before-mutation and atomic apply-to-disk writes
-- `app/resume_evidence/service.py`
-  - ID-oriented backend helpers over the session layer
-- `app/resume_evidence/api.py`
-  - REST CRUD routes under `/resume-evidence`
-- `resume_evidence/cli/`
-  - CLI entrypoint and schema dispatcher
-- `resume_evidence/cli/base.py`
-  - shared interactive CLI base helpers
-- `resume_evidence/cli/{projects,skills,education,experience,user}.py`
-  - schema-specific command implementations
-- `app/resume_generation/`
-  - evidence-to-selection orchestration, batch link enrichment, bullet-point generation, intermediate result assembly, LaTeX/PDF artifact rendering, and `/resume-generation` facade routes
-- `resume_generation/`
-  - compatibility shims for legacy imports and `python -m resume_generation.*` entrypoints
-- `app/main.py`
-  - loads registered evidence on startup into `app.state.resume_evidence`
-
-The currently implemented evidence schemas are:
-
-- `user/resume_evidence/projects.yaml`
-  - `schema_version: 1`
-  - strict project records with `id`, `name`, `summary`, `highlights`, `active`, `skills`, and optional `links`
-- `user/resume_evidence/skills.yaml`
-  - `schema_version: 1`
-  - strict categorized skill lists under `technology`, `programming`, and `concepts`
-- `user/resume_evidence/education.yaml`
-  - `schema_version: 1`
-  - strict education records with `id`, `name`, `degree`, `grade`, `start`, optional `end`, `location`, and `relevant_coursework`
-- `user/resume_evidence/experience.yaml`
-  - `schema_version: 1`
-  - strict experience records with `id`, `name`, `role`, `summary`, `highlights`, `active`, `skills`, `location`, `start`, optional `end`, and optional `links`
-- `user/resume_evidence/user.yaml`
-  - `schema_version: 1`
-  - strict basic contact info with required `name`, `email`, and `phone`, plus optional `linkedin`, `github`, and `website`
-
-Resume evidence can be managed through `/resume-evidence` REST routes, the legacy CLI, or other tools that write to the configured evidence root.
-
-Evidence REST routes:
-
-- `GET /resume-evidence`
-- `GET /resume-evidence/{projects|experience|education|skills|user}`
-- `POST /resume-evidence/{projects|experience|education}`
-- `GET /resume-evidence/{projects|experience|education}/{id}`
-- `PUT /resume-evidence/{projects|experience|education}/{id}`
-- `DELETE /resume-evidence/{projects|experience|education}/{id}`
-- `PUT /resume-evidence/{skills|user}`
-
-### Project selection API
-
-The project-selection subsystem ranks explicit project candidates for a job target without generating resume prose.
-
-- `POST /select-projects`
-  - accepts `context` with job title/description and explicit project `candidates`
-  - supports deterministic `baseline` and model-backed `llm` methods
-  - validates LLM project-id scores locally and falls back to baseline when needed
-  - returns project IDs and scores, not project summaries, highlights, links, or generated claims
-
-### Evidence CLI workflow
-
-Use the CLI to manage staged edits to evidence YAML without hand-editing:
-
-```bash
-PYTHONPATH=. python -m resume_evidence.cli
-```
-
-Default `projects` commands:
-
-- `list`
-- `show <index>`
-- `create`
-- `edit <index>`
-- `delete <index>`
-- `apply`
-- `reload`
-- `quit`
-
-The default schema is `projects`. Use `--schema` to manage any registered evidence file:
-
-```bash
-PYTHONPATH=. python -m resume_evidence.cli --schema skills
-PYTHONPATH=. python -m resume_evidence.cli --schema education
-PYTHONPATH=. python -m resume_evidence.cli --schema experience
-PYTHONPATH=. python -m resume_evidence.cli --schema user
-```
-
-Projects, education, and experience support list/show/create/edit/delete/apply/reload/quit workflows. Skills and user info support list/show-style inspection, edit, apply, reload, and quit.
-
-The CLI keeps edits staged in memory until `apply` is confirmed, preserves stable hidden IDs for projects and experience entries, and writes atomically to disk.
-
-### Evaluation and support scripts
-
-The repo also includes utilities for skill-selection evaluation and data preparation:
-
-- `scripts/build_skill_pools.py`
-  - builds normalized skill pools
-- `scripts/eval_cases_generator.py`
-  - generates evaluation datasets
-- `scripts/eval.py`
-  - runs skill-selection evaluation against case files
-
-See [scripts/README.md](/scripts/README.md) for command details.
-
-## How The Pieces Fit Together
-
-ResumeCR7 now has a broader resume-engine shape:
-
-- the FastAPI `app/` layer provides reusable backend capabilities for selection, focus derivation, bullet generation, enrichment, metrics, and health checks
-- the skills API helps prioritize and rank skills for the Skills section
-- the project-selection API helps prioritize grounded projects for a target job
-- the app-owned resume-evidence package exposes grounded source-of-truth data from `user/resume_evidence/`
-- the `app/resume_generation/` layer combines target job context, evidence, and selected service outputs into an intermediate resume result
-- deterministic assembly and LaTeX rendering turn that structured result into resume artifacts without inventing claims
-
-Skill selection is no longer the whole project. It is one subsystem inside the larger grounded resume pipeline.
-
-## Recommended Service Architecture
-
-The FastAPI backend now has a synchronous v1 resume-generation facade while keeping the existing stage endpoints as internal backend capabilities.
-
-For the first app, the backend should run locally on loopback and serve as the local product API for a web frontend or packaged desktop shell. A hosted backend is deferred until auth, persistence, artifact storage, and generation-run infrastructure are justified.
-
-### Product-facing facade
-
-Product clients should call higher-level resume service APIs, not orchestrate every generation stage themselves. The current facade owns evidence CRUD and synchronous generation actions:
-
-- `POST /resume-generation/enrich-link-evidence`
-- `POST /resume-generation/tex`
-- `POST /resume-generation/pdf`
-
-The next facade step is an async run lifecycle for long-running product workflows:
-
-- generation-run creation with a job target and selected evidence scope
-- generation-run status and artifact retrieval
-- structured resume result retrieval for web-app editing or rendering
-
-The current stage APIs remain valuable, but they are better treated as internal capabilities that the facade calls.
-
-### Internal capability APIs
-
-The existing FastAPI routes are useful backend building blocks:
-
-- `/select-skills`
-- `/select-projects`
-- `/derive-job-focus`
-- `/generate-bulletpoints`
-- `/enrich-link-evidence`
-
-As the service boundary matures, these routes should either move behind an internal namespace or be documented separately from the product API. That keeps the future web app from depending on orchestration details such as cache keys, prompt-specific payloads, or per-stage retry behavior.
-
-### Storage transition
-
-Keep the current YAML-backed `user/resume_evidence/` and `user/resume_generation/` layout for local development and prototype runs. The next implementation step should introduce repository/adapter interfaces around evidence, generation runs, cache entries, and artifacts. The first adapter can continue to read and write files; a database-backed adapter can follow when service requirements are clearer.
-
-This avoids an early database dependency while preventing file paths from leaking into the final API design.
-
-### Generation run model
-
-Full resume generation should be exposed as an async run:
+The runtime layout is:
 
 ```text
-POST create generation run
-  -> return run_id
-GET run status
-  -> queued | running | succeeded | failed
-GET run result/artifacts
-  -> structured result, manifest, rendered output
+RESUMECR7_DATA_DIR/
+  resume_evidence/
+    user.yaml
+    skills.yaml
+    projects.yaml
+    education.yaml
+    experience.yaml
+  resume_generation/
+    config.yaml
+    job_target.yaml
+    artifacts/
+      resume_result.json
+      resume_run_manifest.json
+      resume.tex
+      resume.pdf
+  logs/
+    resumecr7.log
+    desktop-sidecar.log
 ```
 
-The current local CLI-style pipeline can remain synchronous internally, but the product API should not require a web client to hold a request open across multiple LLM-backed stages.
+Startup creates missing directories and schema-valid placeholder YAML files. It
+does not overwrite existing user-authored runtime files.
 
-## Resume Generation Usage
+## Evidence Model
 
-Resume generation is implemented in `app/resume_generation/`, with top-level `resume_generation` compatibility entrypoints. It reads generation settings, the target job, and all registered evidence files, then calls in-process backend services for selection, job focus derivation, and bullet generation. Link scanning is exposed as a standalone evidence-enrichment capability rather than part of the normal generation pipeline.
+Resume evidence is the source of truth. Job descriptions can influence
+selection and phrasing, but they are not evidence.
 
-Then run the generation pipeline from the repo root:
+Implemented evidence files:
+
+- `user.yaml` - contact/header fields: `name`, `email`, `phone`, optional
+  `linkedin`, `github`, `website`.
+- `skills.yaml` - categorized skill lists under `technology`, `programming`,
+  and `concepts`.
+- `projects.yaml` - project records with `id`, `name`, `summary`,
+  `highlights`, `active`, categorized `skills`, and optional `links`.
+- `experience.yaml` - experience records with `id`, `name`, `role`,
+  `summary`, `highlights`, `active`, categorized `skills`, `location`,
+  `start`, optional `end`, and optional `links`.
+- `education.yaml` - education records with `id`, `name`, `degree`, `grade`,
+  `start`, optional `end`, `location`, and `relevant_coursework`.
+
+The workbench stages edits in browser state. The backend applies writes through
+validated REST endpoints and atomic YAML replacement.
+
+## Resume Generation
+
+Resume generation lives under `app/resume_generation/` and is exposed through
+the `/resume-generation` facade.
+
+The pipeline:
+
+1. Loads `resume_generation/config.yaml` and `job_target.yaml`.
+2. Loads and validates all registered resume-evidence YAML files.
+3. Selects relevant skills and active projects.
+4. Derives compact job focus for the target role.
+5. Generates grounded project and active-experience bullets.
+6. Assembles an intermediate structured resume result.
+7. Writes JSON manifest/result and `.tex`; PDF rendering is optional.
+
+Generated artifacts are derived runtime state, not source evidence.
+
+Run the local generation command:
 
 ```bash
-PYTHONPATH=. python -m resume_generation.main
+uv run resumecr7-resume-generation
 ```
 
-The direct module entrypoint writes:
-
-- `user/resume_generation/artifacts/resume_result.json` - intermediate structured resume data
-- `user/resume_generation/artifacts/resume_run_manifest.json` - generation inputs, stage metadata, and token usage
-- `user/resume_generation/artifacts/resume.tex` - LaTeX resume output, unless `resume_output.path` overrides it
-- `user/resume_generation/artifacts/resume.pdf` - optional rendered PDF when `resume_output.render_pdf: true`
-
-To render an existing `.tex` file without rerunning the full pipeline:
+Render an existing `.tex` artifact to PDF:
 
 ```bash
 PYTHONPATH=. python -m resume_generation.pdf
 ```
 
-The PDF renderer uses local `latexmk`, so the runtime environment needs TeX Live plus `latexmk` installed when `resume_output.render_pdf: true`.
+PDF rendering requires local `latexmk` and a working TeX installation.
 
-`user/resume_generation/config.yaml` controls generation:
+## CLI
 
-- `app` - compatibility base URL and request timeout for older HTTP-style orchestration tests
-- `skill_selection` - method, `top_n`, baseline-filter toggle, debug mode, and LLM overrides for skill selection
-- `project_selection` - method, `top_n`, debug mode, and LLM overrides for project selection; `top_n: null` omits the request override and lets the app's `PROJ_TOP_N` default decide the limit
-- `job_focus_generation` - LLM overrides for one job-focus derivation per target role
-- `link_scanning` - standalone enrichment settings used by the link enrichment runner
-- `project_bullet_point_generation` - bullet count range, debug mode, and LLM overrides for selected projects
-- `experience_bullet_point_generation` - bullet count range, debug mode, and LLM overrides for active experience records
-- `cache` - stage cache toggle, path override, and force-refresh behavior
-- `resume_output` - optional `.tex` output path plus opt-in PDF rendering settings
+The evidence CLI provides staged local CRUD over evidence YAML:
 
-`user/resume_generation/job_target.yaml` supplies the target role:
+```bash
+uv run resumecr7-resume-evidence
+uv run resumecr7-resume-evidence --schema projects
+uv run resumecr7-resume-evidence --schema skills
+uv run resumecr7-resume-evidence --schema education
+uv run resumecr7-resume-evidence --schema experience
+uv run resumecr7-resume-evidence --schema user
+```
 
-- `schema_version: 1`
-- `title` - required job title
-- `description` - optional job description text used for selection and bullet generation context
+Collection schemas support list/show/create/edit/delete/apply/reload/quit style
+workflows. Singleton schemas support inspection, edit, apply, reload, and quit.
 
-The pipeline loads every registered resume-evidence schema from `user/resume_evidence/`:
+## Configuration
 
-- `user.yaml` - contact/header data for the resume top section
-- `education.yaml` - education entries and relevant coursework
-- `experience.yaml` - active work experience entries and evidence for experience bullets
-- `projects.yaml` - active project candidates, highlights, skills, and optional links
-- `skills.yaml` - categorized skills available for the Skills section
+ResumeCR7 reads settings from environment variables through `app/config.py`.
 
-Only `active: true` projects are sent to project selection, and only selected projects are sent to project bullet generation. Only `active: true` experience entries are assembled into the final experience section.
+```bash
+RESUMECR7_DATA_DIR=user
+RESUMECR7_PACKAGED=false
+# RESUME_EVIDENCE_ROOT=user/resume_evidence
+# RESUME_GENERATION_ROOT=user/resume_generation
+# RESUMECR7_LOG_DIR=user/logs
 
-## API
+SKILL_METHOD=baseline        # baseline, embeddings, llm
+SKILL_TOP_N=10
+SKILL_BASELINE_FILTER=false
 
-### Resume generation facade
+PROJ_METHOD=llm              # baseline, llm
+# PROJ_TOP_N=2
 
-- `POST /resume-generation/enrich-link-evidence`
-  - scans project and/or experience links in batch
-  - appends unique new highlights to YAML evidence unless `dry_run: true`
-  - returns per-record scan results, skipped reasons, and updated evidence paths
-- `POST /resume-generation/tex`
-  - runs the full configured resume pipeline
-  - writes the structured result, run manifest, and `.tex` artifact
-  - returns the structured result plus `.tex` path and content
-- `POST /resume-generation/pdf`
-  - renders the configured/default `.tex` artifact with local `latexmk`
-  - writes the configured/default PDF artifact
-  - returns `application/pdf` bytes
+DEV_MODE=true
+LOG_LEVEL=INFO
+OPENAI_API_KEY=your_key_here
 
-### Health
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_BATCH_SIZE=100
 
-`GET /health`
+SKILL_LLM_MODEL=gpt-5-mini
+SKILL_LLM_MAX_OUTPUT_TOKENS=1200
+PROJ_LLM_MODEL=gpt-5-mini
+PROJ_LLM_MAX_OUTPUT_TOKENS=1200
+JOB_FOCUS_LLM_MODEL=gpt-5-mini
+JOB_FOCUS_LLM_MAX_OUTPUT_TOKENS=1200
+BULLETPOINTS_LLM_MODEL=gpt-5-mini
+BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS=3000
+LINK_SCANNING_ENABLED=false
+LINK_SCANNING_LLM_MODEL=gpt-5-mini
+LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS=1200
+```
 
-Example response:
+`OPENAI_API_KEY` is only required for embeddings, LLM-backed selection, job
+focus generation, bullet generation, and enabled link scanning. Deterministic
+baseline paths remain functional without it.
+
+## API Surface
+
+Start the backend:
+
+```bash
+uv run resumecr7-api --reload
+```
+
+OpenAPI docs are available at `http://127.0.0.1:8000/docs`.
+
+### Health And Metrics
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Service liveness, version, effective config, and runtime paths |
+| `GET` | `/metrics-lite` | Aggregate request/error/latency/token counters |
+
+### Resume Evidence API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/resume-evidence` | Load the full evidence registry |
+| `GET` | `/resume-evidence/projects` | List projects |
+| `POST` | `/resume-evidence/projects` | Create a project |
+| `GET` | `/resume-evidence/projects/{id}` | Read a project |
+| `PUT` | `/resume-evidence/projects/{id}` | Replace a project |
+| `DELETE` | `/resume-evidence/projects/{id}` | Delete a project |
+| `GET` | `/resume-evidence/experience` | List experience records |
+| `POST` | `/resume-evidence/experience` | Create an experience record |
+| `GET` | `/resume-evidence/experience/{id}` | Read an experience record |
+| `PUT` | `/resume-evidence/experience/{id}` | Replace an experience record |
+| `DELETE` | `/resume-evidence/experience/{id}` | Delete an experience record |
+| `GET` | `/resume-evidence/education` | List education records |
+| `POST` | `/resume-evidence/education` | Create an education record |
+| `GET` | `/resume-evidence/education/{id}` | Read an education record |
+| `PUT` | `/resume-evidence/education/{id}` | Replace an education record |
+| `DELETE` | `/resume-evidence/education/{id}` | Delete an education record |
+| `GET` | `/resume-evidence/skills` | Read skills |
+| `PUT` | `/resume-evidence/skills` | Replace skills |
+| `GET` | `/resume-evidence/user` | Read user info |
+| `PUT` | `/resume-evidence/user` | Replace user info |
+
+### Product Resume Generation API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/resume-generation/enrich-link-evidence` | Batch-enrich project/experience links and optionally write new highlights |
+| `POST` | `/resume-generation/tex` | Run the full resume pipeline and return `.tex` output |
+| `POST` | `/resume-generation/pdf` | Render the current `.tex` artifact and return PDF bytes |
+
+`POST /resume-generation/tex` accepts an optional request-scoped `job_target`
+override:
 
 ```json
 {
-  "status": "ok",
-  "version": "0.3.0",
-  "service": "resumecr7-resume-engine",
-  "dev_mode": true,
-  "skill_selection": {
-    "method": "baseline",
-    "top_n": 10,
-    "baseline_filter": false,
-    "llm_model": "gpt-5-mini",
-    "llm_max_output_tokens": 1200
-  },
-  "project_selection": {
-    "method": "llm",
-    "top_n": null,
-    "llm_model": "gpt-5-mini",
-    "llm_max_output_tokens": 1200
-  },
-  "link_scanning": {
-    "enabled": false,
-    "llm_model": "gpt-5-mini",
-    "llm_max_output_tokens": 1200
+  "job_target": {
+    "schema_version": 1,
+    "title": "Backend Engineer",
+    "description": "Build Python APIs with PostgreSQL."
   }
 }
 ```
 
-### Select Skills
+### Capability APIs
 
-`POST /select-skills`
+These routes are useful backend capabilities and test surfaces. Product clients
+should prefer the evidence and `/resume-generation` facade routes.
 
-Example request:
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/select-skills` | Rank user-provided skills by category for a target role |
+| `POST` | `/select-projects` | Rank explicit project candidates for a target role |
+| `POST` | `/derive-job-focus` | Derive compact job-focus context from a job target |
+| `POST` | `/generate-bulletpoints` | Generate grounded bullets for one project/experience record |
+| `POST` | `/enrich-link-evidence` | Scan one link target and return grounded highlights |
+
+Example `POST /select-skills` request:
 
 ```json
 {
   "job_role": "AI/ML Engineer",
-  "job_text": "Optional job description text",
-  "technology": ["Docker", "Kubernetes", "AWS", "PostgreSQL", "TensorFlow"],
-  "programming": ["Python", "TypeScript", "SQL"],
-  "concepts": ["Machine Learning", "CI/CD", "Distributed Systems"],
+  "job_text": "Build model-serving APIs.",
+  "technology": ["FastAPI", "Docker", "TensorFlow"],
+  "programming": ["Python", "TypeScript"],
+  "concepts": ["Machine Learning", "Distributed Systems"],
   "top_n": 5,
-  "method": "embeddings",
-  "baseline_filter": true,
+  "method": "baseline",
   "dev_mode": true
 }
 ```
 
-Example response:
-
-```json
-{
-  "technology": ["TensorFlow", "AWS", "Docker"],
-  "programming": ["Python"],
-  "concepts": ["Machine Learning", "Distributed Systems"],
-  "details": {}
-}
-```
-
-### Select Projects
-
-`POST /select-projects`
-
-Example request:
+Example `POST /select-projects` request:
 
 ```json
 {
   "context": {
     "title": "Backend Engineer",
-    "description": "Build Python APIs with Django and PostgreSQL."
+    "description": "Build Python APIs with PostgreSQL."
   },
   "candidates": [
     {
       "id": "resumecr7",
       "name": "ResumeCR7",
-      "summary": "Resume engine with deterministic selection and grounded evidence.",
+      "summary": "FastAPI resume engine with grounded evidence.",
       "skills": {
-        "technology": ["Django", "PostgreSQL"],
+        "technology": ["FastAPI", "PostgreSQL"],
         "programming": ["Python"],
         "concepts": ["API"]
       }
@@ -412,191 +386,55 @@ Example request:
 }
 ```
 
-Example response:
+## Testing
 
-```json
-{
-  "selected_project_ids": ["resumecr7"],
-  "ranked_projects": [
-    {
-      "project_id": "resumecr7",
-      "score": 0.75,
-      "method": "baseline"
-    }
-  ],
-  "details": {}
-}
-```
-
-### Metrics
-
-`GET /metrics-lite`
-
-Example response:
-
-```json
-{
-  "requests_total": 42,
-  "errors_total": 1,
-  "total_tokens": 12000,
-  "avg_latency_ms": 25.3,
-  "method_usage": {
-    "baseline": 30,
-    "embeddings": 8,
-    "llm": 4
-  },
-  "subsystems": {
-    "skill_selection": {
-      "requests_total": 38,
-      "errors_total": 1,
-      "total_tokens": 9000,
-      "avg_latency_ms": 22.1,
-      "method_usage": {
-        "baseline": 30,
-        "embeddings": 8
-      }
-    },
-    "project_selection": {
-      "requests_total": 4,
-      "errors_total": 0,
-      "total_tokens": 3000,
-      "avg_latency_ms": 55.7,
-      "method_usage": {
-        "llm": 4
-      }
-    }
-  }
-}
-```
-
-`method_usage` reflects the method that actually produced the response. If a model-backed method falls back to baseline, the request is counted under `baseline`. The top-level metrics remain aggregate; `subsystems` breaks out skill selection and project selection.
-
-## Configuration
-
-ResumeCR7 reads settings from environment variables via `app/config.py`.
-
-```bash
-RESUMECR7_DATA_DIR=user # root for evidence, generation config/artifacts, and logs
-RESUMECR7_PACKAGED=false # use OS app-data defaults when true and DATA_DIR is unset
-# RESUME_EVIDENCE_ROOT=user/resume_evidence # optional legacy evidence-root override
-# RESUME_GENERATION_ROOT=user/resume_generation # optional generation-root override
-# RESUMECR7_LOG_DIR=user/logs # optional log directory override
-
-SKILL_METHOD=baseline # available options: baseline, embeddings, llm
-SKILL_TOP_N=10 # how many top-ranked skills to return per category
-SKILL_BASELINE_FILTER=false # if true, deterministic skill matches bypass model-backed scoring
-
-PROJ_METHOD=llm # available options: baseline, llm
-# PROJ_TOP_N=2 # optional; omit to return all ranked projects unless the request overrides it
-
-DEV_MODE=true # return debugging info
-LOG_LEVEL=INFO
-
-OPENAI_API_KEY=your_key_here
-
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_BATCH_SIZE=100
-
-SKILL_LLM_MODEL=gpt-5-mini
-SKILL_LLM_MAX_OUTPUT_TOKENS=1200
-PROJ_LLM_MODEL=gpt-5-mini
-PROJ_LLM_MAX_OUTPUT_TOKENS=1200
-LINK_SCANNING_ENABLED=false
-LINK_SCANNING_LLM_MODEL=gpt-5-mini
-LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS=1200
-```
-
-When `RESUMECR7_PACKAGED=true` and `RESUMECR7_DATA_DIR` is not set,
-ResumeCR7 resolves the data root from the OS app-data location:
-`$XDG_DATA_HOME/resumecr7` or `~/.local/share/resumecr7` on Linux,
-`~/Library/Application Support/ResumeCR7` on macOS, and
-`%LOCALAPPDATA%\ResumeCR7` on Windows. Startup bootstraps missing evidence and
-generation YAML files with schema-valid placeholder defaults, creates
-`resume_generation/artifacts/`, and never overwrites existing runtime files.
-
-`OPENAI_API_KEY` is only required for skill-selection `embeddings`, skill-selection `llm`, project-selection `llm`, bullet-point generation, and enabled link-scanning requests.
-Link scanning treats normal URLs as single-page sources; `github.com/{owner}/{repo}` links allow repository-scoped exploration for technical project evidence.
-Legacy generic selection variables such as `METHOD`, `TOP_N`, `BASELINE_FILTER`, `LLM_MODEL`, and `LLM_MAX_OUTPUT_TOKENS` are no longer read.
-Baseline filtering is skill-selection-only; project selection does not define a baseline pre-filter pass yet.
-
-## Running Locally
-
-Install dependencies:
-
-```bash
-uv sync --extra dev
-```
-
-Start the FastAPI app:
-
-```bash
-uv run resumecr7-api --reload
-```
-
-Run the evidence CLI:
-
-```bash
-uv run resumecr7-resume-evidence
-```
-
-Run a specific evidence schema CLI:
-
-```bash
-uv run resumecr7-resume-evidence --schema skills
-uv run resumecr7-resume-evidence --schema education
-uv run resumecr7-resume-evidence --schema experience
-uv run resumecr7-resume-evidence --schema user
-```
-
-Run resume generation after the app is running:
-
-```bash
-uv run resumecr7-resume-generation
-```
-
-After `uv sync --extra dev`, the installed `resumecr7-*` commands can also be run
-directly from the active virtual environment. The legacy
-`uvicorn app.main:app --reload`, `PYTHONPATH=. python -m resume_evidence.cli`, and
-`PYTHONPATH=. python -m resume_generation.main` commands remain supported for local
-development.
-
-## Tests
-
-Tests assume the repo root is on `PYTHONPATH`:
+Backend:
 
 ```bash
 uv run pytest
+uv run pytest tests/test_packaging.py tests/test_runtime_data.py tests/test_health.py -q
 ```
 
-Useful targeted runs:
+Frontend:
 
 ```bash
-uv run pytest tests/test_resume_evidence.py
-uv run pytest tests/test_resume_evidence_cli.py
-uv run pytest tests/test_integration.py
+cd frontend
+npm test
+npm run build
 ```
 
-## Planned Next
+Desktop:
 
-The next backend transition should focus on service integration rather than adding unrelated generation features:
+```bash
+cd frontend/src-tauri
+cargo test
+cargo fmt --check
 
-- add repository/adapter boundaries around evidence files, generation runs, cache entries, and artifacts
-- add async resume-generation run creation/status/result endpoints on top of the synchronous v1 facade
-- keep the current stage endpoints available as internal capabilities for the facade and tests
-- defer database persistence until the adapter contract and product API shape are stable
-- expand output formats only after the structured result and run lifecycle are service-ready
+cd ..
+npm run desktop:build
+```
 
-See:
+## Development Rules
 
-- [docs/architecture-overview.md](/home/leon/Documents/proj/ResumeCR7/docs/architecture-overview.md)
-- [docs/decisions/003-grounded-resume-evidence-pipeline.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/003-grounded-resume-evidence-pipeline.md)
-- [docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md)
-- [docs/decisions/005-subsystem-package-organization.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/005-subsystem-package-organization.md)
-- [docs/decisions/008-standalone-resume-evidence-and-generation-layers.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/008-standalone-resume-evidence-and-generation-layers.md)
-- [docs/decisions/012-fastapi-resume-service-transition.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/012-fastapi-resume-service-transition.md)
-- [docs/decisions/015-app-owned-resume-generation-api.md](/home/leon/Documents/proj/ResumeCR7/docs/decisions/015-app-owned-resume-generation-api.md)
+- Do not add skills that were not provided in the request.
+- Respect `technology` / `programming` / `concepts` category boundaries.
+- Keep deterministic baseline behavior functional even when embeddings or LLM
+  paths fail.
+- Keep user-authored evidence separate from generated artifacts.
+- Add focused tests for non-trivial changes.
+- Add a session log under `docs/devlog/` for non-trivial edit sessions and
+  update `docs/devlog/Index.md`.
+- Reserve `docs/CHANGELOG.md` for significant user-facing changes.
 
-## Current Limitations
+## Roadmap
 
-- Full resume generation is synchronous in v1; async run lifecycle endpoints are still future work.
-- The current output path is structured JSON plus LaTeX; additional export formats are still future work.
+Near-term planned work:
+
+- Packaging smoke validation in CI.
+- Release workflow for tag-built desktop artifacts.
+- Signed installers before broad public distribution.
+- Manual release downloads before automatic updater integration.
+- Async generation-run lifecycle once the local facade shape stabilizes.
+
+See [docs/decisions/017-desktop-packaging-and-release-workflow.md](docs/decisions/017-desktop-packaging-and-release-workflow.md)
+for the packaging and release phase model.

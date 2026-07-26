@@ -4,6 +4,7 @@ temp/
 
 __pycache__/
 *.pyc
+*.egg-info/
 
 !user/resume_evidence/
 !user/resume_evidence/experience.yaml
@@ -14,6 +15,10 @@ user/resume_generation/resume_run_manifest.json
 user/resume_generation/resume.tex
 user/resume_generation/resume.pdf
 user/logs/
+
+build/desktop-sidecar/
+frontend/src-tauri/target/
+frontend/src-tauri/binaries/resumecr7-backend-*
 
 .vscode
 

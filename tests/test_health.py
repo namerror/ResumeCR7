@@ -52,6 +52,13 @@ def test_health_method_not_allowed():
     assert res.status_code == 405
 
 
+def test_health_allows_tauri_vite_origin():
+    """Desktop dev webview can call the sidecar backend directly."""
+    res = api_request("GET", "/health", headers={"Origin": "http://127.0.0.1:5173"})
+    assert res.status_code == 200
+    assert res.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
 # === Select skills endpoint tests ===
 
 def test_select_skills_basic():

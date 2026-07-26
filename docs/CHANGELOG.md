@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tauri desktop shell support with a PyInstaller-built FastAPI sidecar, runtime backend URL discovery, app-data logs, and AppImage build output.
+- User/developer README guide covering desktop usage, local setup, repository structure, runtime data, exposed endpoints, configuration, tests, and current development rules.
 - Frontend resume generation controls for request-scoped job targets, `.tex` generation, PDF download, and per-project/per-experience link enrichment.
 - Local-first React/Vite resume evidence workbench that stages edits in browser state and applies them through the existing `/resume-evidence` FastAPI CRUD endpoints.
+
+### Fixed
+- Direct AppImage launches now resolve the Tauri-managed sidecar URL instead of falling back to the browser `/api` proxy and reporting the backend as offline.
 
 ## [0.3.0] - 2026-07-23
 
