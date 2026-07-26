@@ -43,7 +43,7 @@ Build and run the desktop app from the frontend directory:
 cd frontend
 npm install
 npm run desktop:build
-./src-tauri/target/release/bundle/appimage/ResumeCR7_0.3.0_amd64.AppImage
+./src-tauri/target/release/bundle/appimage/ResumeCR7_0.4.0_amd64.AppImage
 ```
 
 During desktop startup, Tauri starts the bundled backend sidecar on an available
@@ -478,8 +478,6 @@ npm run desktop:build
 
 Near-term planned work:
 
-- Packaging smoke validation in CI.
-- Release workflow for tag-built desktop artifacts.
 - Signed installers before broad public distribution.
 - Manual release downloads before automatic updater integration.
 - Async generation-run lifecycle once the local facade shape stabilizes.
