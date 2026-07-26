@@ -61,6 +61,7 @@ def generate_bulletpoints_service(req: BulletGenerationRequest) -> BulletGenerat
             count_range=count_range,
             model=req.llm_model,
             max_output_tokens=req.llm_max_output_tokens,
+            output_token_budget=req.llm_output_token_budget,
         )
         llm_metadata = llm_result.metadata
 
@@ -81,6 +82,17 @@ def generate_bulletpoints_service(req: BulletGenerationRequest) -> BulletGenerat
                 "method": "llm",
                 "latency_ms": round(latency_ms, 3),
                 "bullet_count": len(llm_result.bullet_points),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
             },
         )
 
@@ -107,6 +119,7 @@ def generate_bulletpoints_service(req: BulletGenerationRequest) -> BulletGenerat
         if not request_counted:
             metrics.inc_request(method="llm", subsystem=METRICS_SUBSYSTEM)
         metrics.inc_error(subsystem=METRICS_SUBSYSTEM)
+        llm_metadata = exc.metadata
         logger.warning(
             "generate_bulletpoints_failed",
             extra={
@@ -117,6 +130,17 @@ def generate_bulletpoints_service(req: BulletGenerationRequest) -> BulletGenerat
                 "evidence_id": req.evidence_id,
                 "method": "llm",
                 "error": str(exc),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
             },
         )
         raise BulletPointGenerationError(str(exc)) from exc

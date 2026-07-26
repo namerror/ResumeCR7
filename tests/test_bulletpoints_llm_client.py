@@ -12,6 +12,7 @@ from app.bulletpoints_generation.llm_client import (
     build_bulletpoint_prompt_payload,
     build_bulletpoint_schema,
     generate_bulletpoints_with_llm,
+    resolve_bulletpoint_max_output_tokens,
 )
 from app.bulletpoints_generation.models import BulletCountRange, BulletJobContext
 from app.job_focus_generation.models import JobFocus
@@ -175,11 +176,6 @@ def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
     monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
     monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(bullet_llm_client.settings, "BULLETPOINTS_LLM_MODEL", "test-model")
-    monkeypatch.setattr(
-        bullet_llm_client.settings,
-        "BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS",
-        444,
-    )
 
     result = generate_bulletpoints_with_llm(
         context=BulletJobContext(title="Backend Engineer"),
@@ -191,13 +187,82 @@ def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
     kwargs = captured["kwargs"]
     assert kwargs["model"] == "test-model"
     assert kwargs["temperature"] == 0
-    assert kwargs["max_output_tokens"] == 444
+    assert kwargs["max_output_tokens"] > 3000
     assert kwargs["text"]["format"]["name"] == "project_bullet_points"
     assert kwargs["text"]["format"]["strict"] is True
     assert kwargs["text"]["format"]["schema"]["properties"]["bullet_points"]["minItems"] == 2
     assert json.loads(kwargs["input"])["project"]["id"] == "resumecr7"
     assert result.bullet_points[0].startswith("Built FastAPI")
     assert result.metadata["total_tokens"] == 30
+    assert result.metadata["resolved_llm_max_output_tokens"] == kwargs["max_output_tokens"]
+    assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+
+
+def test_resolve_bulletpoint_max_output_tokens_scales_and_caps():
+    resolved = resolve_bulletpoint_max_output_tokens(
+        prompt_payload="x" * 2100,
+        count_range=BulletCountRange(min=2, max=4),
+        highlight_count=6,
+        output_token_budget={
+            "base": 900,
+            "per_bullet": 550,
+            "per_highlight": 35,
+            "per_evidence_1k_chars": 80,
+            "min": 1800,
+            "max": None,
+        },
+    )
+
+    assert resolved["resolved_llm_max_output_tokens"] == 3550
+    assert resolved["mode"] == "dynamic"
+    assert resolved["inputs"]["highlight_count"] == 6
+
+    capped = resolve_bulletpoint_max_output_tokens(
+        prompt_payload="x" * 2100,
+        count_range=BulletCountRange(min=2, max=4),
+        highlight_count=6,
+        output_token_budget={
+            "base": 900,
+            "per_bullet": 550,
+            "per_highlight": 35,
+            "per_evidence_1k_chars": 80,
+            "min": 1800,
+            "max": 2500,
+        },
+    )
+
+    assert capped["resolved_llm_max_output_tokens"] == 2500
+
+
+def test_generate_bulletpoints_with_llm_accepts_explicit_max_output_override(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text='{"bullet_points":["Built grounded resume APIs."]}',
+                usage=None,
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    result = generate_bulletpoints_with_llm(
+        context=BulletJobContext(title="Backend Engineer"),
+        project=_project(),
+        count_range=BulletCountRange(min=1, max=1),
+        max_output_tokens=444,
+    )
+
+    assert captured["kwargs"]["max_output_tokens"] == 444
+    assert result.metadata["requested_llm_max_output_tokens"] == 444
+    assert result.metadata["resolved_llm_max_output_tokens"] == 444
+    assert result.metadata["llm_output_token_budget_mode"] == "override"
 
 
 def test_generate_bulletpoints_with_llm_retries_malformed_json(monkeypatch):
@@ -233,11 +298,6 @@ def test_generate_bulletpoints_with_llm_retries_malformed_json(monkeypatch):
 
     monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
     monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
-    monkeypatch.setattr(
-        bullet_llm_client.settings,
-        "BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS",
-        444,
-    )
 
     result = generate_bulletpoints_with_llm(
         context=BulletJobContext(title="Backend Engineer"),
@@ -245,7 +305,11 @@ def test_generate_bulletpoints_with_llm_retries_malformed_json(monkeypatch):
         count_range=BulletCountRange(min=2, max=2),
     )
 
-    assert [call["max_output_tokens"] for call in captured_calls] == [444, 3000]
+    first_budget = captured_calls[0]["max_output_tokens"]
+    assert [call["max_output_tokens"] for call in captured_calls] == [
+        first_budget,
+        first_budget * 2,
+    ]
     assert result.bullet_points == [
         "Built FastAPI APIs for grounded resume generation.",
         "Validated user-authored evidence for tailored resumes.",

@@ -48,6 +48,41 @@ class BulletCountRange(StrictSchemaModel):
         return self
 
 
+class BulletOutputTokenBudget(StrictSchemaModel):
+    base: int = 900
+    per_bullet: int = 550
+    per_highlight: int = 35
+    per_evidence_1k_chars: int = 80
+    min: int = 1800
+    max: int | None = None
+
+    @field_validator(
+        "base",
+        "per_bullet",
+        "per_highlight",
+        "per_evidence_1k_chars",
+        "min",
+    )
+    @classmethod
+    def validate_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("output token budget values must be greater than or equal to 0")
+        return value
+
+    @field_validator("max")
+    @classmethod
+    def validate_optional_max(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("output token budget max must be greater than 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "BulletOutputTokenBudget":
+        if self.max is not None and self.max < self.min:
+            raise ValueError("output token budget max must be greater than or equal to min")
+        return self
+
+
 class BulletGenerationRequest(StrictSchemaModel):
     context: BulletJobContext
     project: ProjectRecord | None = None
@@ -56,6 +91,7 @@ class BulletGenerationRequest(StrictSchemaModel):
     dev_mode: bool | None = None
     llm_model: str | None = None
     llm_max_output_tokens: int | None = None
+    llm_output_token_budget: BulletOutputTokenBudget | None = None
 
     @model_validator(mode="after")
     def validate_single_evidence_record(self) -> "BulletGenerationRequest":

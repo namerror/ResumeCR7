@@ -13,12 +13,14 @@ from app.skill_selection.selector import select_skills_service
 from app.metrics import metrics
 from app.logging_config import setup_logging
 from app.runtime_data import bootstrap_runtime_data
+from app.project_selection.llm_client import DEFAULT_PROJECT_OUTPUT_TOKEN_BUDGET
 from app.project_selection.models import ProjectSelectRequest, ProjectSelectionResult
 from app.project_selection.service import record_project_selection_error, select_projects_service
 from app.bulletpoints_generation.models import (
     BulletGenerationRequest,
     BulletGenerationResponse,
 )
+from app.bulletpoints_generation.llm_client import DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
     generate_bulletpoints_service,
@@ -92,11 +94,11 @@ async def health():
             "method": settings.PROJ_METHOD,
             "top_n": settings.PROJ_TOP_N,
             "llm_model": settings.PROJ_LLM_MODEL,
-            "llm_max_output_tokens": settings.PROJ_LLM_MAX_OUTPUT_TOKENS,
+            "llm_output_token_budget": DEFAULT_PROJECT_OUTPUT_TOKEN_BUDGET.model_dump(),
         },
         "bulletpoints_generation": {
             "llm_model": settings.BULLETPOINTS_LLM_MODEL,
-            "llm_max_output_tokens": settings.BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS,
+            "llm_output_token_budget": DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET.model_dump(),
             "default_count": settings.BULLETPOINTS_DEFAULT_COUNT,
         },
         "job_focus_generation": {
@@ -160,6 +162,12 @@ async def generate_bulletpoints(payload: BulletGenerationRequest) -> BulletGener
             "source": "http",
             "evidence_type": payload.evidence_type,
             "evidence_id": payload.evidence_id,
+            "requested_llm_max_output_tokens": payload.llm_max_output_tokens,
+            "llm_output_token_budget": (
+                payload.llm_output_token_budget.model_dump()
+                if payload.llm_output_token_budget is not None
+                else None
+            ),
         },
     )
     try:
@@ -224,6 +232,12 @@ async def select_projects(payload: dict[str, Any]) -> ProjectSelectionResult:
             "stage": "project_selection",
             "endpoint": "/select-projects",
             "source": "http",
+            "requested_llm_max_output_tokens": (
+                payload.get("llm_max_output_tokens") if isinstance(payload, dict) else None
+            ),
+            "llm_output_token_budget": (
+                payload.get("llm_output_token_budget") if isinstance(payload, dict) else None
+            ),
         },
     )
     try:

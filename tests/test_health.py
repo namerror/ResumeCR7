@@ -30,8 +30,11 @@ def test_health():
     assert data["skill_selection"]["baseline_filter"] is False
     assert data["project_selection"]["method"] == "llm"
     assert data["project_selection"]["top_n"] is None
+    assert data["project_selection"]["llm_output_token_budget"]["min"] == 1200
+    assert data["project_selection"]["llm_output_token_budget"]["max"] is None
     assert data["bulletpoints_generation"]["llm_model"] == "gpt-5-mini"
-    assert data["bulletpoints_generation"]["llm_max_output_tokens"] == 3000
+    assert data["bulletpoints_generation"]["llm_output_token_budget"]["min"] == 1800
+    assert data["bulletpoints_generation"]["llm_output_token_budget"]["max"] is None
     assert data["bulletpoints_generation"]["default_count"] == 3
     assert data["job_focus_generation"]["llm_model"] == "gpt-5-mini"
     assert data["job_focus_generation"]["llm_max_output_tokens"] == 1200

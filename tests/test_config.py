@@ -14,9 +14,7 @@ SCOPED_ENV_VARS = [
     "SKILL_LLM_MODEL",
     "SKILL_LLM_MAX_OUTPUT_TOKENS",
     "PROJ_LLM_MODEL",
-    "PROJ_LLM_MAX_OUTPUT_TOKENS",
     "BULLETPOINTS_LLM_MODEL",
-    "BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS",
     "BULLETPOINTS_DEFAULT_COUNT",
     "LINK_SCANNING_ENABLED",
     "LINK_SCANNING_LLM_MODEL",
@@ -56,9 +54,7 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.SKILL_LLM_MODEL == "gpt-5-mini"
     assert settings.PROJ_LLM_MODEL == "gpt-5-mini"
     assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
-    assert settings.PROJ_LLM_MAX_OUTPUT_TOKENS == 1200
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
-    assert settings.BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS == 3000
     assert settings.BULLETPOINTS_DEFAULT_COUNT == 3
     assert settings.LINK_SCANNING_ENABLED is False
     assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5-mini"
@@ -85,7 +81,6 @@ def test_settings_scoped_defaults(monkeypatch):
 def test_settings_generation_llm_env_overrides(monkeypatch):
     _clear_selection_env(monkeypatch)
     monkeypatch.setenv("BULLETPOINTS_LLM_MODEL", "writer-model")
-    monkeypatch.setenv("BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS", "777")
     monkeypatch.setenv("BULLETPOINTS_DEFAULT_COUNT", "4")
     monkeypatch.setenv("LINK_SCANNING_ENABLED", "true")
     monkeypatch.setenv("LINK_SCANNING_LLM_MODEL", "scanner-model")
@@ -96,7 +91,6 @@ def test_settings_generation_llm_env_overrides(monkeypatch):
     settings = Settings(_env_file=None)
 
     assert settings.BULLETPOINTS_LLM_MODEL == "writer-model"
-    assert settings.BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS == 777
     assert settings.BULLETPOINTS_DEFAULT_COUNT == 4
     assert settings.LINK_SCANNING_ENABLED is True
     assert settings.LINK_SCANNING_LLM_MODEL == "scanner-model"
@@ -221,12 +215,6 @@ def test_settings_validates_bulletpoints_defaults(monkeypatch):
         Settings(_env_file=None)
 
     _clear_selection_env(monkeypatch)
-    monkeypatch.setenv("BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS", "0")
-
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None)
-
-    _clear_selection_env(monkeypatch)
     monkeypatch.setenv("LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS", "0")
 
     with pytest.raises(ValidationError):
@@ -286,6 +274,5 @@ def test_legacy_selection_env_vars_are_not_honored(monkeypatch):
     assert settings.SKILL_LLM_MODEL == "gpt-5-mini"
     assert settings.PROJ_LLM_MODEL == "gpt-5-mini"
     assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
-    assert settings.PROJ_LLM_MAX_OUTPUT_TOKENS == 1200
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
     assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5-mini"

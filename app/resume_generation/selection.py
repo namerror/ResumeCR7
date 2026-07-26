@@ -43,7 +43,12 @@ from app.skill_selection.selector import select_skills_service
 
 logger = logging.getLogger("resume_generation")
 SKILL_CATEGORIES = ("technology", "programming", "concepts")
-SELECTION_CACHE_IGNORED_FIELDS = {"top_n", "dev_mode", "llm_max_output_tokens"}
+SELECTION_CACHE_IGNORED_FIELDS = {
+    "top_n",
+    "dev_mode",
+    "llm_max_output_tokens",
+    "llm_output_token_budget",
+}
 _ORIGINAL_HTTPX_CLIENT = httpx.Client
 
 
@@ -309,6 +314,48 @@ def _should_use_cached_stage_response(
     return _should_cache_stage_response(stage=stage, response_data=response_data)
 
 
+def _llm_metadata_for_stage(stage: str, response_data: dict[str, Any]) -> dict[str, Any] | None:
+    details = response_data.get("details")
+    if not isinstance(details, dict):
+        return None
+    detail_keys = {
+        "skill_selection": ("_llm",),
+        "project_selection": ("_project_llm",),
+        "job_focus_generation": ("_job_focus_llm",),
+        "link_scanning": ("_link_scanning_llm",),
+        "project_bullet_points": ("_bulletpoints_llm",),
+        "experience_bullet_points": ("_bulletpoints_llm",),
+    }
+    for key in detail_keys.get(stage, ()):
+        metadata = details.get(key)
+        if isinstance(metadata, dict):
+            return metadata
+    return None
+
+
+def _budget_record_fields(
+    *,
+    payload: dict[str, Any],
+    response_data: dict[str, Any],
+    stage: str,
+) -> dict[str, Any]:
+    metadata = _llm_metadata_for_stage(stage, response_data) or {}
+    requested_tokens = payload.get("llm_max_output_tokens")
+    return {
+        "llm_max_output_tokens": requested_tokens,
+        "requested_llm_max_output_tokens": metadata.get(
+            "requested_llm_max_output_tokens",
+            requested_tokens,
+        ),
+        "resolved_llm_max_output_tokens": metadata.get("resolved_llm_max_output_tokens"),
+        "llm_output_token_budget_mode": metadata.get("llm_output_token_budget_mode"),
+        "llm_output_token_budget": metadata.get(
+            "llm_output_token_budget",
+            payload.get("llm_output_token_budget"),
+        ),
+    }
+
+
 def _cached_post_json(
     *,
     cache: ResumeGenerationStageCache | None,
@@ -335,7 +382,11 @@ def _cached_post_json(
             "source": "http",
             "cache_status": "disabled",
             "cache_key": None,
-            "llm_max_output_tokens": payload.get("llm_max_output_tokens"),
+            **_budget_record_fields(
+                payload=payload,
+                response_data=data,
+                stage=stage,
+            ),
             **token_usage.model_dump(),
         }
         if stage_response_records is not None:
@@ -381,7 +432,11 @@ def _cached_post_json(
         "source": result.source,
         "cache_status": cache_status,
         "cache_key": result.cache_key,
-        "llm_max_output_tokens": payload.get("llm_max_output_tokens"),
+        **_budget_record_fields(
+            payload=payload,
+            response_data=result.data,
+            stage=stage,
+        ),
         **token_usage.model_dump(),
     }
     if stage_response_records is not None:

@@ -303,11 +303,9 @@ EMBEDDING_BATCH_SIZE=100
 SKILL_LLM_MODEL=gpt-5-mini
 SKILL_LLM_MAX_OUTPUT_TOKENS=1200
 PROJ_LLM_MODEL=gpt-5-mini
-PROJ_LLM_MAX_OUTPUT_TOKENS=1200
 JOB_FOCUS_LLM_MODEL=gpt-5-mini
 JOB_FOCUS_LLM_MAX_OUTPUT_TOKENS=1200
 BULLETPOINTS_LLM_MODEL=gpt-5-mini
-BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS=3000
 LINK_SCANNING_ENABLED=false
 LINK_SCANNING_LLM_MODEL=gpt-5-mini
 LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS=1200
@@ -316,6 +314,20 @@ LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS=1200
 `OPENAI_API_KEY` is only required for embeddings, LLM-backed selection, job
 focus generation, bullet generation, and enabled link scanning. Deterministic
 baseline paths remain functional without it.
+
+### Resume Generation Token Budgets
+
+`user/resume_generation/config.yaml` controls per-run resume generation. Project
+selection and project/experience bullet generation use dynamic output token
+budgets by default instead of fixed `llm_max_output_tokens` values.
+
+- Project selection sizes its budget from active project count and prompt size.
+- Bullet generation sizes each request from the requested bullet count,
+  highlight count, and evidence payload size.
+- `max: null` means no app-level cap; set `max` in the relevant
+  `llm_output_token_budget` block to enforce one.
+- Direct API callers may still send `llm_max_output_tokens` as a hard override
+  for debugging or one-off runs.
 
 ## API Surface
 

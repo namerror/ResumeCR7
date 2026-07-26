@@ -154,6 +154,46 @@ def test_select_projects_api_records_project_metrics_and_tokens(monkeypatch):
     assert project_metrics["method_usage"].get("llm", 0) == before_project_metrics["method_usage"].get("llm", 0) + 1
 
 
+def test_select_projects_api_passes_output_token_budget(monkeypatch):
+    captured = {}
+
+    def fake_score_projects_with_llm(**kwargs):
+        captured.update(kwargs)
+        return LLMProjectScoreResult(
+            scores={"resumecr7": 3, "portfolio": 1},
+            metadata={
+                "model": "test-model",
+                "total_tokens": 0,
+                "resolved_llm_max_output_tokens": 1800,
+                "llm_output_token_budget_mode": "dynamic",
+            },
+        )
+
+    monkeypatch.setattr(project_llm, "score_projects_with_llm", fake_score_projects_with_llm)
+
+    response = api_request(
+        "POST",
+        "/select-projects",
+        json=_request_payload(
+            method="llm",
+            llm_output_token_budget={
+                "base": 800,
+                "per_candidate": 50,
+                "per_prompt_1k_chars": 25,
+                "min": 1100,
+                "max": None,
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    assert captured["output_token_budget"].base == 800
+    assert captured["output_token_budget"].max is None
+    assert response.json()["details"]["_project_llm"][
+        "resolved_llm_max_output_tokens"
+    ] == 1800
+
+
 def test_select_projects_api_records_project_errors():
     before = api_request("GET", "/metrics-lite").json()
 

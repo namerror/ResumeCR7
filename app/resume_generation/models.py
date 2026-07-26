@@ -66,12 +66,41 @@ class SkillSelectionConfig(StrictSchemaModel):
         return value
 
 
+class ProjectOutputTokenBudgetConfig(StrictSchemaModel):
+    base: int = 900
+    per_candidate: int = 40
+    per_prompt_1k_chars: int = 40
+    min: int = 1200
+    max: int | None = None
+
+    @field_validator("base", "per_candidate", "per_prompt_1k_chars", "min")
+    @classmethod
+    def validate_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("llm_output_token_budget values must be greater than or equal to 0")
+        return value
+
+    @field_validator("max")
+    @classmethod
+    def validate_optional_max(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("llm_output_token_budget.max must be greater than 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "ProjectOutputTokenBudgetConfig":
+        if self.max is not None and self.max < self.min:
+            raise ValueError("llm_output_token_budget.max must be greater than or equal to min")
+        return self
+
+
 class ProjectSelectionConfig(StrictSchemaModel):
     method: Literal["baseline", "llm"] | None = None
     top_n: int | None = None
     dev_mode: bool | None = None
     llm_model: str | None = None
     llm_max_output_tokens: int | None = None
+    llm_output_token_budget: ProjectOutputTokenBudgetConfig | None = None
 
     @field_validator("top_n")
     @classmethod
@@ -96,6 +125,41 @@ class ProjectSelectionConfig(StrictSchemaModel):
         if value is not None and value <= 0:
             raise ValueError("llm_max_output_tokens must be greater than 0")
         return value
+
+
+class BulletOutputTokenBudgetConfig(StrictSchemaModel):
+    base: int = 900
+    per_bullet: int = 550
+    per_highlight: int = 35
+    per_evidence_1k_chars: int = 80
+    min: int = 1800
+    max: int | None = None
+
+    @field_validator(
+        "base",
+        "per_bullet",
+        "per_highlight",
+        "per_evidence_1k_chars",
+        "min",
+    )
+    @classmethod
+    def validate_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("llm_output_token_budget values must be greater than or equal to 0")
+        return value
+
+    @field_validator("max")
+    @classmethod
+    def validate_optional_max(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("llm_output_token_budget.max must be greater than 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "BulletOutputTokenBudgetConfig":
+        if self.max is not None and self.max < self.min:
+            raise ValueError("llm_output_token_budget.max must be greater than or equal to min")
+        return self
 
 
 class BulletCountRangeConfig(StrictSchemaModel):
@@ -128,6 +192,7 @@ class BulletPointGenerationConfig(StrictSchemaModel):
     dev_mode: bool | None = None
     llm_model: str | None = None
     llm_max_output_tokens: int | None = None
+    llm_output_token_budget: BulletOutputTokenBudgetConfig | None = None
 
     @field_validator("llm_model")
     @classmethod

@@ -8,7 +8,11 @@ import pytest
 from app.project_selection import ProjectCandidate, ProjectJobContext
 from resume_evidence.models import ProjectSkills
 from app.project_selection import llm_client as project_llm_client
-from app.project_selection.llm_client import ProjectLLMClientError, score_projects_with_llm
+from app.project_selection.llm_client import (
+    ProjectLLMClientError,
+    resolve_project_max_output_tokens,
+    score_projects_with_llm,
+)
 
 
 def _candidate(project_id: str, name: str) -> ProjectCandidate:
@@ -43,7 +47,6 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     monkeypatch.setattr(project_llm_client, "OpenAI", DummyOpenAI)
     monkeypatch.setattr(project_llm_client.settings, "OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(project_llm_client.settings, "PROJ_LLM_MODEL", "test-model")
-    monkeypatch.setattr(project_llm_client.settings, "PROJ_LLM_MAX_OUTPUT_TOKENS", 333)
 
     result = score_projects_with_llm(
         context=ProjectJobContext(title="Backend Engineer", description="Build APIs."),
@@ -54,7 +57,7 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     kwargs = captured["kwargs"]
     assert kwargs["model"] == "test-model"
     assert kwargs["temperature"] == 0
-    assert kwargs["max_output_tokens"] == 333
+    assert kwargs["max_output_tokens"] == 1200
     assert kwargs["text"]["format"]["name"] == "project_scores"
     assert kwargs["text"]["format"]["strict"] is True
     schema = kwargs["text"]["format"]["schema"]
@@ -68,6 +71,67 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     assert result.scores == {"resumecr7": 3, "portfolio": 1}
     assert result.metadata["total_tokens"] == 17
     assert result.metadata["model"] == "test-model"
+    assert result.metadata["resolved_llm_max_output_tokens"] == 1200
+    assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+
+
+def test_resolve_project_max_output_tokens_scales_and_caps():
+    resolved = resolve_project_max_output_tokens(
+        prompt_payload="x" * 2500,
+        candidate_count=20,
+        output_token_budget={
+            "base": 900,
+            "per_candidate": 40,
+            "per_prompt_1k_chars": 40,
+            "min": 1200,
+            "max": None,
+        },
+    )
+
+    assert resolved["resolved_llm_max_output_tokens"] == 1820
+    assert resolved["mode"] == "dynamic"
+    assert resolved["inputs"]["candidate_count"] == 20
+
+    capped = resolve_project_max_output_tokens(
+        prompt_payload="x" * 2500,
+        candidate_count=20,
+        output_token_budget={
+            "base": 900,
+            "per_candidate": 40,
+            "per_prompt_1k_chars": 40,
+            "min": 1200,
+            "max": 1500,
+        },
+    )
+
+    assert capped["resolved_llm_max_output_tokens"] == 1500
+
+
+def test_score_projects_with_llm_accepts_explicit_max_output_override(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(output_text='{"resumecr7":3}', usage=None)
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(project_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(project_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    result = score_projects_with_llm(
+        context=ProjectJobContext(title="Backend Engineer"),
+        candidates=[_candidate("resumecr7", "ResumeCR7")],
+        max_output_tokens=333,
+    )
+
+    assert captured["kwargs"]["max_output_tokens"] == 333
+    assert result.metadata["requested_llm_max_output_tokens"] == 333
+    assert result.metadata["resolved_llm_max_output_tokens"] == 333
+    assert result.metadata["llm_output_token_budget_mode"] == "override"
 
 
 def test_score_projects_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):

@@ -480,6 +480,49 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     )
 
 
+def test_load_generation_config_accepts_dynamic_output_token_budgets(tmp_path):
+    payload = _config_payload()
+    payload["project_selection"].pop("llm_max_output_tokens")
+    payload["project_selection"]["llm_output_token_budget"] = {
+        "base": 800,
+        "per_candidate": 50,
+        "per_prompt_1k_chars": 25,
+        "min": 1100,
+        "max": None,
+    }
+    payload["project_bullet_point_generation"].pop("llm_max_output_tokens")
+    payload["project_bullet_point_generation"]["llm_output_token_budget"] = {
+        "base": 1000,
+        "per_bullet": 400,
+        "per_highlight": 20,
+        "per_evidence_1k_chars": 50,
+        "min": 1500,
+        "max": None,
+    }
+    payload["experience_bullet_point_generation"].pop("llm_max_output_tokens")
+    payload["experience_bullet_point_generation"]["llm_output_token_budget"] = {
+        "base": 1100,
+        "per_bullet": 450,
+        "per_highlight": 25,
+        "per_evidence_1k_chars": 60,
+        "min": 1600,
+        "max": 5000,
+    }
+    path = _write_yaml(tmp_path / "config.yaml", payload)
+
+    config = load_generation_config(path)
+
+    assert config.project_selection.llm_max_output_tokens is None
+    assert config.project_selection.llm_output_token_budget is not None
+    assert config.project_selection.llm_output_token_budget.per_candidate == 50
+    assert config.project_selection.llm_output_token_budget.max is None
+    assert (
+        config.project_bullet_point_generation.llm_output_token_budget.per_bullet
+        == 400
+    )
+    assert config.experience_bullet_point_generation.llm_output_token_budget.max == 5000
+
+
 def test_generation_default_paths_follow_settings(monkeypatch, tmp_path):
     generation_root = tmp_path / "resume_generation"
     monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)

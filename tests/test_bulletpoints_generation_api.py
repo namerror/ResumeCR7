@@ -161,6 +161,47 @@ def test_generate_bulletpoints_api_uses_request_count_range(monkeypatch):
     assert captured["count_range"].max == 4
 
 
+def test_generate_bulletpoints_api_passes_output_token_budget(monkeypatch):
+    captured = {}
+
+    def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return LLMBulletPointResult(
+            bullet_points=["Built APIs."],
+            metadata={
+                "model": "test-model",
+                "total_tokens": 0,
+                "resolved_llm_max_output_tokens": 2222,
+                "llm_output_token_budget_mode": "dynamic",
+            },
+        )
+
+    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", fake_generate)
+
+    response = api_request(
+        "POST",
+        "/generate-bulletpoints",
+        json=_request_payload(
+            bullet_count_range={"min": 1, "max": 1},
+            llm_output_token_budget={
+                "base": 1000,
+                "per_bullet": 400,
+                "per_highlight": 25,
+                "per_evidence_1k_chars": 60,
+                "min": 1500,
+                "max": None,
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    assert captured["output_token_budget"].base == 1000
+    assert captured["output_token_budget"].max is None
+    assert response.json()["details"]["_bulletpoints_llm"][
+        "resolved_llm_max_output_tokens"
+    ] == 2222
+
+
 def test_generate_bulletpoints_api_accepts_experience_record(monkeypatch):
     captured = {}
 

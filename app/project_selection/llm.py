@@ -91,6 +91,7 @@ def llm_select_projects(
     dev_mode: bool = False,
     llm_model: str | None = None,
     llm_max_output_tokens: int | None = None,
+    llm_output_token_budget: object | None = None,
 ) -> ProjectSelectionResult:
     llm_metadata: dict[str, Any] | None = None
     try:
@@ -99,16 +100,20 @@ def llm_select_projects(
             candidates=candidates,
             model=llm_model,
             max_output_tokens=llm_max_output_tokens,
+            output_token_budget=llm_output_token_budget,
         )
         llm_metadata = llm_result.metadata
         scores, warnings = _validate_scores(llm_result.scores, candidates)
     except (ProjectLLMClientError, ProjectLLMValidationError) as exc:
+        if isinstance(exc, ProjectLLMClientError):
+            llm_metadata = exc.metadata
         logger.warning(
             "project_llm_fallback_to_baseline",
             extra={
                 "event": "project_llm_fallback_to_baseline",
                 "job_title": context.title,
                 "error": str(exc),
+                "requested_llm_max_output_tokens": llm_max_output_tokens,
             },
         )
         return _fallback_to_baseline(

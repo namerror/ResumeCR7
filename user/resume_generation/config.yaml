@@ -14,7 +14,12 @@ project_selection:
   top_n: null
   dev_mode: true
   llm_model: gpt-5-nano
-  llm_max_output_tokens: 1200
+  llm_output_token_budget:
+    base: 900
+    per_candidate: 40
+    per_prompt_1k_chars: 40
+    min: 1200
+    max: null
 job_focus_generation:
   dev_mode: true
   llm_model: gpt-5-mini
@@ -30,12 +35,24 @@ project_bullet_point_generation:
   bullet_count_range: null
   dev_mode: true
   llm_model: gpt-5-mini
-  llm_max_output_tokens: 3000
+  llm_output_token_budget:
+    base: 900
+    per_bullet: 550
+    per_highlight: 35
+    per_evidence_1k_chars: 80
+    min: 1800
+    max: null
 experience_bullet_point_generation:
   bullet_count_range: null
   dev_mode: true
   llm_model: gpt-5-mini
-  llm_max_output_tokens: 3000
+  llm_output_token_budget:
+    base: 900
+    per_bullet: 550
+    per_highlight: 35
+    per_evidence_1k_chars: 80
+    min: 1800
+    max: null
 cache:
   enabled: true
   path: null

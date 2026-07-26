@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 from openai import OpenAI
 
-from app.bulletpoints_generation.models import BulletCountRange, BulletJobContext
+from app.bulletpoints_generation.models import (
+    BulletCountRange,
+    BulletJobContext,
+    BulletOutputTokenBudget,
+)
 from app.config import settings
 from app.skill_selection.llm_client import _extract_output_text
 from app.skill_selection.llm_client import supports_temperature
@@ -20,6 +25,10 @@ logger = logging.getLogger("bulletpoints_llm_client")
 class BulletPointLLMClientError(RuntimeError):
     """Raised when a bullet-point generation request or response cannot be used."""
 
+    def __init__(self, message: str, metadata: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.metadata = metadata or {}
+
 
 @dataclass
 class LLMBulletPointResult:
@@ -28,6 +37,8 @@ class LLMBulletPointResult:
 
 
 EvidenceType = Literal["project", "experience"]
+
+DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET = BulletOutputTokenBudget()
 
 
 def build_bulletpoint_schema(count_range: BulletCountRange) -> dict[str, Any]:
@@ -162,11 +173,74 @@ def _usage_metadata(response: Any) -> dict[str, int]:
     }
 
 
+def _budget_dict(budget: BulletOutputTokenBudget | Mapping[str, Any]) -> dict[str, Any]:
+    if isinstance(budget, BulletOutputTokenBudget):
+        return budget.model_dump()
+    return dict(budget)
+
+
+def _apply_optional_cap(value: int, max_value: int | None) -> int:
+    return min(value, max_value) if max_value is not None else value
+
+
+def resolve_bulletpoint_max_output_tokens(
+    *,
+    prompt_payload: str,
+    count_range: BulletCountRange,
+    highlight_count: int,
+    max_output_tokens: int | None = None,
+    output_token_budget: BulletOutputTokenBudget | Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    budget = (
+        output_token_budget
+        if output_token_budget is not None
+        else DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET
+    )
+    budget_config = _budget_dict(budget)
+    evidence_1k_chars = math.ceil(len(prompt_payload) / 1000)
+    if max_output_tokens is not None:
+        return {
+            "mode": "override",
+            "requested_llm_max_output_tokens": max_output_tokens,
+            "resolved_llm_max_output_tokens": max_output_tokens,
+            "config": budget_config,
+            "inputs": {
+                "requested_max_bullets": count_range.max,
+                "highlight_count": highlight_count,
+                "evidence_json_chars": len(prompt_payload),
+                "evidence_1k_chars": evidence_1k_chars,
+            },
+        }
+
+    calculated = (
+        int(budget_config["base"])
+        + int(budget_config["per_bullet"]) * count_range.max
+        + int(budget_config["per_highlight"]) * highlight_count
+        + int(budget_config["per_evidence_1k_chars"]) * evidence_1k_chars
+    )
+    resolved = max(int(budget_config["min"]), calculated)
+    resolved = _apply_optional_cap(resolved, budget_config.get("max"))
+    return {
+        "mode": "dynamic",
+        "requested_llm_max_output_tokens": None,
+        "resolved_llm_max_output_tokens": resolved,
+        "config": budget_config,
+        "inputs": {
+            "requested_max_bullets": count_range.max,
+            "highlight_count": highlight_count,
+            "evidence_json_chars": len(prompt_payload),
+            "evidence_1k_chars": evidence_1k_chars,
+            "calculated_max_output_tokens": calculated,
+        },
+    }
+
+
 def _aggregate_attempt_metadata(
     attempts: list[dict[str, Any]],
     *,
     model: str,
     latency_ms: float,
+    token_budget: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "model": model,
@@ -178,6 +252,11 @@ def _aggregate_attempt_metadata(
         ),
         "total_tokens": sum(int(attempt.get("total_tokens", 0) or 0) for attempt in attempts),
         "attempts": attempts,
+        "requested_llm_max_output_tokens": token_budget["requested_llm_max_output_tokens"],
+        "resolved_llm_max_output_tokens": token_budget["resolved_llm_max_output_tokens"],
+        "llm_output_token_budget_mode": token_budget["mode"],
+        "llm_output_token_budget": token_budget["config"],
+        "llm_output_token_budget_inputs": token_budget["inputs"],
     }
 
 
@@ -246,6 +325,7 @@ def generate_bulletpoints_with_llm(
     experience: ExperienceRecord | None = None,
     model: str | None = None,
     max_output_tokens: int | None = None,
+    output_token_budget: BulletOutputTokenBudget | Mapping[str, Any] | None = None,
 ) -> LLMBulletPointResult:
     evidence_type, _ = _build_evidence_payload(
         project=project,
@@ -265,11 +345,16 @@ def generate_bulletpoints_with_llm(
         raise BulletPointLLMClientError("OPENAI_API_KEY is required for bullet-point generation")
 
     effective_model = model if model is not None else settings.BULLETPOINTS_LLM_MODEL
-    effective_max_output_tokens = (
-        max_output_tokens
-        if max_output_tokens is not None
-        else settings.BULLETPOINTS_LLM_MAX_OUTPUT_TOKENS
+    source_record = project if project is not None else experience
+    highlight_count = len(source_record.highlights) if source_record is not None else 0
+    token_budget = resolve_bulletpoint_max_output_tokens(
+        prompt_payload=prompt_payload,
+        count_range=count_range,
+        highlight_count=highlight_count,
+        max_output_tokens=max_output_tokens,
+        output_token_budget=output_token_budget,
     )
+    effective_max_output_tokens = token_budget["resolved_llm_max_output_tokens"]
 
     start = time.perf_counter()
     attempts: list[dict[str, Any]] = []
@@ -285,6 +370,7 @@ def generate_bulletpoints_with_llm(
                 "subsystem": "bulletpoints_generation",
                 "model": effective_model,
                 "attempt": 0,
+                "resolved_llm_max_output_tokens": effective_max_output_tokens,
             },
         )
         raise BulletPointLLMClientError(
@@ -292,8 +378,12 @@ def generate_bulletpoints_with_llm(
         ) from exc
     max_output_tokens_by_attempt = [
         effective_max_output_tokens,
-        max(effective_max_output_tokens * 2, 3000),
+        _apply_optional_cap(
+            max(effective_max_output_tokens * 2, 3000),
+            token_budget["config"].get("max"),
+        ),
     ]
+    max_output_tokens_by_attempt = list(dict.fromkeys(max_output_tokens_by_attempt))
 
     for attempt_index, attempt_max_output_tokens in enumerate(
         max_output_tokens_by_attempt,
@@ -310,6 +400,19 @@ def generate_bulletpoints_with_llm(
             )
             response = client.responses.create(**create_kwargs)
         except Exception as exc:
+            attempt_metadata = {
+                "attempt": attempt_index,
+                "max_output_tokens": attempt_max_output_tokens,
+                "error": f"Bullet-point LLM request failed: {exc}",
+            }
+            attempts.append(attempt_metadata)
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            metadata = _aggregate_attempt_metadata(
+                attempts,
+                model=effective_model,
+                latency_ms=latency_ms,
+                token_budget=token_budget,
+            )
             logger.exception(
                 "bulletpoints_llm_request_failed",
                 extra={
@@ -317,10 +420,12 @@ def generate_bulletpoints_with_llm(
                     "subsystem": "bulletpoints_generation",
                     "model": effective_model,
                     "attempt": attempt_index,
+                    "resolved_llm_max_output_tokens": attempt_max_output_tokens,
                 },
             )
             raise BulletPointLLMClientError(
-                f"Bullet-point LLM request failed: {exc}"
+                f"Bullet-point LLM request failed: {exc}",
+                metadata=metadata,
             ) from exc
 
         attempt_metadata = {
@@ -347,14 +452,25 @@ def generate_bulletpoints_with_llm(
                     attempts,
                     model=effective_model,
                     latency_ms=latency_ms,
+                    token_budget=token_budget,
                 )
                 if retry_reason is not None:
                     metadata["retry_reason"] = retry_reason
                 return LLMBulletPointResult(bullet_points=bullets, metadata=metadata)
 
         if attempt_index == len(max_output_tokens_by_attempt):
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            metadata = _aggregate_attempt_metadata(
+                attempts,
+                model=effective_model,
+                latency_ms=latency_ms,
+                token_budget=token_budget,
+            )
+            if retry_reason is not None:
+                metadata["retry_reason"] = retry_reason
             raise BulletPointLLMClientError(
-                retry_reason or "Bullet-point LLM response could not be parsed"
+                retry_reason or "Bullet-point LLM response could not be parsed",
+                metadata=metadata,
             )
 
         logger.warning(
@@ -364,6 +480,7 @@ def generate_bulletpoints_with_llm(
                 "subsystem": "bulletpoints_generation",
                 "model": effective_model,
                 "attempt": attempt_index,
+                "resolved_llm_max_output_tokens": attempt_max_output_tokens,
                 "retry_reason": retry_reason,
             },
         )
