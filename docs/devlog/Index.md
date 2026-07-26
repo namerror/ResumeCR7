@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-26-2026-Codex-phase-5-linux-release-workflow.md` - 2026-07-26 - Phase 5 Linux release workflow
 - `07-26-2026-Codex-phase-4-ci-validation.md` - 2026-07-26 - Phase 4 CI validation
 - `07-26-2026-Codex-document-desktop-data-paths.md` - 2026-07-26 - Document desktop data paths
 - `07-26-2026-Codex-tauri-cors-desktop-backend.md` - 2026-07-26 - Allow Tauri desktop backend CORS
