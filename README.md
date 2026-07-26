@@ -43,7 +43,7 @@ Build and run the desktop app from the frontend directory:
 cd frontend
 npm install
 npm run desktop:build
-./src-tauri/target/release/bundle/appimage/ResumeCR7_0.4.0_amd64.AppImage
+./src-tauri/target/release/bundle/appimage/ResumeCR7_0.4.1_amd64.AppImage
 ```
 
 During desktop startup, Tauri starts the bundled backend sidecar on an available

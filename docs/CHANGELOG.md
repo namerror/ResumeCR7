@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.1] - 2026-07-26
 
 ### Added
 - Frontend Config page and `/resume-generation/config` API for editing selected local generation settings, including masked YAML-backed OpenAI API key setup.
 - Updated token budgeting logic with dynamic settings. Project selection and bullet generation now scale output budgets with request size by default, preserve explicit override controls, and expose resolved budget metadata in logs, stage records, and dev details for easier diagnosis.
+  
+### Fixed
+- Fix resume LaTex generation error by sanitizing special characters from LLM output and tightening the LLM prompt to avoid generating invalid output.
 
 ## [0.4.0] - 2026-07-26
 
