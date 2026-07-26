@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
+from app.config import settings
 from app.link_scanning.service import LinkScanningError
 from app.resume_evidence import load_registered_evidence
-from app.resume_generation.config import load_generation_config, resolve_generation_config_path
+from app.resume_generation.config import (
+    load_generation_config,
+    load_generation_config_payload,
+    merge_generation_config_defaults,
+    resolve_generation_config_path,
+    write_generation_config_payload,
+)
 from app.resume_generation.enrich import run_link_evidence_enrichment
 from app.resume_generation.latex import resolve_resume_latex_output_path
 from app.resume_generation.main import (
@@ -18,8 +26,10 @@ from app.resume_generation.main import (
     write_resume_latex_from_config,
 )
 from app.resume_generation.models import (
+    BulletCountRangeConfig,
     IntermediateResumeResult,
     JobTarget,
+    ResumeGenerationConfig,
     StrictSchemaModel,
 )
 from app.resume_generation.pdf import LatexPdfRenderError, render_latex_pdf
@@ -104,8 +114,131 @@ class ResumePdfGenerationRequest(StrictSchemaModel):
     pass
 
 
+class ConfigSkillSelectionValues(StrictSchemaModel):
+    top_n: int | None = None
+
+    @field_validator("top_n")
+    @classmethod
+    def validate_top_n(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("top_n must be greater than or equal to 0")
+        return value
+
+
+class ConfigProjectSelectionValues(StrictSchemaModel):
+    top_n: int | None = None
+
+    @field_validator("top_n")
+    @classmethod
+    def validate_top_n(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("top_n must be greater than or equal to 0")
+        return value
+
+
+class ConfigLinkScanningValues(StrictSchemaModel):
+    highlight_count: int | None = None
+    max_tokens_per_highlight: int | None = None
+
+    @field_validator("highlight_count", "max_tokens_per_highlight")
+    @classmethod
+    def validate_positive_int(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
+
+class ConfigOpenAIPatch(StrictSchemaModel):
+    api_key: str | None = None
+    clear_api_key: bool = False
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("api_key must not be empty; use clear_api_key to remove it")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_clear_or_replace(self) -> "ConfigOpenAIPatch":
+        if self.clear_api_key and "api_key" in self.model_fields_set:
+            raise ValueError("Provide either api_key or clear_api_key, not both")
+        return self
+
+
+class ResumeGenerationConfigPatch(StrictSchemaModel):
+    skill_selection: ConfigSkillSelectionValues | None = None
+    project_selection: ConfigProjectSelectionValues | None = None
+    link_scanning: ConfigLinkScanningValues | None = None
+    bullet_count_range: BulletCountRangeConfig | None = None
+    openai: ConfigOpenAIPatch | None = None
+
+
+class ConfigDisplayDefaults(StrictSchemaModel):
+    skill_selection_top_n: str
+    project_selection_top_n: str
+    link_scanning_highlight_count: str
+    link_scanning_max_tokens_per_highlight: str
+    bullet_count_range: str
+
+
+class ConfigDefaultValues(StrictSchemaModel):
+    skill_selection_top_n: int
+    project_selection_top_n: int | None
+    link_scanning_highlight_count: int
+    link_scanning_max_tokens_per_highlight: int
+    bullet_count_range: BulletCountRangeConfig
+
+
+class ResumeGenerationConfigResponse(StrictSchemaModel):
+    schema_version: Literal[1]
+    config_path: str
+    skill_selection: ConfigSkillSelectionValues
+    project_selection: ConfigProjectSelectionValues
+    link_scanning: ConfigLinkScanningValues
+    bullet_count_range: BulletCountRangeConfig | None
+    openai_api_key_configured: bool
+    openai_api_key_saved: bool
+    openai_api_key_source: Literal["environment", "config", "none"]
+    display_defaults: ConfigDisplayDefaults
+    default_values: ConfigDefaultValues
+
+
 def _validation_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/config", response_model=ResumeGenerationConfigResponse)
+async def get_resume_generation_config() -> ResumeGenerationConfigResponse:
+    try:
+        payload = load_generation_config_payload(fill_defaults=True)
+        config = ResumeGenerationConfig.model_validate(payload)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise _validation_error(exc) from exc
+    return _config_response(config)
+
+
+@router.patch("/config", response_model=ResumeGenerationConfigResponse)
+async def patch_resume_generation_config(
+    request: Request,
+    payload: ResumeGenerationConfigPatch,
+) -> ResumeGenerationConfigResponse:
+    if _patch_changes_openai_key(payload) and not _is_secure_config_request(request):
+        raise HTTPException(
+            status_code=403,
+            detail="OpenAI API key updates require HTTPS or a local loopback request.",
+        )
+
+    try:
+        current_payload = load_generation_config_payload(fill_defaults=True)
+        updated_payload = _apply_config_patch(current_payload, payload)
+        config = write_generation_config_payload(updated_payload)
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise _validation_error(exc) from exc
+    return _config_response(config)
 
 
 @router.post("/enrich-link-evidence", response_model=ResumeLinkEnrichmentResponse)
@@ -151,6 +284,135 @@ async def enrich_resume_link_evidence(
             for record in result.records
         ],
     )
+
+
+def _apply_config_patch(
+    current_payload: dict[str, Any],
+    patch: ResumeGenerationConfigPatch,
+) -> dict[str, Any]:
+    updated = merge_generation_config_defaults(current_payload)
+
+    if patch.skill_selection is not None:
+        fields = patch.skill_selection.model_fields_set
+        if "top_n" in fields:
+            updated["skill_selection"]["top_n"] = patch.skill_selection.top_n
+
+    if patch.project_selection is not None:
+        fields = patch.project_selection.model_fields_set
+        if "top_n" in fields:
+            updated["project_selection"]["top_n"] = patch.project_selection.top_n
+
+    if patch.link_scanning is not None:
+        fields = patch.link_scanning.model_fields_set
+        if "highlight_count" in fields:
+            updated["link_scanning"]["highlight_count"] = patch.link_scanning.highlight_count
+        if "max_tokens_per_highlight" in fields:
+            updated["link_scanning"]["max_tokens_per_highlight"] = (
+                patch.link_scanning.max_tokens_per_highlight
+            )
+
+    if "bullet_count_range" in patch.model_fields_set:
+        bullet_range = (
+            patch.bullet_count_range.model_dump(mode="python")
+            if patch.bullet_count_range is not None
+            else None
+        )
+        updated["project_bullet_point_generation"]["bullet_count_range"] = bullet_range
+        updated["experience_bullet_point_generation"]["bullet_count_range"] = bullet_range
+
+    if patch.openai is not None:
+        updated.setdefault("openai", {})
+        if patch.openai.clear_api_key:
+            updated["openai"]["api_key"] = None
+        elif "api_key" in patch.openai.model_fields_set:
+            updated["openai"]["api_key"] = patch.openai.api_key
+
+    return updated
+
+
+def _config_response(
+    config: ResumeGenerationConfig,
+) -> ResumeGenerationConfigResponse:
+    openai_source = _openai_api_key_source(config)
+    return ResumeGenerationConfigResponse(
+        schema_version=1,
+        config_path=str(resolve_generation_config_path()),
+        skill_selection=ConfigSkillSelectionValues(
+            top_n=config.skill_selection.top_n,
+        ),
+        project_selection=ConfigProjectSelectionValues(
+            top_n=config.project_selection.top_n,
+        ),
+        link_scanning=ConfigLinkScanningValues(
+            highlight_count=config.link_scanning.highlight_count,
+            max_tokens_per_highlight=config.link_scanning.max_tokens_per_highlight,
+        ),
+        bullet_count_range=config.project_bullet_point_generation.bullet_count_range,
+        openai_api_key_configured=openai_source != "none",
+        openai_api_key_saved=bool(config.openai.api_key),
+        openai_api_key_source=openai_source,
+        display_defaults=_config_display_defaults(),
+        default_values=_config_default_values(),
+    )
+
+
+def _config_display_defaults() -> ConfigDisplayDefaults:
+    default_bullet_count = settings.BULLETPOINTS_DEFAULT_COUNT
+    return ConfigDisplayDefaults(
+        skill_selection_top_n=f"{settings.SKILL_TOP_N} (default)",
+        project_selection_top_n="unlimited (default)",
+        link_scanning_highlight_count=(
+            f"{settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT} (default)"
+        ),
+        link_scanning_max_tokens_per_highlight=(
+            f"{settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT} (default)"
+        ),
+        bullet_count_range=f"{default_bullet_count} to {default_bullet_count} (default)",
+    )
+
+
+def _config_default_values() -> ConfigDefaultValues:
+    default_bullet_count = settings.BULLETPOINTS_DEFAULT_COUNT
+    return ConfigDefaultValues(
+        skill_selection_top_n=settings.SKILL_TOP_N,
+        project_selection_top_n=None,
+        link_scanning_highlight_count=settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT,
+        link_scanning_max_tokens_per_highlight=settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT,
+        bullet_count_range=BulletCountRangeConfig(
+            min=default_bullet_count,
+            max=default_bullet_count,
+        ),
+    )
+
+
+def _openai_api_key_source(
+    config: ResumeGenerationConfig,
+) -> Literal["environment", "config", "none"]:
+    if getattr(settings, "OPENAI_API_KEY", "").strip():
+        return "environment"
+    if config.openai.api_key:
+        return "config"
+    return "none"
+
+
+def _patch_changes_openai_key(payload: ResumeGenerationConfigPatch) -> bool:
+    if payload.openai is None:
+        return False
+    return payload.openai.clear_api_key or "api_key" in payload.openai.model_fields_set
+
+
+def _is_secure_config_request(request: Request) -> bool:
+    if request.url.scheme == "https":
+        return True
+    host = request.url.hostname
+    if host is None:
+        return False
+    if host == "localhost" or host == "testserver":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @router.post("/tex", response_model=ResumeTexGenerationResponse)

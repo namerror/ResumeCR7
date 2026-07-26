@@ -8,7 +8,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.config import settings
+from app.config import get_openai_api_key, settings
 
 logger = logging.getLogger("llm_client")
 
@@ -257,7 +257,7 @@ def score_skills_with_llm(
         "categories. Scores must be integers from 0 to 3."
     )
 
-    api_key = getattr(settings, "OPENAI_API_KEY", "")
+    api_key = get_openai_api_key()
     if not api_key.strip():
         raise LLMClientError("OPENAI_API_KEY is required for LLM scoring")
 

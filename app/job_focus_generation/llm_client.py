@@ -8,7 +8,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.config import settings
+from app.config import get_openai_api_key, settings
 from app.job_focus_generation.models import JobFocus
 from app.skill_selection.llm_client import _extract_output_text, supports_temperature
 
@@ -170,7 +170,7 @@ def derive_job_focus_with_llm(
     schema = build_job_focus_schema()
     instructions = build_job_focus_instructions()
 
-    api_key = getattr(settings, "OPENAI_API_KEY", "")
+    api_key = get_openai_api_key()
     if not api_key.strip():
         raise JobFocusLLMClientError("OPENAI_API_KEY is required for job-focus generation")
 

@@ -140,4 +140,72 @@ describe("evidence api client", () => {
       }),
     );
   });
+
+  it("reads and patches generation config", async () => {
+    const configPayload = {
+      schema_version: 1 as const,
+      config_path: "user/resume_generation/config.yaml",
+      skill_selection: { top_n: 20 },
+      project_selection: { top_n: null },
+      link_scanning: { highlight_count: 6, max_tokens_per_highlight: 500 },
+      bullet_count_range: null,
+      openai_api_key_configured: false,
+      openai_api_key_saved: false,
+      openai_api_key_source: "none" as const,
+      display_defaults: {
+        skill_selection_top_n: "20 (default)",
+        project_selection_top_n: "unlimited (default)",
+        link_scanning_highlight_count: "6 (default)",
+        link_scanning_max_tokens_per_highlight: "500 (default)",
+        bullet_count_range: "3 to 3 (default)",
+      },
+      default_values: {
+        skill_selection_top_n: 20,
+        project_selection_top_n: null,
+        link_scanning_highlight_count: 6,
+        link_scanning_max_tokens_per_highlight: 500,
+        bullet_count_range: { min: 3, max: 3 },
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue(configPayload),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          ...configPayload,
+          skill_selection: { top_n: 12 },
+        }),
+      });
+    const api = createEvidenceApi({
+      baseUrl: "/api",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await api.getGenerationConfig();
+    await api.updateGenerationConfig({
+      skill_selection: { top_n: 12 },
+      openai: { api_key: "sk-test" },
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/resume-generation/config",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/resume-generation/config",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          skill_selection: { top_n: 12 },
+          openai: { api_key: "sk-test" },
+        }),
+      }),
+    );
+  });
 });

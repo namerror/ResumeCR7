@@ -548,8 +548,9 @@ def test_scan_evidence_links_with_llm_rejects_other_github_repo_source(monkeypat
         )
 
 
-def test_scan_evidence_links_with_llm_requires_api_key(monkeypatch):
+def test_scan_evidence_links_with_llm_requires_api_key(monkeypatch, tmp_path):
     monkeypatch.setattr(link_llm_client.settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(link_llm_client.settings, "RESUME_GENERATION_ROOT", tmp_path)
 
     with pytest.raises(LinkScanningLLMClientError, match="OPENAI_API_KEY"):
         scan_evidence_links_with_llm(

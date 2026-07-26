@@ -14,7 +14,11 @@ from app.resume_evidence.models import (
     SkillsFile,
     UserInfoFile,
 )
-from app.resume_generation.config import load_generation_config, load_job_target
+from app.resume_generation.config import (
+    default_generation_config_payload,
+    ensure_generation_config_defaults,
+    load_job_target,
+)
 from app.resume_generation.models import JobTarget, ResumeGenerationConfig
 
 
@@ -55,7 +59,7 @@ def bootstrap_runtime_data(
 
     _write_default_yaml_if_missing(
         generation_root / "config.yaml",
-        {"schema_version": 1},
+        default_generation_config_payload(),
         validator=ResumeGenerationConfig.model_validate,
     )
     _write_default_yaml_if_missing(
@@ -68,7 +72,7 @@ def bootstrap_runtime_data(
         validator=JobTarget.model_validate,
     )
 
-    load_generation_config(generation_root / "config.yaml")
+    ensure_generation_config_defaults(generation_root / "config.yaml")
     load_job_target(generation_root / "job_target.yaml")
 
 

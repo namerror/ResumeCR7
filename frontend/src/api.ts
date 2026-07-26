@@ -11,6 +11,8 @@ import type {
   ResumeLinkEnrichmentRequest,
   ResumeLinkEnrichmentResponse,
   ResumeEvidenceRegistry,
+  ResumeGenerationConfig,
+  ResumeGenerationConfigPatch,
   ResumeTexGenerationRequest,
   ResumeTexGenerationResponse,
   SkillsFile,
@@ -47,6 +49,10 @@ export interface EvidenceApi {
   enrichResumeLinkEvidence(
     payload: ResumeLinkEnrichmentRequest,
   ): Promise<ResumeLinkEnrichmentResponse>;
+  getGenerationConfig(): Promise<ResumeGenerationConfig>;
+  updateGenerationConfig(
+    payload: ResumeGenerationConfigPatch,
+  ): Promise<ResumeGenerationConfig>;
 }
 
 export class ApiError extends Error {
@@ -177,6 +183,12 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
     enrichResumeLinkEvidence: (payload) =>
       request<ResumeLinkEnrichmentResponse>("/resume-generation/enrich-link-evidence", {
         method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    getGenerationConfig: () => request<ResumeGenerationConfig>("/resume-generation/config"),
+    updateGenerationConfig: (payload) =>
+      request<ResumeGenerationConfig>("/resume-generation/config", {
+        method: "PATCH",
         body: JSON.stringify(payload),
       }),
   };

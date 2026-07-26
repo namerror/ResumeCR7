@@ -445,6 +445,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     config = load_generation_config(path)
 
     assert isinstance(config, ResumeGenerationConfig)
+    assert config.openai.api_key is None
     assert config.app.base_url == "http://resumecr7.test"
     assert config.skill_selection.llm_model == "skill-model"
     assert config.project_selection.llm_max_output_tokens == 880
@@ -466,7 +467,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     )
     assert config.experience_bullet_point_generation.bullet_count_range is not None
     assert config.experience_bullet_point_generation.bullet_count_range.min == 1
-    assert config.cache.enabled is False
+    assert config.cache.enabled is True
     assert config.cache.force_refresh is False
     assert config.resume_output.path is None
     assert config.resume_output.pdf_path is None
@@ -2672,7 +2673,9 @@ def test_resume_generation_pipeline_rejects_invalid_loaded_experience(monkeypatc
 
 
 def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypatch, tmp_path):
-    config_path = _write_yaml(tmp_path / "config.yaml", _config_payload())
+    payload = _config_payload()
+    payload["cache"] = {"enabled": False}
+    config_path = _write_yaml(tmp_path / "config.yaml", payload)
     job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
     projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
     skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())

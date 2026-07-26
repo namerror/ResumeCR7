@@ -14,7 +14,7 @@ from app.bulletpoints_generation.models import (
     BulletJobContext,
     BulletOutputTokenBudget,
 )
-from app.config import settings
+from app.config import get_openai_api_key, settings
 from app.skill_selection.llm_client import _extract_output_text
 from app.skill_selection.llm_client import supports_temperature
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
@@ -340,7 +340,7 @@ def generate_bulletpoints_with_llm(
     schema = build_bulletpoint_schema(count_range)
     instructions = build_bulletpoint_instructions(count_range, evidence_type=evidence_type)
 
-    api_key = getattr(settings, "OPENAI_API_KEY", "")
+    api_key = get_openai_api_key()
     if not api_key.strip():
         raise BulletPointLLMClientError("OPENAI_API_KEY is required for bullet-point generation")
 

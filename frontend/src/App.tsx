@@ -13,6 +13,7 @@ import {
   Save,
   ScanLine,
   Search,
+  Settings2,
   Trash2,
   UserRound,
   Wrench,
@@ -32,23 +33,34 @@ import {
   createBlankEducation,
   createBlankExperience,
   createBlankProject,
+  deepEqual,
   hasDraftChanges,
   isTempId,
 } from "./draft";
 import type {
   CollectionRecord,
+  BulletCountRangeConfig,
   EducationRecord,
   ExperienceRecord,
   JobTargetOverride,
   ProjectRecord,
   ProjectSkills,
   ResumeEvidenceRegistry,
+  ResumeGenerationConfig,
+  ResumeGenerationConfigPatch,
   SkillCategory,
 } from "./types";
 import { skillCategories } from "./types";
-import { validateDraftEvidence } from "./validation";
+import { validateDraftEvidence, validateGenerationConfig } from "./validation";
 
-type SectionKey = "user" | "skills" | "generate" | "experience" | "projects" | "education";
+type SectionKey =
+  | "user"
+  | "skills"
+  | "generate"
+  | "config"
+  | "experience"
+  | "projects"
+  | "education";
 type BackendStatus = "checking" | "online" | "offline";
 type EnrichmentEvidenceType = "projects" | "experience";
 
@@ -75,6 +87,7 @@ const sectionDefinitions: Array<{
   { key: "user", label: "User", icon: UserRound },
   { key: "skills", label: "Skills", icon: Wrench },
   { key: "generate", label: "Generate", icon: FileText },
+  { key: "config", label: "Config", icon: Settings2 },
   { key: "experience", label: "Experience", icon: BriefcaseBusiness },
   { key: "projects", label: "Projects", icon: FolderKanban },
   { key: "education", label: "Education", icon: GraduationCap },
@@ -89,6 +102,10 @@ const categoryLabels: Record<SkillCategory, string> = {
 export default function App({ client = evidenceApi }: AppProps) {
   const [baseline, setBaseline] = useState<ResumeEvidenceRegistry | null>(null);
   const [draft, setDraft] = useState<ResumeEvidenceRegistry | null>(null);
+  const [configBaseline, setConfigBaseline] = useState<ResumeGenerationConfig | null>(null);
+  const [configDraft, setConfigDraft] = useState<ResumeGenerationConfig | null>(null);
+  const [openAiKeyDraft, setOpenAiKeyDraft] = useState("");
+  const [clearOpenAiKey, setClearOpenAiKey] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("user");
   const [selectedIds, setSelectedIds] = useState<SelectedIds>({});
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("checking");
@@ -117,6 +134,14 @@ export default function App({ client = evidenceApi }: AppProps) {
     setCurrentOperation(null);
   }, []);
 
+  const resetConfig = useCallback((config: ResumeGenerationConfig) => {
+    const nextBaseline = cloneEvidence(config);
+    setConfigBaseline(nextBaseline);
+    setConfigDraft(cloneEvidence(config));
+    setOpenAiKeyDraft("");
+    setClearOpenAiKey(false);
+  }, []);
+
   const loadEvidence = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
@@ -128,8 +153,12 @@ export default function App({ client = evidenceApi }: AppProps) {
         .getHealth()
         .then(() => "online" as const)
         .catch(() => "offline" as const);
-      const evidence = await client.getResumeEvidence();
+      const [evidence, config] = await Promise.all([
+        client.getResumeEvidence(),
+        client.getGenerationConfig(),
+      ]);
       resetEvidence(evidence);
+      resetConfig(config);
       setBackendStatus(await healthPromise);
     } catch (error) {
       setBackendStatus("offline");
@@ -137,14 +166,27 @@ export default function App({ client = evidenceApi }: AppProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [client, resetEvidence]);
+  }, [client, resetConfig, resetEvidence]);
 
   useEffect(() => {
     void loadEvidence();
   }, [loadEvidence]);
 
-  const dirty = useMemo(() => hasDraftChanges(baseline, draft), [baseline, draft]);
-  const validationErrors = useMemo(() => (draft ? validateDraftEvidence(draft) : []), [draft]);
+  const evidenceDirty = useMemo(() => hasDraftChanges(baseline, draft), [baseline, draft]);
+  const configValuesDirty = useMemo(
+    () => configExposedValuesChanged(configBaseline, configDraft),
+    [configBaseline, configDraft],
+  );
+  const configSecretDirty = openAiKeyDraft.trim().length > 0 || clearOpenAiKey;
+  const configDirty = configValuesDirty || configSecretDirty;
+  const dirty = evidenceDirty || configDirty;
+  const validationErrors = useMemo(() => {
+    const errors = draft ? validateDraftEvidence(draft) : [];
+    if (configDraft) {
+      errors.push(...validateGenerationConfig(configDraft));
+    }
+    return errors;
+  }, [configDraft, draft]);
   const actionInFlight = isGeneratingTex || isGeneratingPdf || enrichingTarget !== null;
   const savedActionDisabled =
     dirty || isLoading || isApplying || actionInFlight || validationErrors.length > 0;
@@ -163,8 +205,21 @@ export default function App({ client = evidenceApi }: AppProps) {
     setMessage(null);
   }, []);
 
+  const mutateConfig = useCallback((mutator: (next: ResumeGenerationConfig) => void) => {
+    setConfigDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = cloneEvidence(current);
+      mutator(next);
+      return next;
+    });
+    setApplyError(null);
+    setMessage(null);
+  }, []);
+
   async function handleApply() {
-    if (!baseline || !draft || applyDisabled) {
+    if (!baseline || !draft || !configBaseline || !configDraft || applyDisabled) {
       return;
     }
 
@@ -174,12 +229,32 @@ export default function App({ client = evidenceApi }: AppProps) {
 
     let operationLabel: string | null = null;
     try {
-      const operationCount = await applyEvidenceChanges(client, baseline, draft, (operation) => {
-        operationLabel = describeOperation(operation);
+      let operationCount = 0;
+      if (evidenceDirty) {
+        operationCount += await applyEvidenceChanges(client, baseline, draft, (operation) => {
+          operationLabel = describeOperation(operation);
+          setCurrentOperation(operationLabel);
+        });
+      }
+      if (configDirty) {
+        operationLabel = "Updating config";
         setCurrentOperation(operationLabel);
-      });
-      const freshEvidence = await client.getResumeEvidence();
+        await client.updateGenerationConfig(
+          buildGenerationConfigPatch({
+            baseline: configBaseline,
+            draft: configDraft,
+            openAiKeyDraft,
+            clearOpenAiKey,
+          }),
+        );
+        operationCount += 1;
+      }
+      const [freshEvidence, freshConfig] = await Promise.all([
+        client.getResumeEvidence(),
+        client.getGenerationConfig(),
+      ]);
       resetEvidence(freshEvidence);
+      resetConfig(freshConfig);
       setMessage(`${operationCount} operation${operationCount === 1 ? "" : "s"} applied.`);
     } catch (error) {
       const prefix = operationLabel ? `${operationLabel}: ` : "";
@@ -191,10 +266,11 @@ export default function App({ client = evidenceApi }: AppProps) {
   }
 
   function handleDiscard() {
-    if (!baseline) {
+    if (!baseline || !configBaseline) {
       return;
     }
     setDraft(cloneEvidence(baseline));
+    resetConfig(configBaseline);
     setSelectedIds({
       projects: baseline.projects.projects[0]?.id,
       experience: baseline.experience.experience[0]?.id,
@@ -506,12 +582,12 @@ export default function App({ client = evidenceApi }: AppProps) {
         <section className="content-area">
           {isLoading ? (
             <StatePanel icon={Loader2} spin title="Loading evidence" />
-          ) : loadError || !draft ? (
+          ) : loadError || !draft || !configDraft ? (
             <StatePanel
               icon={AlertCircle}
               tone="error"
               title="Evidence unavailable"
-              detail={loadError ?? "No evidence was returned."}
+              detail={loadError ?? "Workspace data was not returned."}
             >
               <button className="button secondary" type="button" onClick={() => void loadEvidence()}>
                 <RefreshCw aria-hidden="true" size={17} />
@@ -557,6 +633,30 @@ export default function App({ client = evidenceApi }: AppProps) {
                   onGenerateTex={() => void handleGenerateTex()}
                   onJobDescriptionChange={setJobDescription}
                   onJobTitleChange={setJobTitle}
+                />
+              ) : null}
+              {activeSection === "config" ? (
+                <ConfigEditor
+                  clearOpenAiKey={clearOpenAiKey}
+                  config={configDraft}
+                  openAiKeyDraft={openAiKeyDraft}
+                  onChange={mutateConfig}
+                  onClearOpenAiKey={(value) => {
+                    setClearOpenAiKey(value);
+                    if (value) {
+                      setOpenAiKeyDraft("");
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
+                  onOpenAiKeyChange={(value) => {
+                    setOpenAiKeyDraft(value);
+                    if (value.trim()) {
+                      setClearOpenAiKey(false);
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
                 />
               ) : null}
               {activeSection === "projects" ? (
@@ -849,6 +949,176 @@ function ResumeGenerationPanel({
           )}
           Generate PDF
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfigEditor({
+  clearOpenAiKey,
+  config,
+  openAiKeyDraft,
+  onChange,
+  onClearOpenAiKey,
+  onOpenAiKeyChange,
+}: {
+  clearOpenAiKey: boolean;
+  config: ResumeGenerationConfig;
+  openAiKeyDraft: string;
+  onChange: (mutator: (next: ResumeGenerationConfig) => void) => void;
+  onClearOpenAiKey: (value: boolean) => void;
+  onOpenAiKeyChange: (value: string) => void;
+}) {
+  const bulletRange = config.bullet_count_range;
+  const keyStatus = openAiKeyStatus(config, openAiKeyDraft, clearOpenAiKey);
+  return (
+    <div className="editor-surface">
+      <SectionHeader title="Config" eyebrow="Runtime" />
+      <div className="config-layout">
+        <div className="config-section">
+          <h3>Selection</h3>
+          <div className="field-grid">
+            <NumberField
+              defaultLabel={
+                config.skill_selection.top_n === null
+                  ? config.display_defaults.skill_selection_top_n
+                  : undefined
+              }
+              label="# of skills to display in the skills section per category"
+              min={0}
+              value={config.skill_selection.top_n}
+              onChange={(top_n) =>
+                onChange((next) => {
+                  next.skill_selection.top_n = top_n;
+                })
+              }
+            />
+            <NumberField
+              defaultLabel={
+                config.project_selection.top_n === null
+                  ? config.display_defaults.project_selection_top_n
+                  : undefined
+              }
+              label="# of projects to select for the resume"
+              min={0}
+              value={config.project_selection.top_n}
+              onChange={(top_n) =>
+                onChange((next) => {
+                  next.project_selection.top_n = top_n;
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
+          <h3>Link Scanning</h3>
+          <div className="field-grid">
+            <NumberField
+              defaultLabel={
+                config.link_scanning.highlight_count === null
+                  ? config.display_defaults.link_scanning_highlight_count
+                  : undefined
+              }
+              label="Highlights to collect per record"
+              min={1}
+              value={config.link_scanning.highlight_count}
+              onChange={(highlight_count) =>
+                onChange((next) => {
+                  next.link_scanning.highlight_count = highlight_count;
+                })
+              }
+            />
+            <NumberField
+              defaultLabel={
+                config.link_scanning.max_tokens_per_highlight === null
+                  ? config.display_defaults.link_scanning_max_tokens_per_highlight
+                  : undefined
+              }
+              label="Max tokens per highlight"
+              min={1}
+              value={config.link_scanning.max_tokens_per_highlight}
+              onChange={(max_tokens_per_highlight) =>
+                onChange((next) => {
+                  next.link_scanning.max_tokens_per_highlight = max_tokens_per_highlight;
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-section-header">
+            <h3>Bullet Counts</h3>
+            <button
+              className="button secondary compact"
+              disabled={bulletRange === null}
+              title="Use default bullet count range"
+              type="button"
+              onClick={() =>
+                onChange((next) => {
+                  next.bullet_count_range = null;
+                })
+              }
+            >
+              <RotateCcw aria-hidden="true" size={16} />
+              Use default
+            </button>
+          </div>
+          <div className="field-grid">
+            <NumberField
+              defaultLabel={
+                bulletRange === null ? config.display_defaults.bullet_count_range : undefined
+              }
+              label="Bullet count lower bound"
+              min={1}
+              value={bulletRange?.min ?? null}
+              onChange={(min) =>
+                updateBulletCountRange(config, onChange, "min", min)
+              }
+            />
+            <NumberField
+              defaultLabel={
+                bulletRange === null ? config.display_defaults.bullet_count_range : undefined
+              }
+              label="Bullet count upper bound"
+              min={1}
+              value={bulletRange?.max ?? null}
+              onChange={(max) =>
+                updateBulletCountRange(config, onChange, "max", max)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-section-header">
+            <h3>OpenAI</h3>
+            <span className="config-status">{keyStatus}</span>
+          </div>
+          <div className="secret-row">
+            <PasswordField
+              label="OpenAI API Key"
+              placeholder={config.openai_api_key_configured ? "saved" : "not set"}
+              value={openAiKeyDraft}
+              onChange={onOpenAiKeyChange}
+            />
+            <button
+              className="button secondary compact"
+              disabled={!config.openai_api_key_saved}
+              title={clearOpenAiKey ? "Keep saved OpenAI API key" : "Clear saved OpenAI API key"}
+              type="button"
+              onClick={() => onClearOpenAiKey(!clearOpenAiKey)}
+            >
+              {clearOpenAiKey ? (
+                <RotateCcw aria-hidden="true" size={16} />
+              ) : (
+                <Trash2 aria-hidden="true" size={16} />
+              )}
+              {clearOpenAiKey ? "Keep" : "Clear"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1159,6 +1429,62 @@ function TextField({
   );
 }
 
+function NumberField({
+  defaultLabel,
+  label,
+  min,
+  onChange,
+  value,
+}: {
+  defaultLabel?: string;
+  label: string;
+  min?: number;
+  onChange: (value: number | null) => void;
+  value: number | null;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        min={min}
+        step={1}
+        type="number"
+        value={value ?? ""}
+        onChange={(event) => onChange(parseNullableInteger(event.target.value))}
+      />
+      {value === null && defaultLabel ? <span className="field-hint">{defaultLabel}</span> : null}
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  value: string;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        autoComplete="off"
+        placeholder={placeholder}
+        spellCheck={false}
+        type="password"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 function TextareaField({
   label,
   onChange,
@@ -1318,6 +1644,113 @@ function triggerDownload(blob: Blob, filename: string): void {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(href);
+}
+
+function buildGenerationConfigPatch({
+  baseline,
+  clearOpenAiKey,
+  draft,
+  openAiKeyDraft,
+}: {
+  baseline: ResumeGenerationConfig;
+  clearOpenAiKey: boolean;
+  draft: ResumeGenerationConfig;
+  openAiKeyDraft: string;
+}): ResumeGenerationConfigPatch {
+  const patch: ResumeGenerationConfigPatch = {};
+
+  if (baseline.skill_selection.top_n !== draft.skill_selection.top_n) {
+    patch.skill_selection = { top_n: draft.skill_selection.top_n };
+  }
+  if (baseline.project_selection.top_n !== draft.project_selection.top_n) {
+    patch.project_selection = { top_n: draft.project_selection.top_n };
+  }
+  if (!deepEqual(baseline.link_scanning, draft.link_scanning)) {
+    patch.link_scanning = {
+      highlight_count: draft.link_scanning.highlight_count,
+      max_tokens_per_highlight: draft.link_scanning.max_tokens_per_highlight,
+    };
+  }
+  if (!deepEqual(baseline.bullet_count_range, draft.bullet_count_range)) {
+    patch.bullet_count_range = draft.bullet_count_range;
+  }
+
+  const trimmedKey = openAiKeyDraft.trim();
+  if (trimmedKey) {
+    patch.openai = { api_key: trimmedKey };
+  } else if (clearOpenAiKey) {
+    patch.openai = { clear_api_key: true };
+  }
+
+  return patch;
+}
+
+function configExposedValuesChanged(
+  baseline: ResumeGenerationConfig | null,
+  draft: ResumeGenerationConfig | null,
+): boolean {
+  if (!baseline || !draft) {
+    return false;
+  }
+  return !deepEqual(
+    {
+      skill_selection: baseline.skill_selection,
+      project_selection: baseline.project_selection,
+      link_scanning: baseline.link_scanning,
+      bullet_count_range: baseline.bullet_count_range,
+    },
+    {
+      skill_selection: draft.skill_selection,
+      project_selection: draft.project_selection,
+      link_scanning: draft.link_scanning,
+      bullet_count_range: draft.bullet_count_range,
+    },
+  );
+}
+
+function updateBulletCountRange(
+  config: ResumeGenerationConfig,
+  onChange: (mutator: (next: ResumeGenerationConfig) => void) => void,
+  bound: keyof BulletCountRangeConfig,
+  value: number | null,
+): void {
+  onChange((next) => {
+    if (value === null) {
+      next.bullet_count_range = null;
+      return;
+    }
+    const current = next.bullet_count_range ?? config.default_values.bullet_count_range;
+    next.bullet_count_range = { ...current, [bound]: value };
+  });
+}
+
+function openAiKeyStatus(
+  config: ResumeGenerationConfig,
+  openAiKeyDraft: string,
+  clearOpenAiKey: boolean,
+): string {
+  if (clearOpenAiKey) {
+    return "will clear";
+  }
+  if (openAiKeyDraft.trim()) {
+    return config.openai_api_key_saved ? "will replace" : "will save";
+  }
+  if (config.openai_api_key_source === "environment") {
+    return "set by environment";
+  }
+  if (config.openai_api_key_saved) {
+    return "saved";
+  }
+  return "not set";
+}
+
+function parseNullableInteger(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function sectionCount(section: SectionKey, evidence: ResumeEvidenceRegistry): number | undefined {

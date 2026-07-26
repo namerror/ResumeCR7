@@ -46,6 +46,13 @@ def test_bootstrap_runtime_data_writes_schema_valid_defaults(tmp_path):
     assert evidence["skills"].skills.technology == []
     assert evidence["user"].name == "Your Name"
     assert config.schema_version == 1
+    assert config.openai.api_key is None
+    assert config.skill_selection.method == "llm"
+    assert config.skill_selection.top_n == 20
+    assert config.project_selection.top_n is None
+    assert config.link_scanning.llm_model == "gpt-5.6-terra"
+    assert config.link_scanning.max_tokens_per_highlight == 500
+    assert config.cache.enabled is True
     assert job_target.title == "Target Job Title"
 
 
@@ -90,3 +97,40 @@ def test_bootstrap_runtime_data_does_not_overwrite_existing_files(tmp_path):
 
     payload = yaml.safe_load(projects_path.read_text(encoding="utf-8"))
     assert payload["projects"][0]["name"] == "Existing Project"
+
+
+def test_bootstrap_runtime_data_fills_existing_generation_config_defaults(tmp_path):
+    data_dir = tmp_path / "resumecr7-data"
+    generation_root = data_dir / "resume_generation"
+    generation_root.mkdir(parents=True)
+    config_path = generation_root / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 1,
+                "skill_selection": {
+                    "top_n": 7,
+                },
+                "cache": {
+                    "enabled": False,
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    bootstrap_runtime_data(
+        data_dir=data_dir,
+        evidence_root=data_dir / "resume_evidence",
+        generation_root=generation_root,
+        artifacts_root=generation_root / "artifacts",
+        log_dir=data_dir / "logs",
+    )
+
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert payload["skill_selection"]["top_n"] == 7
+    assert payload["skill_selection"]["method"] == "llm"
+    assert payload["openai"]["api_key"] is None
+    assert payload["link_scanning"]["max_tokens_per_highlight"] == 500
+    assert payload["cache"]["enabled"] is False

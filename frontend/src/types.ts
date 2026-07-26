@@ -147,3 +147,60 @@ export interface ResumeLinkEnrichmentResponse {
   updated_paths: string[];
   records: ResumeLinkEnrichmentRecordResponse[];
 }
+
+export interface ConfigTopNValues {
+  top_n: number | null;
+}
+
+export interface ConfigLinkScanningValues {
+  highlight_count: number | null;
+  max_tokens_per_highlight: number | null;
+}
+
+export interface BulletCountRangeConfig {
+  min: number;
+  max: number;
+}
+
+export type OpenAIApiKeySource = "environment" | "config" | "none";
+
+export interface ConfigDisplayDefaults {
+  skill_selection_top_n: string;
+  project_selection_top_n: string;
+  link_scanning_highlight_count: string;
+  link_scanning_max_tokens_per_highlight: string;
+  bullet_count_range: string;
+}
+
+export interface ConfigDefaultValues {
+  skill_selection_top_n: number;
+  project_selection_top_n: number | null;
+  link_scanning_highlight_count: number;
+  link_scanning_max_tokens_per_highlight: number;
+  bullet_count_range: BulletCountRangeConfig;
+}
+
+export interface ResumeGenerationConfig {
+  schema_version: 1;
+  config_path: string;
+  skill_selection: ConfigTopNValues;
+  project_selection: ConfigTopNValues;
+  link_scanning: ConfigLinkScanningValues;
+  bullet_count_range: BulletCountRangeConfig | null;
+  openai_api_key_configured: boolean;
+  openai_api_key_saved: boolean;
+  openai_api_key_source: OpenAIApiKeySource;
+  display_defaults: ConfigDisplayDefaults;
+  default_values: ConfigDefaultValues;
+}
+
+export interface ResumeGenerationConfigPatch {
+  skill_selection?: Partial<ConfigTopNValues>;
+  project_selection?: Partial<ConfigTopNValues>;
+  link_scanning?: Partial<ConfigLinkScanningValues>;
+  bullet_count_range?: BulletCountRangeConfig | null;
+  openai?: {
+    api_key?: string | null;
+    clear_api_key?: boolean;
+  };
+}

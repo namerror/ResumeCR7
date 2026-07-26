@@ -39,10 +39,10 @@ def test_health():
     assert data["job_focus_generation"]["llm_model"] == "gpt-5-mini"
     assert data["job_focus_generation"]["llm_max_output_tokens"] == 1200
     assert data["link_scanning"]["enabled"] is False
-    assert data["link_scanning"]["llm_model"] == "gpt-5-mini"
-    assert data["link_scanning"]["llm_max_output_tokens"] == 1200
+    assert data["link_scanning"]["llm_model"] == "gpt-5.6-terra"
+    assert data["link_scanning"]["llm_max_output_tokens"] is None
     assert data["link_scanning"]["default_highlight_count"] == 6
-    assert data["link_scanning"]["max_tokens_per_highlight"] == 120
+    assert data["link_scanning"]["max_tokens_per_highlight"] == 500
     assert data["paths"]["data_dir"].endswith("user")
     assert data["paths"]["resume_evidence_root"].endswith("user/resume_evidence")
     assert data["paths"]["resume_generation_root"].endswith("user/resume_generation")

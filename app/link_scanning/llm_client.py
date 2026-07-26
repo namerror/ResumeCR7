@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
-from app.config import settings
+from app.config import get_openai_api_key, settings
 from app.link_scanning.models import LinkScanHighlight
 from app.skill_selection.llm_client import _extract_output_text, supports_temperature
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
@@ -454,7 +454,7 @@ def scan_evidence_links_with_llm(
             },
         )
 
-    api_key = getattr(settings, "OPENAI_API_KEY", "")
+    api_key = get_openai_api_key()
     if not api_key.strip():
         raise LinkScanningLLMClientError("OPENAI_API_KEY is required for link scanning")
 

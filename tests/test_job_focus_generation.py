@@ -130,8 +130,9 @@ def test_derive_job_focus_with_llm_sends_strict_schema(monkeypatch):
     assert result.metadata["total_tokens"] == 30
 
 
-def test_derive_job_focus_with_llm_requires_api_key(monkeypatch):
+def test_derive_job_focus_with_llm_requires_api_key(monkeypatch, tmp_path):
     monkeypatch.setattr(job_focus_llm_client.settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(job_focus_llm_client.settings, "RESUME_GENERATION_ROOT", tmp_path)
 
     with pytest.raises(JobFocusLLMClientError, match="OPENAI_API_KEY"):
         derive_job_focus_with_llm(

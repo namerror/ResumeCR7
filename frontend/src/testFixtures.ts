@@ -1,4 +1,4 @@
-import type { ResumeEvidenceRegistry } from "./types";
+import type { ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
 
 export function sampleEvidence(): ResumeEvidenceRegistry {
   return {
@@ -73,6 +73,44 @@ export function sampleEvidence(): ResumeEvidenceRegistry {
       linkedin: "https://www.linkedin.com/in/example-candidate",
       github: "https://github.com/example-candidate",
       website: null,
+    },
+  };
+}
+
+export function sampleGenerationConfig(): ResumeGenerationConfig {
+  return {
+    schema_version: 1,
+    config_path: "user/resume_generation/config.yaml",
+    skill_selection: {
+      top_n: 20,
+    },
+    project_selection: {
+      top_n: null,
+    },
+    link_scanning: {
+      highlight_count: 6,
+      max_tokens_per_highlight: 500,
+    },
+    bullet_count_range: null,
+    openai_api_key_configured: false,
+    openai_api_key_saved: false,
+    openai_api_key_source: "none",
+    display_defaults: {
+      skill_selection_top_n: "20 (default)",
+      project_selection_top_n: "unlimited (default)",
+      link_scanning_highlight_count: "6 (default)",
+      link_scanning_max_tokens_per_highlight: "500 (default)",
+      bullet_count_range: "3 to 3 (default)",
+    },
+    default_values: {
+      skill_selection_top_n: 20,
+      project_selection_top_n: null,
+      link_scanning_highlight_count: 6,
+      link_scanning_max_tokens_per_highlight: 500,
+      bullet_count_range: {
+        min: 3,
+        max: 3,
+      },
     },
   };
 }

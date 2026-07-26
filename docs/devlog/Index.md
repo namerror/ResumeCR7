@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-26-2026-Codex-config-page-openai-setup.md` - 2026-07-26 - Config page and OpenAI setup
 - `07-26-2026-Codex-document-token-budgeting-readme.md` - 2026-07-26 - Document token budgeting in README
 - `07-26-2026-Codex-dynamic-llm-output-budgets.md` - 2026-07-26 - Dynamic LLM output budgets
 - `07-26-2026-Codex-phase-5-linux-release-workflow.md` - 2026-07-26 - Phase 5 Linux release workflow

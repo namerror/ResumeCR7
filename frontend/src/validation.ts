@@ -1,4 +1,4 @@
-import type { ResumeEvidenceRegistry } from "./types";
+import type { ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
 
 export function validateDraftEvidence(draft: ResumeEvidenceRegistry): string[] {
   const errors: string[] = [];
@@ -53,9 +53,78 @@ export function validateDraftEvidence(draft: ResumeEvidenceRegistry): string[] {
   return errors;
 }
 
+export function validateGenerationConfig(draft: ResumeGenerationConfig): string[] {
+  const errors: string[] = [];
+
+  validateNullableNonNegativeInteger(
+    errors,
+    "# of skills to display in the skills section per category",
+    draft.skill_selection.top_n,
+  );
+  validateNullableNonNegativeInteger(
+    errors,
+    "# of projects to select for the resume",
+    draft.project_selection.top_n,
+  );
+  validateNullablePositiveInteger(
+    errors,
+    "Link scanning highlights",
+    draft.link_scanning.highlight_count,
+  );
+  validateNullablePositiveInteger(
+    errors,
+    "Link scanning max tokens per highlight",
+    draft.link_scanning.max_tokens_per_highlight,
+  );
+
+  if (draft.bullet_count_range !== null) {
+    const { min, max } = draft.bullet_count_range;
+    validatePositiveInteger(errors, "Bullet count lower bound", min);
+    validatePositiveInteger(errors, "Bullet count upper bound", max);
+    if (Number.isInteger(min) && Number.isInteger(max) && min > max) {
+      errors.push("Bullet count lower bound must be less than or equal to upper bound.");
+    }
+    if (Number.isInteger(max) && max > 10) {
+      errors.push("Bullet count upper bound must be 10 or less.");
+    }
+  }
+
+  return errors;
+}
+
 function requireText(errors: string[], label: string, value: string): void {
   if (!value.trim()) {
     errors.push(`${label} is required.`);
+  }
+}
+
+function validateNullableNonNegativeInteger(
+  errors: string[],
+  label: string,
+  value: number | null,
+): void {
+  if (value === null) {
+    return;
+  }
+  if (!Number.isInteger(value) || value < 0) {
+    errors.push(`${label} must be a whole number greater than or equal to 0.`);
+  }
+}
+
+function validateNullablePositiveInteger(
+  errors: string[],
+  label: string,
+  value: number | null,
+): void {
+  if (value === null) {
+    return;
+  }
+  validatePositiveInteger(errors, label, value);
+}
+
+function validatePositiveInteger(errors: string[], label: string, value: number): void {
+  if (!Number.isInteger(value) || value < 1) {
+    errors.push(`${label} must be a whole number greater than 0.`);
   }
 }
 

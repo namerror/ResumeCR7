@@ -79,7 +79,9 @@ button:disabled {
 .list-row,
 .list-editor-header,
 .toggle-field,
-.search-box {
+.search-box,
+.config-section-header,
+.secret-row {
   align-items: center;
   display: flex;
 }
@@ -115,6 +117,12 @@ h1 {
 h2 {
   font-size: 22px;
   line-height: 1.25;
+}
+
+h3 {
+  font-size: 15px;
+  line-height: 1.3;
+  margin: 0;
 }
 
 .subtle-text,
@@ -374,6 +382,41 @@ h2 {
   grid-template-columns: repeat(2, minmax(220px, 1fr));
 }
 
+.config-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.config-section {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.config-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.config-section-header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-status {
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 28px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -407,9 +450,23 @@ h2 {
   width: 100%;
 }
 
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .field textarea {
   min-height: 118px;
   resize: vertical;
+}
+
+.secret-row {
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.secret-row .field {
+  flex: 1;
 }
 
 .field input:focus,
@@ -658,6 +715,12 @@ h2 {
   }
 
   .collection-toolbar {
+    flex-direction: column;
+  }
+
+  .config-section-header,
+  .secret-row {
+    align-items: stretch;
     flex-direction: column;
   }
 

@@ -1,5 +1,5 @@
 import tiktoken
-from app.config import settings
+from app.config import get_openai_api_key, settings
 from openai import OpenAI
 import logging
 
@@ -63,7 +63,7 @@ def embed_role(role_text: str) -> list[float]:
     )[0]
 
     # Call OpenAI API to get embedding
-    client = OpenAI(api_key=getattr(settings, "OPENAI_API_KEY", ""))
+    client = OpenAI(api_key=get_openai_api_key())
     embed_kwargs = {
         "input": truncated_role,
         "model": settings.EMBEDDING_MODEL,
@@ -95,7 +95,7 @@ def embed_skills(texts: list[str]) -> list[list[float]]:
     )
 
     # Call OpenAI API to get embeddings in batch
-    client = OpenAI(api_key=getattr(settings, "OPENAI_API_KEY", ""))
+    client = OpenAI(api_key=get_openai_api_key())
     
     embed_kwargs = {
         "input": truncated_texts,

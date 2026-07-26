@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.data_paths import resolve_default_data_dir
-from app.config import Settings
+from app.config import Settings, get_openai_api_key, settings as global_settings
 
 
 SCOPED_ENV_VARS = [
@@ -26,6 +26,7 @@ SCOPED_ENV_VARS = [
     "RESUME_EVIDENCE_ROOT",
     "RESUME_GENERATION_ROOT",
     "RESUMECR7_LOG_DIR",
+    "OPENAI_API_KEY",
 ]
 LEGACY_ENV_VARS = [
     "METHOD",
@@ -46,21 +47,21 @@ def test_settings_scoped_defaults(monkeypatch):
 
     settings = Settings(_env_file=None)
 
-    assert settings.SKILL_METHOD == "baseline"
-    assert settings.SKILL_TOP_N == 10
+    assert settings.SKILL_METHOD == "llm"
+    assert settings.SKILL_TOP_N == 20
     assert settings.SKILL_BASELINE_FILTER is False
     assert settings.PROJ_METHOD == "llm"
     assert settings.PROJ_TOP_N is None
-    assert settings.SKILL_LLM_MODEL == "gpt-5-mini"
-    assert settings.PROJ_LLM_MODEL == "gpt-5-mini"
+    assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
+    assert settings.PROJ_LLM_MODEL == "gpt-5-nano"
     assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
     assert settings.BULLETPOINTS_DEFAULT_COUNT == 3
     assert settings.LINK_SCANNING_ENABLED is False
-    assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5-mini"
-    assert settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS == 1200
+    assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5.6-terra"
+    assert settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS is None
     assert settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT == 6
-    assert settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT == 120
+    assert settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT == 500
     assert settings.RESUMECR7_PACKAGED is False
     assert str(settings.RESUMECR7_DATA_DIR).endswith("user")
     assert str(settings.RESUME_EVIDENCE_ROOT).endswith("user/resume_evidence")
@@ -268,11 +269,29 @@ def test_legacy_selection_env_vars_are_not_honored(monkeypatch):
 
     settings = Settings(_env_file=None)
 
-    assert settings.SKILL_METHOD == "baseline"
-    assert settings.SKILL_TOP_N == 10
+    assert settings.SKILL_METHOD == "llm"
+    assert settings.SKILL_TOP_N == 20
     assert settings.SKILL_BASELINE_FILTER is False
-    assert settings.SKILL_LLM_MODEL == "gpt-5-mini"
-    assert settings.PROJ_LLM_MODEL == "gpt-5-mini"
+    assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
+    assert settings.PROJ_LLM_MODEL == "gpt-5-nano"
     assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
-    assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5-mini"
+    assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5.6-terra"
+
+
+def test_get_openai_api_key_prefers_env_over_generation_config(monkeypatch, tmp_path):
+    _clear_selection_env(monkeypatch)
+    generation_root = tmp_path / "resume_generation"
+    generation_root.mkdir()
+    (generation_root / "config.yaml").write_text(
+        "schema_version: 1\nopenai:\n  api_key: yaml-key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(global_settings, "RESUME_GENERATION_ROOT", generation_root)
+    monkeypatch.setattr(global_settings, "OPENAI_API_KEY", " env-key ")
+
+    assert get_openai_api_key() == "env-key"
+
+    monkeypatch.setattr(global_settings, "OPENAI_API_KEY", "")
+
+    assert get_openai_api_key() == "yaml-key"

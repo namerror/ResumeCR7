@@ -1,7 +1,9 @@
 schema_version: 1
+openai:
+  api_key: null
 app:
   base_url: http://127.0.0.1:8000
-  timeout_seconds: 120
+  timeout_seconds: 120.0
 skill_selection:
   method: llm
   top_n: 20
@@ -14,6 +16,7 @@ project_selection:
   top_n: null
   dev_mode: true
   llm_model: gpt-5-nano
+  llm_max_output_tokens: null
   llm_output_token_budget:
     base: 900
     per_candidate: 40
@@ -35,6 +38,7 @@ project_bullet_point_generation:
   bullet_count_range: null
   dev_mode: true
   llm_model: gpt-5-mini
+  llm_max_output_tokens: null
   llm_output_token_budget:
     base: 900
     per_bullet: 550
@@ -46,6 +50,7 @@ experience_bullet_point_generation:
   bullet_count_range: null
   dev_mode: true
   llm_model: gpt-5-mini
+  llm_max_output_tokens: null
   llm_output_token_budget:
     base: 900
     per_bullet: 550
@@ -61,4 +66,4 @@ resume_output:
   path: null
   pdf_path: null
   render_pdf: false
-  pdf_timeout_seconds: 60
+  pdf_timeout_seconds: 60.0

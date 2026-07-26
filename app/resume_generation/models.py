@@ -15,7 +15,7 @@ class StrictSchemaModel(BaseModel):
 
 class GenerationAppConfig(StrictSchemaModel):
     base_url: str = "http://127.0.0.1:8000"
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 120.0
 
     @field_validator("base_url")
     @classmethod
@@ -34,12 +34,12 @@ class GenerationAppConfig(StrictSchemaModel):
 
 
 class SkillSelectionConfig(StrictSchemaModel):
-    method: Literal["baseline", "embeddings", "llm"] | None = None
-    top_n: int | None = None
-    baseline_filter: bool | None = None
-    dev_mode: bool | None = None
-    llm_model: str | None = None
-    llm_max_output_tokens: int | None = None
+    method: Literal["baseline", "embeddings", "llm"] | None = "llm"
+    top_n: int | None = 20
+    baseline_filter: bool | None = False
+    dev_mode: bool | None = True
+    llm_model: str | None = "gpt-5-nano"
+    llm_max_output_tokens: int | None = 1200
 
     @field_validator("top_n")
     @classmethod
@@ -95,12 +95,14 @@ class ProjectOutputTokenBudgetConfig(StrictSchemaModel):
 
 
 class ProjectSelectionConfig(StrictSchemaModel):
-    method: Literal["baseline", "llm"] | None = None
+    method: Literal["baseline", "llm"] | None = "llm"
     top_n: int | None = None
-    dev_mode: bool | None = None
-    llm_model: str | None = None
+    dev_mode: bool | None = True
+    llm_model: str | None = "gpt-5-nano"
     llm_max_output_tokens: int | None = None
-    llm_output_token_budget: ProjectOutputTokenBudgetConfig | None = None
+    llm_output_token_budget: ProjectOutputTokenBudgetConfig | None = Field(
+        default_factory=ProjectOutputTokenBudgetConfig
+    )
 
     @field_validator("top_n")
     @classmethod
@@ -189,10 +191,12 @@ class BulletCountRangeConfig(StrictSchemaModel):
 
 class BulletPointGenerationConfig(StrictSchemaModel):
     bullet_count_range: BulletCountRangeConfig | None = None
-    dev_mode: bool | None = None
-    llm_model: str | None = None
+    dev_mode: bool | None = True
+    llm_model: str | None = "gpt-5-mini"
     llm_max_output_tokens: int | None = None
-    llm_output_token_budget: BulletOutputTokenBudgetConfig | None = None
+    llm_output_token_budget: BulletOutputTokenBudgetConfig | None = Field(
+        default_factory=BulletOutputTokenBudgetConfig
+    )
 
     @field_validator("llm_model")
     @classmethod
@@ -213,9 +217,9 @@ class BulletPointGenerationConfig(StrictSchemaModel):
 
 
 class JobFocusGenerationConfig(StrictSchemaModel):
-    dev_mode: bool | None = None
-    llm_model: str | None = None
-    llm_max_output_tokens: int | None = None
+    dev_mode: bool | None = True
+    llm_model: str | None = "gpt-5-mini"
+    llm_max_output_tokens: int | None = 1200
 
     @field_validator("llm_model")
     @classmethod
@@ -237,11 +241,11 @@ class JobFocusGenerationConfig(StrictSchemaModel):
 
 class LinkScanningConfig(StrictSchemaModel):
     enabled: bool = False
-    dev_mode: bool | None = None
-    llm_model: str | None = None
+    dev_mode: bool | None = True
+    llm_model: str | None = "gpt-5.6-terra"
     llm_max_output_tokens: int | None = None
-    highlight_count: int | None = None
-    max_tokens_per_highlight: int | None = None
+    highlight_count: int | None = 6
+    max_tokens_per_highlight: int | None = 500
 
     @field_validator("llm_model")
     @classmethod
@@ -276,7 +280,7 @@ class LinkScanningConfig(StrictSchemaModel):
 
 
 class ResumeGenerationCacheConfig(StrictSchemaModel):
-    enabled: bool = False
+    enabled: bool = True
     path: str | None = None
     force_refresh: bool = False
 
@@ -321,8 +325,21 @@ class ResumeOutputConfig(StrictSchemaModel):
         return value
 
 
+class OpenAIConfig(StrictSchemaModel):
+    api_key: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class ResumeGenerationConfig(StrictSchemaModel):
     schema_version: Literal[1]
+    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     app: GenerationAppConfig = Field(default_factory=GenerationAppConfig)
     skill_selection: SkillSelectionConfig = Field(default_factory=SkillSelectionConfig)
     project_selection: ProjectSelectionConfig = Field(default_factory=ProjectSelectionConfig)

@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,8 +21,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    SKILL_TOP_N: int = 10
-    SKILL_METHOD: SkillSelectionMethod = "baseline"
+    SKILL_TOP_N: int = 20
+    SKILL_METHOD: SkillSelectionMethod = "llm"
     SKILL_BASELINE_FILTER: bool = False
     PROJ_TOP_N: int | None = None
     PROJ_METHOD: ProjectSelectionMethod = "llm"
@@ -39,20 +40,20 @@ class Settings(BaseSettings):
     # EMBEDDING_DIMENSIONS: int = 1024 # Optionally reduce dimensionality
 
     # LLM-related settings, split by subsystem so selection methods can be tuned independently.
-    SKILL_LLM_MODEL: str = "gpt-5-mini"
+    SKILL_LLM_MODEL: str = "gpt-5-nano"
     SKILL_LLM_MAX_OUTPUT_TOKENS: int = 1200
-    PROJ_LLM_MODEL: str = "gpt-5-mini"
+    PROJ_LLM_MODEL: str = "gpt-5-nano"
     JOB_FOCUS_LLM_MODEL: str = "gpt-5-mini"
     JOB_FOCUS_LLM_MAX_OUTPUT_TOKENS: int = 1200
     BULLETPOINTS_LLM_MODEL: str = "gpt-5-mini"
     BULLETPOINTS_DEFAULT_COUNT: int = 3
     LINK_SCANNING_ENABLED: bool = False
-    LINK_SCANNING_LLM_MODEL: str = "gpt-5-mini"
-    LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS: int = 1200
+    LINK_SCANNING_LLM_MODEL: str = "gpt-5.6-terra"
+    LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS: int | None = None
     LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT: int = 6
-    LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT: int = 120
+    LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT: int = 500
 
-    OPENAI_API_KEY: str = "" # This should be set in the .env file or environment variable
+    OPENAI_API_KEY: str = ""
 
     @model_validator(mode="after")
     def resolve_data_roots(self) -> "Settings":
@@ -121,8 +122,8 @@ class Settings(BaseSettings):
         "LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS",
     )
     @classmethod
-    def validate_llm_max_output_tokens(cls, value: int) -> int:
-        if value <= 0:
+    def validate_llm_max_output_tokens(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
             raise ValueError("LLM max output tokens must be greater than 0")
         return value
 
@@ -138,3 +139,30 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_openai_api_key(config_path: Path | str | None = None) -> str:
+    env_key = getattr(settings, "OPENAI_API_KEY", "")
+    if env_key.strip():
+        return env_key.strip()
+    return _load_openai_api_key_from_generation_config(
+        Path(config_path) if config_path is not None else settings.generation_config_path
+    )
+
+
+def _load_openai_api_key_from_generation_config(config_path: Path) -> str:
+    if not config_path.exists():
+        return ""
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        payload = yaml.safe_load(handle)
+
+    if not isinstance(payload, dict):
+        return ""
+
+    openai_config = payload.get("openai")
+    if not isinstance(openai_config, dict):
+        return ""
+
+    api_key = openai_config.get("api_key")
+    return api_key.strip() if isinstance(api_key, str) else ""

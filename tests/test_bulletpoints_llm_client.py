@@ -431,8 +431,9 @@ def test_generate_bulletpoints_with_llm_rejects_wrong_count(monkeypatch):
         )
 
 
-def test_generate_bulletpoints_with_llm_requires_api_key(monkeypatch):
+def test_generate_bulletpoints_with_llm_requires_api_key(monkeypatch, tmp_path):
     monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(bullet_llm_client.settings, "RESUME_GENERATION_ROOT", tmp_path)
 
     with pytest.raises(BulletPointLLMClientError, match="OPENAI_API_KEY"):
         generate_bulletpoints_with_llm(

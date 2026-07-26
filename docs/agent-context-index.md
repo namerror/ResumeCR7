@@ -30,11 +30,13 @@ Use this file as the primary navigation index for coding agents.
 9. `docs/decisions/013-app-owned-resume-evidence-crud-api.md`
    - current app-owned evidence package, REST CRUD API, and YAML storage boundary
 10. `docs/decisions/015-app-owned-resume-generation-api.md`
-   - current app-owned resume-generation package and synchronous facade endpoints
-11. `docs/archive/branch-03-grounded-resume-generation.md`
-   - historical Branch 03 plan; use only as background, not current implementation truth
-12. `docs/archive/project-selection-plan.md`
-   - historical project-selection plan; use implemented code and current ADRs first
+    - current app-owned resume-generation package and synchronous facade endpoints
+11. `docs/decisions/018-local-generation-config-api.md`
+    - local YAML-backed config API, frontend config page boundary, and OpenAI key handling
+12. `docs/archive/branch-03-grounded-resume-generation.md`
+    - historical Branch 03 plan; use only as background, not current implementation truth
+13. `docs/archive/project-selection-plan.md`
+    - historical project-selection plan; use implemented code and current ADRs first
 
 ## Recommended Read Order
 
@@ -108,7 +110,7 @@ Use this file as the primary navigation index for coding agents.
 - `app/resume_generation/`
   - implemented backend-owned resume generation orchestration and facade package
 - `app/resume_generation/api.py`
-  - FastAPI facade routes under `/resume-generation`
+  - FastAPI facade routes under `/resume-generation`, including the local config API
 - `app/resume_generation/main.py`
   - pipeline owner for config, job target, evidence loading, selection, job focus, bullet generation, assembly, manifest, and artifacts
 - `app/resume_generation/selection.py`

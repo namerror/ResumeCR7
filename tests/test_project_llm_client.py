@@ -177,8 +177,9 @@ def test_score_projects_with_llm_rejects_invalid_json(monkeypatch):
         )
 
 
-def test_score_projects_with_llm_requires_api_key(monkeypatch):
+def test_score_projects_with_llm_requires_api_key(monkeypatch, tmp_path):
     monkeypatch.setattr(project_llm_client.settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(project_llm_client.settings, "RESUME_GENERATION_ROOT", tmp_path)
 
     with pytest.raises(ProjectLLMClientError, match="OPENAI_API_KEY"):
         score_projects_with_llm(

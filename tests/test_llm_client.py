@@ -286,8 +286,9 @@ def test_score_skills_with_llm_computes_default_output_cap(monkeypatch):
     assert captured["kwargs"]["max_output_tokens"] > 321
 
 
-def test_score_skills_with_llm_requires_api_key(monkeypatch):
+def test_score_skills_with_llm_requires_api_key(monkeypatch, tmp_path):
     monkeypatch.setattr(llm_client.settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(llm_client.settings, "RESUME_GENERATION_ROOT", tmp_path)
 
     with pytest.raises(LLMClientError, match="OPENAI_API_KEY"):
         score_skills_with_llm(

@@ -5,7 +5,7 @@ import App from "./App";
 import { ApiError } from "./api";
 import type { EvidenceApi } from "./api";
 import { cloneEvidence } from "./draft";
-import { sampleEvidence } from "./testFixtures";
+import { sampleEvidence, sampleGenerationConfig } from "./testFixtures";
 
 describe("App", () => {
   it("stages user edits and applies them through the user endpoint", async () => {
@@ -205,11 +205,84 @@ describe("App", () => {
     });
     expect(client.getResumeEvidence).toHaveBeenCalledTimes(2);
   });
+
+  it("shows config defaults for null values", async () => {
+    const evidence = sampleEvidence();
+    const config = sampleGenerationConfig();
+    const client = createMockClient(evidence, evidence, config);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Config" }));
+
+    expect(screen.getByText("unlimited (default)")).toBeTruthy();
+    expect(screen.getAllByText("3 to 3 (default)").length).toBeGreaterThan(0);
+    expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).type).toBe("password");
+    expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).value).toBe("");
+  });
+
+  it("applies exposed config edits and changed OpenAI keys", async () => {
+    const evidence = sampleEvidence();
+    const config = sampleGenerationConfig();
+    const reloadedConfig = cloneEvidence(config);
+    reloadedConfig.skill_selection.top_n = 12;
+    reloadedConfig.openai_api_key_configured = true;
+    reloadedConfig.openai_api_key_saved = true;
+    reloadedConfig.openai_api_key_source = "config";
+    const client = createMockClient(evidence, evidence, config, reloadedConfig);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Config" }));
+    fireEvent.change(
+      screen.getByLabelText("# of skills to display in the skills section per category"),
+      { target: { value: "12" } },
+    );
+    fireEvent.change(screen.getByLabelText("OpenAI API Key"), {
+      target: { value: "sk-test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
+
+    await waitFor(() => {
+      expect(client.updateGenerationConfig).toHaveBeenCalledWith({
+        skill_selection: { top_n: 12 },
+        openai: { api_key: "sk-test" },
+      });
+    });
+  });
+
+  it("blocks invalid bullet count ranges before applying config", async () => {
+    const evidence = sampleEvidence();
+    const config = sampleGenerationConfig();
+    const client = createMockClient(evidence, evidence, config);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Config" }));
+    fireEvent.change(await screen.findByLabelText("Bullet count lower bound"), {
+      target: { value: "5" },
+    });
+    fireEvent.change(screen.getByLabelText("Bullet count upper bound"), {
+      target: { value: "2" },
+    });
+
+    expect(
+      await screen.findByText(
+        "Bullet count lower bound must be less than or equal to upper bound.",
+      ),
+    ).toBeTruthy();
+    expect((screen.getByRole("button", { name: /apply/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(client.updateGenerationConfig).not.toHaveBeenCalled();
+  });
 });
 
 function createMockClient(
   initial = sampleEvidence(),
   reloaded = initial,
+  initialConfig = sampleGenerationConfig(),
+  reloadedConfig = initialConfig,
 ): EvidenceApi & Record<string, ReturnType<typeof vi.fn>> {
   return {
     getHealth: vi.fn().mockResolvedValue({ status: "ok" }),
@@ -217,6 +290,10 @@ function createMockClient(
       .fn()
       .mockResolvedValueOnce(cloneEvidence(initial))
       .mockResolvedValue(cloneEvidence(reloaded)),
+    getGenerationConfig: vi
+      .fn()
+      .mockResolvedValueOnce(cloneEvidence(initialConfig))
+      .mockResolvedValue(cloneEvidence(reloadedConfig)),
     getProjects: vi.fn(),
     createProject: vi.fn().mockResolvedValue(reloaded.projects.projects.at(-1)),
     updateProject: vi.fn(),
@@ -248,5 +325,6 @@ function createMockClient(
       updated_paths: ["user/resume_evidence/projects.yaml"],
       records: [],
     }),
+    updateGenerationConfig: vi.fn().mockResolvedValue(cloneEvidence(reloadedConfig)),
   };
 }

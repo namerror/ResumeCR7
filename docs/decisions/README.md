@@ -68,3 +68,4 @@ Files are named: `NNN-short-kebab-case-title.md`
 - `015-app-owned-resume-generation-api.md`
 - `016-local-first-web-workbench-desktop-distribution.md`
 - `017-desktop-packaging-and-release-workflow.md`
+- `018-local-generation-config-api.md`
