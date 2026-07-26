@@ -2060,6 +2060,23 @@ def test_latex_escape_escapes_reserved_characters():
     )
 
 
+def test_latex_escape_normalizes_unicode_punctuation_for_pdflatex():
+    text = (
+        "Runtime \u2248 2 minutes \u2192 dashboards \u2014 "
+        "\u201crole\u2011specific\u201d \u2022 shipped \U0001f680"
+    )
+
+    escaped = latex_escape(text)
+
+    assert escaped == 'Runtime about 2 minutes to dashboards - "role-specific" - shipped'
+    assert "\u2248" not in escaped
+    assert "\u2192" not in escaped
+    assert "\u2014" not in escaped
+    assert "\u2011" not in escaped
+    assert "\u2022" not in escaped
+    assert "\U0001f680" not in escaped
+
+
 def test_render_resume_latex_uses_template_sections_and_runtime_result():
     resume_result = _sample_intermediate_resume_result()
 
@@ -2073,6 +2090,7 @@ def test_render_resume_latex_uses_template_sections_and_runtime_result():
     assert "\\section{Technical Skills}" in rendered
     assert r"\newsavebox{\resumeHeaderBox}" in rendered
     assert r"\newcommand{\resumeHeaderLine}[1]" in rendered
+    assert r"\setlength{\footskip}{4pt}" in rendered
     assert r"\textbf{\Large \scshape Example Candidate}" in rendered
     assert r"{\seticon{faEnvelope} candidate\_name@example.com}" in rendered
     assert r"{\seticon{faPhone} +1 555-0100}" in rendered
@@ -2197,6 +2215,32 @@ def test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffix
     assert r"\begin{tabular*}{0.97\textwidth}" not in rendered
     for skill in long_experience_skills + long_project_skills:
         assert latex_escape(skill) in rendered
+
+
+def test_render_resume_latex_sanitizes_generated_bullet_text():
+    payload = _sample_intermediate_resume_result().model_dump()
+    payload["experience"][0]["bullet_points"] = [
+        "Improved applicant \u2192 admin flow with role\u2011specific data views.",
+    ]
+    payload["projects"][0]["bullet_points"] = [
+        "Reduced analysis runtime \u2248 2 minutes \u2014 shipped dashboard output \U0001f680.",
+    ]
+    resume_result = IntermediateResumeResult.model_validate(payload)
+
+    rendered = render_resume_latex(resume_result)
+
+    assert (
+        r"\resumeItem{Improved applicant to admin flow with role-specific data views.}"
+        in rendered
+    )
+    assert (
+        r"\resumeItem{Reduced analysis runtime about 2 minutes - shipped dashboard output.}"
+        in rendered
+    )
+    assert "\u2192" not in rendered
+    assert "\u2248" not in rendered
+    assert "\u2014" not in rendered
+    assert "\U0001f680" not in rendered
 
 
 def test_write_resume_latex_artifact_writes_tex_file(tmp_path):

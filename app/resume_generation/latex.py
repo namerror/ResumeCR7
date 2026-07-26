@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from app.config import settings
@@ -42,6 +43,7 @@ _LATEX_HEADER = r"""\documentclass[letterpaper,9pt]{article}
 \fancyfoot{}
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
+\setlength{\footskip}{4pt}
 
 % Narrower margins to fit content on one page
 \addtolength{\oddsidemargin}{-0.75in}
@@ -144,9 +146,61 @@ _LATEX_ESCAPES = {
     "\\": r"\textbackslash{}",
 }
 
+_LATEX_TEXT_REPLACEMENTS = {
+    "\u00a0": " ",
+    "\u2010": "-",
+    "\u2011": "-",
+    "\u2012": "-",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2015": "-",
+    "\u2212": "-",
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201a": "'",
+    "\u201b": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u201e": '"',
+    "\u00ab": '"',
+    "\u00bb": '"',
+    "\u2022": "-",
+    "\u2023": "-",
+    "\u2043": "-",
+    "\u2219": "-",
+    "\u25e6": "-",
+    "\u2190": " from ",
+    "\u2192": " to ",
+    "\u2194": " to ",
+    "\u21d2": " to ",
+    "\u27f6": " to ",
+    "\u2248": " about ",
+    "\u223c": " about ",
+    "\u2264": " <= ",
+    "\u2265": " >= ",
+    "\u00b1": " +/- ",
+    "\u00d7": " x ",
+    "\u00f7": " / ",
+    "\u2026": "...",
+}
+
+
+def sanitize_latex_text(text: str) -> str:
+    """Normalize generated text to conservative pdfLaTeX-compatible ASCII."""
+    normalized = "".join(_LATEX_TEXT_REPLACEMENTS.get(char, char) for char in text)
+    ascii_text = "".join(
+        char
+        if (char == "\n" or char == "\t" or 32 <= ord(char) <= 126)
+        else ""
+        for char in normalized
+    )
+    collapsed = re.sub(r"[ \t]{2,}", " ", ascii_text)
+    return re.sub(r" +([,.;:!?])", r"\1", collapsed).strip()
+
 
 def latex_escape(text: str) -> str:
-    return "".join(_LATEX_ESCAPES.get(char, char) for char in text)
+    sanitized = sanitize_latex_text(text)
+    return "".join(_LATEX_ESCAPES.get(char, char) for char in sanitized)
 
 
 def display_url(url: str) -> str:

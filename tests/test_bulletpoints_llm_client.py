@@ -84,6 +84,9 @@ def test_build_bulletpoint_instructions_distinguishes_exact_and_flexible_counts(
     assert "mostly raw, human-written factual context" in exact
     assert "should not copy its logic, tone, or wording" in exact
     assert "recruiting-relevant information from the live evidence" in exact
+    assert "Use plain ASCII text only" in exact
+    assert "pdfLaTeX" in exact
+    assert "approximation signs" in exact
     assert "experience evidence" in experience
 
 

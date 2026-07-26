@@ -114,7 +114,12 @@ def build_bulletpoint_instructions(
         "writing by extracting and reframing the most recruiting-relevant "
         "information from the live evidence. Do not fabricate any details that "
         "are not supported by the supplied evidence. "
-        "Each string must be a polished resume bullet without a leading bullet marker."
+        "Use plain ASCII text only so the bullets can be rendered by pdfLaTeX: "
+        "do not use Unicode symbols or punctuation such as smart quotes, en or "
+        "em dashes, nonbreaking hyphens, arrows, approximation signs, bullets, "
+        "or emoji. Write words such as about or to instead of symbols when "
+        "needed. Each string must be a polished resume bullet without a leading "
+        "bullet marker."
     )
 
 
