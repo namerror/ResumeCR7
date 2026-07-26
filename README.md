@@ -128,6 +128,43 @@ and [docs/architecture-overview.md](docs/architecture-overview.md).
 
 ## Runtime Data
 
+ResumeCR7 stores user-authored evidence, generation config, generated `.tex`,
+generated `.pdf`, and logs under `RESUMECR7_DATA_DIR`. The location depends on
+how the app is launched.
+
+Local web/backend development defaults to the repository `user/` directory:
+
+```text
+user/
+```
+
+That means local development evidence files live in `user/resume_evidence/`,
+and generated artifacts live in `user/resume_generation/artifacts/`.
+
+Packaged desktop runs through Tauri. Tauri resolves the OS app-data directory
+with the bundle identifier `com.resumecr7.desktop`, then passes that directory
+to the packaged FastAPI sidecar as `RESUMECR7_DATA_DIR`. Typical default
+locations are:
+
+```text
+Linux:   $XDG_DATA_HOME/com.resumecr7.desktop
+         or ~/.local/share/com.resumecr7.desktop
+macOS:   ~/Library/Application Support/com.resumecr7.desktop
+Windows: %APPDATA%\com.resumecr7.desktop
+```
+
+For the current Linux AppImage, the default is usually:
+
+```text
+~/.local/share/com.resumecr7.desktop/
+```
+
+### In short
+
+An explicit `RESUMECR7_DATA_DIR` environment variable still overrides the local
+development default for non-desktop backend launches. In the Tauri desktop app,
+the Rust shell explicitly supplies the Tauri app-data directory to the sidecar.
+
 Local development defaults to `RESUMECR7_DATA_DIR=user`. Packaged desktop runs
 set `RESUMECR7_PACKAGED=true` and use an OS app-data root unless
 `RESUMECR7_DATA_DIR` is explicitly supplied.
@@ -157,6 +194,17 @@ RESUMECR7_DATA_DIR/
 
 Startup creates missing directories and schema-valid placeholder YAML files. It
 does not overwrite existing user-authored runtime files.
+
+To retrieve or back up your data, copy these paths from the active
+`RESUMECR7_DATA_DIR`:
+
+- Evidence YAML files: `resume_evidence/user.yaml`,
+  `resume_evidence/skills.yaml`, `resume_evidence/projects.yaml`,
+  `resume_evidence/education.yaml`, and `resume_evidence/experience.yaml`.
+- Generated LaTeX file: `resume_generation/artifacts/resume.tex`.
+- Generated PDF file: `resume_generation/artifacts/resume.pdf`.
+- Runtime logs: `logs/resumecr7.log` and, for desktop launches,
+  `logs/desktop-sidecar.log`.
 
 ## Evidence Model
 

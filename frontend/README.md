@@ -28,5 +28,19 @@ npm run desktop:dev
 The Tauri shell launches the packaged FastAPI sidecar on an available loopback
 port and exposes that URL to the frontend before rendering the workbench.
 
+Desktop data is stored under Tauri's OS app-data directory for
+`com.resumecr7.desktop`:
+
+```text
+Linux:   $XDG_DATA_HOME/com.resumecr7.desktop or ~/.local/share/com.resumecr7.desktop
+macOS:   ~/Library/Application Support/com.resumecr7.desktop
+Windows: %APPDATA%\com.resumecr7.desktop
+```
+
+Resume evidence YAML files are under `resume_evidence/`. Generated artifacts
+are under `resume_generation/artifacts/`, including `resume.tex` and
+`resume.pdf`. Local web/backend development uses the repository `user/`
+directory instead.
+
 On Ubuntu, install the native Tauri WebView/GTK build dependencies before
 running `desktop:dev` or `desktop:build`.

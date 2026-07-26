@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-26-2026-Codex-document-desktop-data-paths.md` - 2026-07-26 - Document desktop data paths
 - `07-26-2026-Codex-tauri-cors-desktop-backend.md` - 2026-07-26 - Allow Tauri desktop backend CORS
 - `07-25-2026-Codex-readme-product-developer-refresh.md` - 2026-07-25 - README product and developer refresh
 - `07-25-2026-Codex-phase-3-desktop-shell.md` - 2026-07-25 - Phase 3 desktop shell
