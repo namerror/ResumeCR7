@@ -5,10 +5,13 @@ import tomllib
 import importlib
 from pathlib import Path
 
+import pytest
+
 from app import __version__
 from app import api_launcher
 from app import desktop_backend
 from scripts import build_desktop_sidecar
+from scripts import smoke_desktop_sidecar
 
 resume_generation_main = importlib.import_module("app.resume_generation.main")
 
@@ -117,6 +120,121 @@ def test_sidecar_executable_name_uses_windows_extension():
         )
         == "resumecr7-backend-x86_64-pc-windows-msvc.exe"
     )
+
+
+def test_smoke_sidecar_reserves_bindable_loopback_port():
+    port = smoke_desktop_sidecar.reserve_loopback_port()
+
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((smoke_desktop_sidecar.BACKEND_HOST, port))
+
+
+def test_smoke_wait_for_health_retries_until_ready(monkeypatch):
+    calls: list[str] = []
+
+    def fake_health_check(base_url: str) -> bool:
+        calls.append(base_url)
+        return len(calls) == 2
+
+    monkeypatch.setattr(smoke_desktop_sidecar, "health_check_once", fake_health_check)
+    monkeypatch.setattr(smoke_desktop_sidecar.time, "sleep", lambda _: None)
+
+    smoke_desktop_sidecar.wait_for_health(
+        "http://127.0.0.1:43210",
+        timeout_seconds=1,
+        poll_seconds=0,
+    )
+
+    assert calls == ["http://127.0.0.1:43210", "http://127.0.0.1:43210"]
+
+
+def test_smoke_sidecar_launches_packaged_backend_and_terminates(monkeypatch, tmp_path):
+    binary_path = tmp_path / "resumecr7-backend-x86_64-unknown-linux-gnu"
+    binary_path.write_text("fake binary", encoding="utf-8")
+    processes: list[FakeSidecarProcess] = []
+    popen_calls: list[dict[str, object]] = []
+
+    def fake_popen(command, **kwargs):
+        process = FakeSidecarProcess()
+        processes.append(process)
+        popen_calls.append({"command": command, **kwargs})
+        return process
+
+    monkeypatch.setattr(smoke_desktop_sidecar.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(smoke_desktop_sidecar, "health_check_once", lambda _: True)
+
+    base_url = smoke_desktop_sidecar.run_sidecar_smoke(
+        binary_path,
+        data_dir=tmp_path / "runtime-data",
+        port=45678,
+        timeout_seconds=1,
+    )
+
+    assert base_url == "http://127.0.0.1:45678"
+    assert processes[0].terminated is True
+    assert popen_calls[0]["command"] == [
+        str(binary_path),
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "45678",
+        "--packaged",
+        "--data-dir",
+        str(tmp_path / "runtime-data"),
+    ]
+    assert popen_calls[0]["env"]["RESUMECR7_PACKAGED"] == "true"
+    assert popen_calls[0]["env"]["RESUMECR7_DATA_DIR"] == str(tmp_path / "runtime-data")
+
+
+def test_smoke_sidecar_reports_early_process_exit(monkeypatch, tmp_path):
+    binary_path = tmp_path / "resumecr7-backend-x86_64-unknown-linux-gnu"
+    binary_path.write_text("fake binary", encoding="utf-8")
+    process = FakeSidecarProcess(returncode=7, stdout="", stderr="startup failed")
+
+    monkeypatch.setattr(
+        smoke_desktop_sidecar.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: process,
+    )
+    monkeypatch.setattr(smoke_desktop_sidecar, "health_check_once", lambda _: False)
+
+    with pytest.raises(RuntimeError, match="startup failed"):
+        smoke_desktop_sidecar.run_sidecar_smoke(
+            binary_path,
+            data_dir=tmp_path / "runtime-data",
+            port=45678,
+            timeout_seconds=1,
+        )
+
+    assert process.terminated is False
+
+
+class FakeSidecarProcess:
+    def __init__(self, *, returncode: int | None = None, stdout: str = "", stderr: str = ""):
+        self.returncode = returncode
+        self.stdout_text = stdout
+        self.stderr_text = stderr
+        self.terminated = False
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = 0
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+    def communicate(self, timeout=None):
+        return self.stdout_text, self.stderr_text
 
 
 def test_resume_generation_console_script_dispatches_pipeline(monkeypatch):
