@@ -1,6 +1,6 @@
 [package]
 name = "resumecr7-desktop"
-version = "0.4.1"
+version = "0.4.2"
 description = "ResumeCR7 desktop shell"
 authors = ["ResumeCR7 contributors"]
 edition = "2021"
