@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Config page controls for project and experience resume counts, with experience counts limiting active records in deterministic evidence order.
+
 ### Fixed
 - Allow local storage of job description and job title in `job_target.yaml` for resume generation, allowing persistent reuse of job target when relaunching the app.
 

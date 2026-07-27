@@ -62,6 +62,17 @@ def _token_usage_extra(usage: TokenUsage) -> dict[str, int | float]:
     }
 
 
+def _select_resume_experience(
+    experience: ExperienceFile,
+    *,
+    top_n: int | None,
+) -> ExperienceFile:
+    active_records = [item for item in experience.experience if item.active]
+    if top_n is not None:
+        active_records = active_records[:top_n]
+    return ExperienceFile(schema_version=experience.schema_version, experience=active_records)
+
+
 def write_resume_result_artifact(
     resume_result: IntermediateResumeResult,
     path: Path | str | None = None,
@@ -213,6 +224,11 @@ def run_resume_generation_pipeline(
 
     # TODO: optionally re-rank project skills with LLM (not the skills themselves), this is ranked per project, priortizing skills that are more relevant to the job target. This should be done with a separate reranking API instead of the one used for regular skill ranking
 
+    selected_experience = _select_resume_experience(
+        _experience,
+        top_n=config.experience_selection.top_n,
+    )
+
     logger.info(
         "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
@@ -264,17 +280,16 @@ def run_resume_generation_pipeline(
         },
     )
 
-    active_experience_count = sum(1 for item in _experience.experience if item.active)
     logger.info(
         "resume_generation_stage_start",
         extra={
             "event": "resume_generation_stage_start",
             "stage": "experience_bullet_points",
-            "experience_count": active_experience_count,
+            "experience_count": len(selected_experience.experience),
         },
     )
     experience_bullet_points = generate_experience_bullet_points(
-        experience=_experience.experience,
+        experience=selected_experience.experience,
         config=config,
         job_target=job_target,
         job_focus=job_focus,
@@ -303,7 +318,7 @@ def run_resume_generation_pipeline(
     resume_result = assemble_intermediate_resume_result(
         user_info=_user_info,
         education=_education,
-        experience=_experience,
+        experience=selected_experience,
         selection_context=context,
         selected_projects=context.selected_projects,
         project_bullet_points=bullet_points,

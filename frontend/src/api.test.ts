@@ -147,6 +147,7 @@ describe("evidence api client", () => {
       config_path: "user/resume_generation/config.yaml",
       skill_selection: { top_n: 20 },
       project_selection: { top_n: null },
+      experience_selection: { top_n: null },
       link_scanning: { highlight_count: 6, max_tokens_per_highlight: 500 },
       bullet_count_range: null,
       openai_api_key_configured: false,
@@ -155,6 +156,7 @@ describe("evidence api client", () => {
       display_defaults: {
         skill_selection_top_n: "20 (default)",
         project_selection_top_n: "unlimited (default)",
+        experience_selection_top_n: "unlimited (default)",
         link_scanning_highlight_count: "6 (default)",
         link_scanning_max_tokens_per_highlight: "500 (default)",
         bullet_count_range: "3 to 3 (default)",
@@ -162,6 +164,7 @@ describe("evidence api client", () => {
       default_values: {
         skill_selection_top_n: 20,
         project_selection_top_n: null,
+        experience_selection_top_n: null,
         link_scanning_highlight_count: 6,
         link_scanning_max_tokens_per_highlight: 500,
         bullet_count_range: { min: 3, max: 3 },

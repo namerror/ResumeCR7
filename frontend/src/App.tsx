@@ -86,11 +86,11 @@ const sectionDefinitions: Array<{
 }> = [
   { key: "user", label: "User", icon: UserRound },
   { key: "skills", label: "Skills", icon: Wrench },
-  { key: "generate", label: "Generate", icon: FileText },
-  { key: "config", label: "Config", icon: Settings2 },
   { key: "experience", label: "Experience", icon: BriefcaseBusiness },
   { key: "projects", label: "Projects", icon: FolderKanban },
   { key: "education", label: "Education", icon: GraduationCap },
+  { key: "generate", label: "Generate", icon: FileText },
+  { key: "config", label: "Config", icon: Settings2 },
 ];
 
 const categoryLabels: Record<SkillCategory, string> = {
@@ -1035,6 +1035,21 @@ function ConfigEditor({
                 })
               }
             />
+            <NumberField
+              defaultLabel={
+                config.experience_selection.top_n === null
+                  ? config.display_defaults.experience_selection_top_n
+                  : undefined
+              }
+              label="# of experience entries to include in the resume"
+              min={0}
+              value={config.experience_selection.top_n}
+              onChange={(top_n) =>
+                onChange((next) => {
+                  next.experience_selection.top_n = top_n;
+                })
+              }
+            />
           </div>
         </div>
 
@@ -1692,6 +1707,9 @@ function buildGenerationConfigPatch({
   if (baseline.project_selection.top_n !== draft.project_selection.top_n) {
     patch.project_selection = { top_n: draft.project_selection.top_n };
   }
+  if (baseline.experience_selection.top_n !== draft.experience_selection.top_n) {
+    patch.experience_selection = { top_n: draft.experience_selection.top_n };
+  }
   if (!deepEqual(baseline.link_scanning, draft.link_scanning)) {
     patch.link_scanning = {
       highlight_count: draft.link_scanning.highlight_count,
@@ -1732,12 +1750,14 @@ function configExposedValuesChanged(
     {
       skill_selection: baseline.skill_selection,
       project_selection: baseline.project_selection,
+      experience_selection: baseline.experience_selection,
       link_scanning: baseline.link_scanning,
       bullet_count_range: baseline.bullet_count_range,
     },
     {
       skill_selection: draft.skill_selection,
       project_selection: draft.project_selection,
+      experience_selection: draft.experience_selection,
       link_scanning: draft.link_scanning,
       bullet_count_range: draft.bullet_count_range,
     },

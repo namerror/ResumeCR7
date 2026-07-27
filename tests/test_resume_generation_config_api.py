@@ -46,7 +46,9 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     data = response.json()
     assert data["skill_selection"]["top_n"] == 20
     assert data["project_selection"]["top_n"] is None
+    assert data["experience_selection"]["top_n"] is None
     assert data["display_defaults"]["project_selection_top_n"] == "unlimited (default)"
+    assert data["display_defaults"]["experience_selection_top_n"] == "unlimited (default)"
     assert data["openai_api_key_configured"] is True
     assert data["openai_api_key_saved"] is True
     assert data["openai_api_key_source"] == "config"
@@ -65,6 +67,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
         json={
             "skill_selection": {"top_n": 12},
             "project_selection": {"top_n": None},
+            "experience_selection": {"top_n": 2},
             "link_scanning": {
                 "highlight_count": 4,
                 "max_tokens_per_highlight": 300,
@@ -76,8 +79,10 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     assert response.status_code == 200
     data = response.json()
     assert data["skill_selection"]["top_n"] == 12
+    assert data["experience_selection"]["top_n"] == 2
     assert data["bullet_count_range"] == {"min": 2, "max": 4}
     saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
+    assert saved["experience_selection"]["top_n"] == 2
     assert saved["job_focus_generation"]["llm_model"] == "custom-job-focus"
     assert saved["project_selection"]["llm_output_token_budget"]["max"] == 5000
     assert saved["project_bullet_point_generation"]["bullet_count_range"] == {

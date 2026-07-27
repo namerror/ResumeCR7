@@ -66,6 +66,11 @@ export function validateGenerationConfig(draft: ResumeGenerationConfig): string[
     "# of projects to select for the resume",
     draft.project_selection.top_n,
   );
+  validateNullableNonNegativeInteger(
+    errors,
+    "# of experience entries to include in the resume",
+    draft.experience_selection.top_n,
+  );
   validateNullablePositiveInteger(
     errors,
     "Link scanning highlights",

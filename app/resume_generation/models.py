@@ -129,6 +129,17 @@ class ProjectSelectionConfig(StrictSchemaModel):
         return value
 
 
+class ExperienceSelectionConfig(StrictSchemaModel):
+    top_n: int | None = None
+
+    @field_validator("top_n")
+    @classmethod
+    def validate_top_n(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("top_n must be greater than or equal to 0")
+        return value
+
+
 class BulletOutputTokenBudgetConfig(StrictSchemaModel):
     base: int = 900
     per_bullet: int = 550
@@ -343,6 +354,9 @@ class ResumeGenerationConfig(StrictSchemaModel):
     app: GenerationAppConfig = Field(default_factory=GenerationAppConfig)
     skill_selection: SkillSelectionConfig = Field(default_factory=SkillSelectionConfig)
     project_selection: ProjectSelectionConfig = Field(default_factory=ProjectSelectionConfig)
+    experience_selection: ExperienceSelectionConfig = Field(
+        default_factory=ExperienceSelectionConfig
+    )
     job_focus_generation: JobFocusGenerationConfig = Field(
         default_factory=JobFocusGenerationConfig
     )

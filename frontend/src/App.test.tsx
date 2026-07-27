@@ -8,6 +8,28 @@ import { cloneEvidence } from "./draft";
 import { sampleEvidence, sampleGenerationConfig, sampleJobTarget } from "./testFixtures";
 
 describe("App", () => {
+  it("groups evidence tabs before generation and config tabs", async () => {
+    const evidence = sampleEvidence();
+    const client = createMockClient(evidence);
+
+    render(<App client={client} />);
+
+    const nav = await screen.findByRole("navigation", { name: "Evidence sections" });
+    const labels = Array.from(nav.querySelectorAll(".nav-button span:nth-child(2)")).map(
+      (element) => element.textContent,
+    );
+
+    expect(labels).toEqual([
+      "User",
+      "Skills",
+      "Experience",
+      "Projects",
+      "Education",
+      "Generate",
+      "Config",
+    ]);
+  });
+
   it("stages user edits and applies them through the user endpoint", async () => {
     const evidence = sampleEvidence();
     const reloaded = cloneEvidence(evidence);
@@ -263,7 +285,7 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Config" }));
 
-    expect(screen.getByText("unlimited (default)")).toBeTruthy();
+    expect(screen.getAllByText("unlimited (default)").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("3 to 3 (default)").length).toBeGreaterThan(0);
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).type).toBe("password");
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).value).toBe("");
@@ -274,6 +296,8 @@ describe("App", () => {
     const config = sampleGenerationConfig();
     const reloadedConfig = cloneEvidence(config);
     reloadedConfig.skill_selection.top_n = 12;
+    reloadedConfig.project_selection.top_n = 3;
+    reloadedConfig.experience_selection.top_n = 2;
     reloadedConfig.openai_api_key_configured = true;
     reloadedConfig.openai_api_key_saved = true;
     reloadedConfig.openai_api_key_source = "config";
@@ -286,6 +310,12 @@ describe("App", () => {
       screen.getByLabelText("# of skills to display in the skills section per category"),
       { target: { value: "12" } },
     );
+    fireEvent.change(screen.getByLabelText("# of projects to select for the resume"), {
+      target: { value: "3" },
+    });
+    fireEvent.change(screen.getByLabelText("# of experience entries to include in the resume"), {
+      target: { value: "2" },
+    });
     fireEvent.change(screen.getByLabelText("OpenAI API Key"), {
       target: { value: "sk-test" },
     });
@@ -294,6 +324,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(client.updateGenerationConfig).toHaveBeenCalledWith({
         skill_selection: { top_n: 12 },
+        project_selection: { top_n: 3 },
+        experience_selection: { top_n: 2 },
         openai: { api_key: "sk-test" },
       });
     });

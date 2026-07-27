@@ -139,6 +139,17 @@ class ConfigProjectSelectionValues(StrictSchemaModel):
         return value
 
 
+class ConfigExperienceSelectionValues(StrictSchemaModel):
+    top_n: int | None = None
+
+    @field_validator("top_n")
+    @classmethod
+    def validate_top_n(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("top_n must be greater than or equal to 0")
+        return value
+
+
 class ConfigLinkScanningValues(StrictSchemaModel):
     highlight_count: int | None = None
     max_tokens_per_highlight: int | None = None
@@ -175,6 +186,7 @@ class ConfigOpenAIPatch(StrictSchemaModel):
 class ResumeGenerationConfigPatch(StrictSchemaModel):
     skill_selection: ConfigSkillSelectionValues | None = None
     project_selection: ConfigProjectSelectionValues | None = None
+    experience_selection: ConfigExperienceSelectionValues | None = None
     link_scanning: ConfigLinkScanningValues | None = None
     bullet_count_range: BulletCountRangeConfig | None = None
     openai: ConfigOpenAIPatch | None = None
@@ -183,6 +195,7 @@ class ResumeGenerationConfigPatch(StrictSchemaModel):
 class ConfigDisplayDefaults(StrictSchemaModel):
     skill_selection_top_n: str
     project_selection_top_n: str
+    experience_selection_top_n: str
     link_scanning_highlight_count: str
     link_scanning_max_tokens_per_highlight: str
     bullet_count_range: str
@@ -191,6 +204,7 @@ class ConfigDisplayDefaults(StrictSchemaModel):
 class ConfigDefaultValues(StrictSchemaModel):
     skill_selection_top_n: int
     project_selection_top_n: int | None
+    experience_selection_top_n: int | None
     link_scanning_highlight_count: int
     link_scanning_max_tokens_per_highlight: int
     bullet_count_range: BulletCountRangeConfig
@@ -201,6 +215,7 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     config_path: str
     skill_selection: ConfigSkillSelectionValues
     project_selection: ConfigProjectSelectionValues
+    experience_selection: ConfigExperienceSelectionValues
     link_scanning: ConfigLinkScanningValues
     bullet_count_range: BulletCountRangeConfig | None
     openai_api_key_configured: bool
@@ -330,6 +345,11 @@ def _apply_config_patch(
         if "top_n" in fields:
             updated["project_selection"]["top_n"] = patch.project_selection.top_n
 
+    if patch.experience_selection is not None:
+        fields = patch.experience_selection.model_fields_set
+        if "top_n" in fields:
+            updated["experience_selection"]["top_n"] = patch.experience_selection.top_n
+
     if patch.link_scanning is not None:
         fields = patch.link_scanning.model_fields_set
         if "highlight_count" in fields:
@@ -371,6 +391,9 @@ def _config_response(
         project_selection=ConfigProjectSelectionValues(
             top_n=config.project_selection.top_n,
         ),
+        experience_selection=ConfigExperienceSelectionValues(
+            top_n=config.experience_selection.top_n,
+        ),
         link_scanning=ConfigLinkScanningValues(
             highlight_count=config.link_scanning.highlight_count,
             max_tokens_per_highlight=config.link_scanning.max_tokens_per_highlight,
@@ -389,6 +412,7 @@ def _config_display_defaults() -> ConfigDisplayDefaults:
     return ConfigDisplayDefaults(
         skill_selection_top_n=f"{settings.SKILL_TOP_N} (default)",
         project_selection_top_n="unlimited (default)",
+        experience_selection_top_n="unlimited (default)",
         link_scanning_highlight_count=(
             f"{settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT} (default)"
         ),
@@ -404,6 +428,7 @@ def _config_default_values() -> ConfigDefaultValues:
     return ConfigDefaultValues(
         skill_selection_top_n=settings.SKILL_TOP_N,
         project_selection_top_n=None,
+        experience_selection_top_n=None,
         link_scanning_highlight_count=settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT,
         link_scanning_max_tokens_per_highlight=settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT,
         bullet_count_range=BulletCountRangeConfig(

@@ -17,6 +17,8 @@ project_selection:
   dev_mode: true
   llm_model: gpt-5-nano
   llm_max_output_tokens: null
+experience_selection:
+  top_n: null
 job_focus_generation:
   dev_mode: true
   llm_model: gpt-5-mini

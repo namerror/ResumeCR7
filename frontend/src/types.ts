@@ -171,6 +171,7 @@ export type OpenAIApiKeySource = "environment" | "config" | "none";
 export interface ConfigDisplayDefaults {
   skill_selection_top_n: string;
   project_selection_top_n: string;
+  experience_selection_top_n: string;
   link_scanning_highlight_count: string;
   link_scanning_max_tokens_per_highlight: string;
   bullet_count_range: string;
@@ -179,6 +180,7 @@ export interface ConfigDisplayDefaults {
 export interface ConfigDefaultValues {
   skill_selection_top_n: number;
   project_selection_top_n: number | null;
+  experience_selection_top_n: number | null;
   link_scanning_highlight_count: number;
   link_scanning_max_tokens_per_highlight: number;
   bullet_count_range: BulletCountRangeConfig;
@@ -189,6 +191,7 @@ export interface ResumeGenerationConfig {
   config_path: string;
   skill_selection: ConfigTopNValues;
   project_selection: ConfigTopNValues;
+  experience_selection: ConfigTopNValues;
   link_scanning: ConfigLinkScanningValues;
   bullet_count_range: BulletCountRangeConfig | null;
   openai_api_key_configured: boolean;
@@ -201,6 +204,7 @@ export interface ResumeGenerationConfig {
 export interface ResumeGenerationConfigPatch {
   skill_selection?: Partial<ConfigTopNValues>;
   project_selection?: Partial<ConfigTopNValues>;
+  experience_selection?: Partial<ConfigTopNValues>;
   link_scanning?: Partial<ConfigLinkScanningValues>;
   bullet_count_range?: BulletCountRangeConfig | null;
   openai?: {

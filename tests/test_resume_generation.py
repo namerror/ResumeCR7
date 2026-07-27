@@ -62,6 +62,7 @@ import resume_generation.enrich as resume_enrich
 import resume_generation.selection as resume_selection
 import resume_generation.pdf as resume_pdf
 from resume_generation.main import (
+    _select_resume_experience,
     run_resume_generation_pipeline,
     write_resume_latex_from_config,
     write_resume_pdf_from_config,
@@ -295,6 +296,67 @@ def _loaded_evidence(
         "skills": load_evidence_yaml(skills_path, "skills"),
         "user": load_evidence_yaml(user_path, "user"),
     }
+
+
+@pytest.mark.parametrize(
+    ("top_n", "expected_ids"),
+    [
+        (None, ["backend-engineer", "platform-engineer"]),
+        (0, []),
+        (1, ["backend-engineer"]),
+        (2, ["backend-engineer", "platform-engineer"]),
+    ],
+)
+def test_select_resume_experience_caps_active_records_in_order(
+    tmp_path,
+    top_n,
+    expected_ids,
+):
+    experience_payload = _experience_payload()
+    experience_payload["experience"].extend(
+        [
+            {
+                "id": "inactive-role",
+                "name": "Inactive Company",
+                "role": "Frontend Engineer",
+                "summary": "Older inactive experience.",
+                "highlights": ["This should not generate."],
+                "active": False,
+                "skills": {
+                    "technology": ["Angular"],
+                    "programming": ["JavaScript"],
+                    "concepts": ["UI"],
+                },
+                "location": "Remote",
+                "start": "2022",
+                "end": "2023",
+                "links": None,
+            },
+            {
+                "id": "platform-engineer",
+                "name": "Platform Company",
+                "role": "Platform Engineer",
+                "summary": "Built platform tooling.",
+                "highlights": ["Improved deployment workflows."],
+                "active": True,
+                "skills": {
+                    "technology": ["Kubernetes"],
+                    "programming": ["Python"],
+                    "concepts": ["CI/CD"],
+                },
+                "location": "Remote",
+                "start": "2023",
+                "end": "2024",
+                "links": None,
+            },
+        ]
+    )
+    experience_path = _write_yaml(tmp_path / "experience.yaml", experience_payload)
+    experience_file = load_evidence_yaml(experience_path, "experience")
+
+    result = _select_resume_experience(experience_file, top_n=top_n)
+
+    assert [item.id for item in result.experience] == expected_ids
 
 
 def _sample_intermediate_resume_result() -> IntermediateResumeResult:
@@ -2719,11 +2781,37 @@ def test_resume_generation_pipeline_rejects_invalid_loaded_experience(monkeypatc
 def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypatch, tmp_path):
     payload = _config_payload()
     payload["cache"] = {"enabled": False}
+    payload["experience_selection"] = {"top_n": 1}
     config_path = _write_yaml(tmp_path / "config.yaml", payload)
     job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
     projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
     skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
-    loaded_evidence = _loaded_evidence(projects_path, skills_path)
+    experience_payload = _experience_payload()
+    experience_payload["experience"].append(
+        {
+            "id": "platform-engineer",
+            "name": "Platform Company",
+            "role": "Platform Engineer",
+            "summary": "Built platform tooling.",
+            "highlights": ["Improved deployment workflows."],
+            "active": True,
+            "skills": {
+                "technology": ["Kubernetes"],
+                "programming": ["Python"],
+                "concepts": ["CI/CD"],
+            },
+            "location": "Remote",
+            "start": "2023",
+            "end": "2024",
+            "links": None,
+        }
+    )
+    experience_path = _write_yaml(tmp_path / "experience.yaml", experience_payload)
+    loaded_evidence = _loaded_evidence(
+        projects_path,
+        skills_path,
+        experience_path=experience_path,
+    )
     calls: list[str] = []
 
     class FakeClient:
@@ -2886,8 +2974,15 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
         ("experience_bullet_points", "disabled", None),
     ]
     assert "token_usage" in manifest_payload
+    assert [item.id for item in loaded_evidence["experience"].experience] == [
+        "backend-engineer",
+        "platform-engineer",
+    ]
     assert assembly_calls[0]["user_info"].name == "Example Candidate"
     assert assembly_calls[0]["education"].education[0].name == "Example University"
+    assert [item.id for item in assembly_calls[0]["experience"].experience] == [
+        "backend-engineer"
+    ]
     assert assembly_calls[0]["experience"].experience[0].name == "Example Company"
     assert assembly_calls[0]["selection_context"].selected_skills.technology == ["FastAPI"]
     assert [project.id for project in assembly_calls[0]["selected_projects"]] == [
