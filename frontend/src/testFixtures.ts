@@ -1,4 +1,4 @@
-import type { ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
+import type { JobTargetResponse, ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
 
 export function sampleEvidence(): ResumeEvidenceRegistry {
   return {
@@ -112,5 +112,14 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
         max: 3,
       },
     },
+  };
+}
+
+export function sampleJobTarget(): JobTargetResponse {
+  return {
+    schema_version: 1,
+    title: "Backend Engineer",
+    description: "Build Python APIs.",
+    job_target_path: "user/resume_generation/job_target.yaml",
   };
 }

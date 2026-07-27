@@ -5,6 +5,8 @@ import type {
   ExperienceFile,
   ExperienceRecord,
   ExperienceRecordInput,
+  JobTarget,
+  JobTargetResponse,
   ProjectRecord,
   ProjectRecordInput,
   ProjectsFile,
@@ -53,6 +55,8 @@ export interface EvidenceApi {
   updateGenerationConfig(
     payload: ResumeGenerationConfigPatch,
   ): Promise<ResumeGenerationConfig>;
+  getJobTarget(): Promise<JobTargetResponse>;
+  updateJobTarget(payload: JobTarget): Promise<JobTargetResponse>;
 }
 
 export class ApiError extends Error {
@@ -189,6 +193,12 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
     updateGenerationConfig: (payload) =>
       request<ResumeGenerationConfig>("/resume-generation/config", {
         method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    getJobTarget: () => request<JobTargetResponse>("/resume-generation/job-target"),
+    updateJobTarget: (payload) =>
+      request<JobTargetResponse>("/resume-generation/job-target", {
+        method: "PUT",
         body: JSON.stringify(payload),
       }),
   };

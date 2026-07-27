@@ -13,6 +13,7 @@
 
 ## Session Index
 
+- `07-27-2026-Codex-persist-job-target.md` - 2026-07-27 - Persist desktop job target
 - `07-26-2026-Codex-latex-output-sanitization.md` - 2026-07-26 - Harden LaTeX resume output sanitization
 - `07-26-2026-Codex-config-page-openai-setup.md` - 2026-07-26 - Config page and OpenAI setup
 - `07-26-2026-Codex-document-token-budgeting-readme.md` - 2026-07-26 - Document token budgeting in README

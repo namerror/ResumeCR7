@@ -208,4 +208,52 @@ describe("evidence api client", () => {
       }),
     );
   });
+
+  it("reads and updates the saved job target", async () => {
+    const jobTargetPayload = {
+      schema_version: 1 as const,
+      title: "Backend Engineer",
+      description: "Build Python APIs.",
+      job_target_path: "user/resume_generation/job_target.yaml",
+    };
+    const updatePayload = {
+      schema_version: 1 as const,
+      title: "Frontend Engineer",
+      description: "Build React interfaces.",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue(jobTargetPayload),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          ...updatePayload,
+          job_target_path: jobTargetPayload.job_target_path,
+        }),
+      });
+    const api = createEvidenceApi({
+      baseUrl: "/api",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await api.getJobTarget();
+    await api.updateJobTarget(updatePayload);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/resume-generation/job-target",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/resume-generation/job-target",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify(updatePayload),
+      }),
+    );
+  });
 });

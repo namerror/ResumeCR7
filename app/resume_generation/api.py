@@ -13,9 +13,12 @@ from app.resume_evidence import load_registered_evidence
 from app.resume_generation.config import (
     load_generation_config,
     load_generation_config_payload,
+    load_job_target,
     merge_generation_config_defaults,
     resolve_generation_config_path,
+    resolve_job_target_path,
     write_generation_config_payload,
+    write_job_target_payload,
 )
 from app.resume_generation.enrich import run_link_evidence_enrichment
 from app.resume_generation.latex import resolve_resume_latex_output_path
@@ -207,6 +210,13 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     default_values: ConfigDefaultValues
 
 
+class JobTargetResponse(StrictSchemaModel):
+    schema_version: Literal[1]
+    title: str
+    description: str | None
+    job_target_path: str
+
+
 def _validation_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
@@ -239,6 +249,24 @@ async def patch_resume_generation_config(
     except (FileNotFoundError, TypeError, ValueError) as exc:
         raise _validation_error(exc) from exc
     return _config_response(config)
+
+
+@router.get("/job-target", response_model=JobTargetResponse)
+async def get_resume_generation_job_target() -> JobTargetResponse:
+    try:
+        job_target = load_job_target()
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise _validation_error(exc) from exc
+    return _job_target_response(job_target)
+
+
+@router.put("/job-target", response_model=JobTargetResponse)
+async def put_resume_generation_job_target(payload: JobTarget) -> JobTargetResponse:
+    try:
+        job_target = write_job_target_payload(payload.model_dump(mode="python"))
+    except (FileNotFoundError, TypeError, ValueError) as exc:
+        raise _validation_error(exc) from exc
+    return _job_target_response(job_target)
 
 
 @router.post("/enrich-link-evidence", response_model=ResumeLinkEnrichmentResponse)
@@ -393,6 +421,15 @@ def _openai_api_key_source(
     if config.openai.api_key:
         return "config"
     return "none"
+
+
+def _job_target_response(job_target: JobTarget) -> JobTargetResponse:
+    return JobTargetResponse(
+        schema_version=job_target.schema_version,
+        title=job_target.title,
+        description=job_target.description,
+        job_target_path=str(resolve_job_target_path()),
+    )
 
 
 def _patch_changes_openai_key(payload: ResumeGenerationConfigPatch) -> bool:

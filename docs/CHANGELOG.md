@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Allow local storage of job description and job title in `job_target.yaml` for resume generation, allowing persistent reuse of job target when relaunching the app.
+
 ## [0.4.1] - 2026-07-26
 
 ### Added

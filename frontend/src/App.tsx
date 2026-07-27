@@ -42,7 +42,7 @@ import type {
   BulletCountRangeConfig,
   EducationRecord,
   ExperienceRecord,
-  JobTargetOverride,
+  JobTarget,
   ProjectRecord,
   ProjectSkills,
   ResumeEvidenceRegistry,
@@ -51,7 +51,7 @@ import type {
   SkillCategory,
 } from "./types";
 import { skillCategories } from "./types";
-import { validateDraftEvidence, validateGenerationConfig } from "./validation";
+import { validateDraftEvidence, validateGenerationConfig, validateJobTarget } from "./validation";
 
 type SectionKey =
   | "user"
@@ -104,6 +104,8 @@ export default function App({ client = evidenceApi }: AppProps) {
   const [draft, setDraft] = useState<ResumeEvidenceRegistry | null>(null);
   const [configBaseline, setConfigBaseline] = useState<ResumeGenerationConfig | null>(null);
   const [configDraft, setConfigDraft] = useState<ResumeGenerationConfig | null>(null);
+  const [jobTargetBaseline, setJobTargetBaseline] = useState<JobTarget | null>(null);
+  const [jobTargetDraft, setJobTargetDraft] = useState<JobTarget | null>(null);
   const [openAiKeyDraft, setOpenAiKeyDraft] = useState("");
   const [clearOpenAiKey, setClearOpenAiKey] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("user");
@@ -115,8 +117,6 @@ export default function App({ client = evidenceApi }: AppProps) {
   const [applyError, setApplyError] = useState<string | null>(null);
   const [currentOperation, setCurrentOperation] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [jobTitle, setJobTitle] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
   const [isGeneratingTex, setIsGeneratingTex] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [enrichingTarget, setEnrichingTarget] = useState<EnrichmentTarget | null>(null);
@@ -142,6 +142,12 @@ export default function App({ client = evidenceApi }: AppProps) {
     setClearOpenAiKey(false);
   }, []);
 
+  const resetJobTarget = useCallback((jobTarget: JobTarget) => {
+    const nextBaseline = cloneEvidence(jobTarget);
+    setJobTargetBaseline(nextBaseline);
+    setJobTargetDraft(cloneEvidence(jobTarget));
+  }, []);
+
   const loadEvidence = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
@@ -153,12 +159,14 @@ export default function App({ client = evidenceApi }: AppProps) {
         .getHealth()
         .then(() => "online" as const)
         .catch(() => "offline" as const);
-      const [evidence, config] = await Promise.all([
+      const [evidence, config, jobTarget] = await Promise.all([
         client.getResumeEvidence(),
         client.getGenerationConfig(),
+        client.getJobTarget(),
       ]);
       resetEvidence(evidence);
       resetConfig(config);
+      resetJobTarget(jobTarget);
       setBackendStatus(await healthPromise);
     } catch (error) {
       setBackendStatus("offline");
@@ -166,7 +174,7 @@ export default function App({ client = evidenceApi }: AppProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [client, resetConfig, resetEvidence]);
+  }, [client, resetConfig, resetEvidence, resetJobTarget]);
 
   useEffect(() => {
     void loadEvidence();
@@ -179,14 +187,26 @@ export default function App({ client = evidenceApi }: AppProps) {
   );
   const configSecretDirty = openAiKeyDraft.trim().length > 0 || clearOpenAiKey;
   const configDirty = configValuesDirty || configSecretDirty;
-  const dirty = evidenceDirty || configDirty;
+  const jobTargetDirty = useMemo(
+    () =>
+      Boolean(
+        jobTargetBaseline &&
+          jobTargetDraft &&
+          !deepEqual(jobTargetBaseline, jobTargetDraft),
+      ),
+    [jobTargetBaseline, jobTargetDraft],
+  );
+  const dirty = evidenceDirty || configDirty || jobTargetDirty;
   const validationErrors = useMemo(() => {
     const errors = draft ? validateDraftEvidence(draft) : [];
     if (configDraft) {
       errors.push(...validateGenerationConfig(configDraft));
     }
+    if (jobTargetDraft) {
+      errors.push(...validateJobTarget(jobTargetDraft));
+    }
     return errors;
-  }, [configDraft, draft]);
+  }, [configDraft, draft, jobTargetDraft]);
   const actionInFlight = isGeneratingTex || isGeneratingPdf || enrichingTarget !== null;
   const savedActionDisabled =
     dirty || isLoading || isApplying || actionInFlight || validationErrors.length > 0;
@@ -218,8 +238,29 @@ export default function App({ client = evidenceApi }: AppProps) {
     setMessage(null);
   }, []);
 
+  const mutateJobTarget = useCallback((mutator: (next: JobTarget) => void) => {
+    setJobTargetDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = cloneEvidence(current);
+      mutator(next);
+      return next;
+    });
+    setApplyError(null);
+    setMessage(null);
+  }, []);
+
   async function handleApply() {
-    if (!baseline || !draft || !configBaseline || !configDraft || applyDisabled) {
+    if (
+      !baseline ||
+      !draft ||
+      !configBaseline ||
+      !configDraft ||
+      !jobTargetBaseline ||
+      !jobTargetDraft ||
+      applyDisabled
+    ) {
       return;
     }
 
@@ -249,12 +290,20 @@ export default function App({ client = evidenceApi }: AppProps) {
         );
         operationCount += 1;
       }
-      const [freshEvidence, freshConfig] = await Promise.all([
+      if (jobTargetDirty) {
+        operationLabel = "Updating job target";
+        setCurrentOperation(operationLabel);
+        await client.updateJobTarget(normalizeJobTargetForSave(jobTargetDraft));
+        operationCount += 1;
+      }
+      const [freshEvidence, freshConfig, freshJobTarget] = await Promise.all([
         client.getResumeEvidence(),
         client.getGenerationConfig(),
+        client.getJobTarget(),
       ]);
       resetEvidence(freshEvidence);
       resetConfig(freshConfig);
+      resetJobTarget(freshJobTarget);
       setMessage(`${operationCount} operation${operationCount === 1 ? "" : "s"} applied.`);
     } catch (error) {
       const prefix = operationLabel ? `${operationLabel}: ` : "";
@@ -266,11 +315,12 @@ export default function App({ client = evidenceApi }: AppProps) {
   }
 
   function handleDiscard() {
-    if (!baseline || !configBaseline) {
+    if (!baseline || !configBaseline || !jobTargetBaseline) {
       return;
     }
     setDraft(cloneEvidence(baseline));
     resetConfig(configBaseline);
+    resetJobTarget(jobTargetBaseline);
     setSelectedIds({
       projects: baseline.projects.projects[0]?.id,
       experience: baseline.experience.experience[0]?.id,
@@ -385,36 +435,8 @@ export default function App({ client = evidenceApi }: AppProps) {
     return true;
   }
 
-  function buildJobTargetPayload(): { job_target?: JobTargetOverride } | null {
-    const title = jobTitle.trim();
-    const description = jobDescription.trim();
-
-    if (!title && description) {
-      setApplyError("Enter a job title before adding a job description.");
-      setMessage(null);
-      return null;
-    }
-
-    if (!title) {
-      return {};
-    }
-
-    return {
-      job_target: {
-        schema_version: 1,
-        title,
-        description: description ? description : null,
-      },
-    };
-  }
-
   async function handleGenerateTex() {
     if (!ensureSavedActionReady()) {
-      return;
-    }
-
-    const payload = buildJobTargetPayload();
-    if (payload === null) {
       return;
     }
 
@@ -424,7 +446,7 @@ export default function App({ client = evidenceApi }: AppProps) {
     setCurrentOperation("Generating .tex resume");
 
     try {
-      const result = await client.generateResumeTex(payload);
+      const result = await client.generateResumeTex({});
       setMessage(`Generated .tex at ${result.tex_path}.`);
     } catch (error) {
       setApplyError(formatError(error));
@@ -582,7 +604,7 @@ export default function App({ client = evidenceApi }: AppProps) {
         <section className="content-area">
           {isLoading ? (
             <StatePanel icon={Loader2} spin title="Loading evidence" />
-          ) : loadError || !draft || !configDraft ? (
+          ) : loadError || !draft || !configDraft || !jobTargetDraft ? (
             <StatePanel
               icon={AlertCircle}
               tone="error"
@@ -625,14 +647,21 @@ export default function App({ client = evidenceApi }: AppProps) {
               {activeSection === "generate" ? (
                 <ResumeGenerationPanel
                   actionsDisabled={savedActionDisabled}
-                  jobDescription={jobDescription}
-                  jobTitle={jobTitle}
+                  jobTarget={jobTargetDraft}
                   pdfBusy={isGeneratingPdf}
                   texBusy={isGeneratingTex}
                   onGeneratePdf={() => void handleGeneratePdf()}
                   onGenerateTex={() => void handleGenerateTex()}
-                  onJobDescriptionChange={setJobDescription}
-                  onJobTitleChange={setJobTitle}
+                  onJobDescriptionChange={(description) => {
+                    mutateJobTarget((next) => {
+                      next.description = optionalText(description);
+                    });
+                  }}
+                  onJobTitleChange={(title) => {
+                    mutateJobTarget((next) => {
+                      next.title = title;
+                    });
+                  }}
                 />
               ) : null}
               {activeSection === "config" ? (
@@ -890,8 +919,7 @@ function SkillsEditor({
 
 function ResumeGenerationPanel({
   actionsDisabled,
-  jobDescription,
-  jobTitle,
+  jobTarget,
   pdfBusy,
   texBusy,
   onGeneratePdf,
@@ -900,8 +928,7 @@ function ResumeGenerationPanel({
   onJobTitleChange,
 }: {
   actionsDisabled: boolean;
-  jobDescription: string;
-  jobTitle: string;
+  jobTarget: JobTarget;
   pdfBusy: boolean;
   texBusy: boolean;
   onGeneratePdf: () => void;
@@ -913,11 +940,11 @@ function ResumeGenerationPanel({
     <div className="editor-surface">
       <SectionHeader title="Resume" eyebrow="Generate" />
       <div className="field-grid">
-        <TextField label="Job Title" value={jobTitle} onChange={onJobTitleChange} />
+        <TextField label="Job Title" value={jobTarget.title} onChange={onJobTitleChange} />
       </div>
       <TextareaField
         label="Job Description"
-        value={jobDescription}
+        value={jobTarget.description ?? ""}
         onChange={onJobDescriptionChange}
       />
       <div className="generation-actions">
@@ -1683,6 +1710,15 @@ function buildGenerationConfigPatch({
   }
 
   return patch;
+}
+
+function normalizeJobTargetForSave(jobTarget: JobTarget): JobTarget {
+  const description = jobTarget.description?.trim() ?? "";
+  return {
+    schema_version: 1,
+    title: jobTarget.title.trim(),
+    description: description ? description : null,
+  };
 }
 
 function configExposedValuesChanged(

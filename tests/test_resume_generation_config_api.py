@@ -130,3 +130,87 @@ def test_resume_generation_config_rejects_api_key_update_over_remote_http(genera
 
     assert response.status_code == 403
     assert "HTTPS or a local loopback request" in response.text
+
+
+def test_resume_generation_job_target_get_reads_saved_yaml(generation_root):
+    _write_config(
+        generation_root / "job_target.yaml",
+        {
+            "schema_version": 1,
+            "title": "Backend Engineer",
+            "description": "Build Python APIs.",
+        },
+    )
+
+    response = api_request("GET", "/resume-generation/job-target")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {
+        "schema_version": 1,
+        "title": "Backend Engineer",
+        "description": "Build Python APIs.",
+        "job_target_path": str(generation_root / "job_target.yaml"),
+    }
+
+
+def test_resume_generation_job_target_put_persists_yaml(generation_root):
+    _write_config(
+        generation_root / "job_target.yaml",
+        {
+            "schema_version": 1,
+            "title": "Original Role",
+            "description": None,
+        },
+    )
+
+    response = api_request(
+        "PUT",
+        "/resume-generation/job-target",
+        json={
+            "schema_version": 1,
+            "title": " Frontend Engineer ",
+            "description": " Build React interfaces. ",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Frontend Engineer"
+    assert response.json()["description"] == "Build React interfaces."
+    saved = yaml.safe_load((generation_root / "job_target.yaml").read_text(encoding="utf-8"))
+    assert saved == {
+        "schema_version": 1,
+        "title": "Frontend Engineer",
+        "description": "Build React interfaces.",
+    }
+
+
+def test_resume_generation_job_target_put_rejects_blank_title_without_writing(
+    generation_root,
+):
+    _write_config(
+        generation_root / "job_target.yaml",
+        {
+            "schema_version": 1,
+            "title": "Existing Role",
+            "description": "Existing description.",
+        },
+    )
+
+    response = api_request(
+        "PUT",
+        "/resume-generation/job-target",
+        json={
+            "schema_version": 1,
+            "title": " ",
+            "description": "New description.",
+        },
+    )
+
+    assert response.status_code == 422
+    saved = yaml.safe_load((generation_root / "job_target.yaml").read_text(encoding="utf-8"))
+    assert saved == {
+        "schema_version": 1,
+        "title": "Existing Role",
+        "description": "Existing description.",
+    }

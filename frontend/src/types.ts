@@ -99,14 +99,18 @@ export interface ResumeEvidenceRegistry {
 
 export type CollectionRecord = ProjectRecord | ExperienceRecord | EducationRecord;
 
-export interface JobTargetOverride {
+export interface JobTarget {
   schema_version: 1;
   title: string;
   description: string | null;
 }
 
+export interface JobTargetResponse extends JobTarget {
+  job_target_path: string;
+}
+
 export interface ResumeTexGenerationRequest {
-  job_target?: JobTargetOverride | null;
+  job_target?: JobTarget | null;
 }
 
 export interface ResumeTexGenerationResponse {

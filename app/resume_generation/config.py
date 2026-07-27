@@ -63,6 +63,16 @@ def load_job_target(path: Path | str | None = None) -> JobTarget:
     return JobTarget.model_validate(_load_yaml_mapping(resolve_job_target_path(path)))
 
 
+def write_job_target_payload(
+    payload: dict[str, Any],
+    path: Path | str | None = None,
+) -> JobTarget:
+    resolved_path = resolve_job_target_path(path)
+    validated = JobTarget.model_validate(payload)
+    _write_yaml_atomic(resolved_path, validated.model_dump(mode="python"))
+    return validated
+
+
 def ensure_generation_config_defaults(path: Path | str | None = None) -> ResumeGenerationConfig:
     resolved_path = resolve_generation_config_path(path)
     if resolved_path.exists():

@@ -5,7 +5,7 @@ import App from "./App";
 import { ApiError } from "./api";
 import type { EvidenceApi } from "./api";
 import { cloneEvidence } from "./draft";
-import { sampleEvidence, sampleGenerationConfig } from "./testFixtures";
+import { sampleEvidence, sampleGenerationConfig, sampleJobTarget } from "./testFixtures";
 
 describe("App", () => {
   it("stages user edits and applies them through the user endpoint", async () => {
@@ -123,29 +123,77 @@ describe("App", () => {
     expect(client.generateResumeTex).not.toHaveBeenCalled();
   });
 
-  it("generates tex with a job target override", async () => {
+  it("loads the saved job target into the generate panel", async () => {
+    const evidence = sampleEvidence();
+    const jobTarget = sampleJobTarget();
+    const client = createMockClient(
+      evidence,
+      evidence,
+      sampleGenerationConfig(),
+      sampleGenerationConfig(),
+      jobTarget,
+    );
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
+
+    expect((screen.getByLabelText("Job Title") as HTMLInputElement).value).toBe(
+      "Backend Engineer",
+    );
+    expect((screen.getByLabelText("Job Description") as HTMLTextAreaElement).value).toBe(
+      "Build Python APIs.",
+    );
+  });
+
+  it("applies job target edits through the job target endpoint", async () => {
+    const evidence = sampleEvidence();
+    const jobTarget = sampleJobTarget();
+    const reloadedJobTarget = {
+      ...jobTarget,
+      title: "Frontend Engineer",
+      description: "Build React interfaces.",
+    };
+    const client = createMockClient(
+      evidence,
+      evidence,
+      sampleGenerationConfig(),
+      sampleGenerationConfig(),
+      jobTarget,
+      reloadedJobTarget,
+    );
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
+    fireEvent.change(screen.getByLabelText("Job Title"), {
+      target: { value: " Frontend Engineer " },
+    });
+    fireEvent.change(screen.getByLabelText("Job Description"), {
+      target: { value: " Build React interfaces. " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
+
+    await waitFor(() => {
+      expect(client.updateJobTarget).toHaveBeenCalledWith({
+        schema_version: 1,
+        title: "Frontend Engineer",
+        description: "Build React interfaces.",
+      });
+    });
+  });
+
+  it("generates tex with the saved job target", async () => {
     const evidence = sampleEvidence();
     const client = createMockClient(evidence);
 
     render(<App client={client} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
-    fireEvent.change(screen.getByLabelText("Job Title"), {
-      target: { value: "Frontend Engineer" },
-    });
-    fireEvent.change(screen.getByLabelText("Job Description"), {
-      target: { value: "Build React interfaces." },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Generate .tex" }));
 
     await waitFor(() => {
-      expect(client.generateResumeTex).toHaveBeenCalledWith({
-        job_target: {
-          schema_version: 1,
-          title: "Frontend Engineer",
-          description: "Build React interfaces.",
-        },
-      });
+      expect(client.generateResumeTex).toHaveBeenCalledWith({});
     });
   });
 
@@ -283,6 +331,8 @@ function createMockClient(
   reloaded = initial,
   initialConfig = sampleGenerationConfig(),
   reloadedConfig = initialConfig,
+  initialJobTarget = sampleJobTarget(),
+  reloadedJobTarget = initialJobTarget,
 ): EvidenceApi & Record<string, ReturnType<typeof vi.fn>> {
   return {
     getHealth: vi.fn().mockResolvedValue({ status: "ok" }),
@@ -294,6 +344,10 @@ function createMockClient(
       .fn()
       .mockResolvedValueOnce(cloneEvidence(initialConfig))
       .mockResolvedValue(cloneEvidence(reloadedConfig)),
+    getJobTarget: vi
+      .fn()
+      .mockResolvedValueOnce(cloneEvidence(initialJobTarget))
+      .mockResolvedValue(cloneEvidence(reloadedJobTarget)),
     getProjects: vi.fn(),
     createProject: vi.fn().mockResolvedValue(reloaded.projects.projects.at(-1)),
     updateProject: vi.fn(),
@@ -326,5 +380,6 @@ function createMockClient(
       records: [],
     }),
     updateGenerationConfig: vi.fn().mockResolvedValue(cloneEvidence(reloadedConfig)),
+    updateJobTarget: vi.fn().mockResolvedValue(cloneEvidence(reloadedJobTarget)),
   };
 }

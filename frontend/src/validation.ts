@@ -1,4 +1,4 @@
-import type { ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
+import type { JobTarget, ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
 
 export function validateDraftEvidence(draft: ResumeEvidenceRegistry): string[] {
   const errors: string[] = [];
@@ -89,6 +89,12 @@ export function validateGenerationConfig(draft: ResumeGenerationConfig): string[
     }
   }
 
+  return errors;
+}
+
+export function validateJobTarget(draft: JobTarget): string[] {
+  const errors: string[] = [];
+  requireText(errors, "Job title", draft.title);
   return errors;
 }
 
