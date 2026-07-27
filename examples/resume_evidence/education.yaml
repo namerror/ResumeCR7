@@ -1,0 +1,13 @@
+schema_version: 1
+education:
+- id: example-university
+  name: Example University
+  degree: B.S. Computer Science
+  grade: GPA 3.8
+  start: "2022"
+  end: "2026"
+  location: Example City, ST
+  relevant_coursework:
+  - Data Structures
+  - Databases
+  - Distributed Systems

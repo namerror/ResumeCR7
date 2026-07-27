@@ -1,0 +1,26 @@
+schema_version: 1
+experience:
+- id: campus-platform-team
+  name: Campus Platform Team
+  role: Software Engineering Intern
+  summary: Supported internal web tools used by student services staff.
+  highlights:
+  - Reworked form validation to catch incomplete requests before submission.
+  - Added backend tests for API error responses and authorization edge cases.
+  - Improved deployment notes so staff could verify releases without developer help.
+  active: true
+  skills:
+    technology:
+    - FastAPI
+    - PostgreSQL
+    programming:
+    - Python
+    - TypeScript
+    concepts:
+    - API
+    - Data Validation
+    - Documentation
+  location: Remote
+  start: "2025"
+  end: "2026"
+  links: null

@@ -1,0 +1,28 @@
+schema_version: 1
+projects:
+- id: deployment-health-dashboard
+  name: Deployment Health Dashboard
+  summary: A local dashboard that helped a student engineering team inspect service
+    health, recent deploys, and failing checks before release handoffs.
+  highlights:
+  - Built a FastAPI service that normalized deployment metadata from multiple JSON
+    sources into one validated response model.
+  - Added React views for release status, failing checks, and environment-specific
+    health details.
+  - Wrote automated tests for schema validation, status aggregation, and frontend
+    rendering states.
+  active: true
+  skills:
+    technology:
+    - FastAPI
+    - React
+    - Docker
+    programming:
+    - Python
+    - TypeScript
+    concepts:
+    - REST API
+    - Observability
+    - Test Automation
+  links:
+  - https://github.com/example/deployment-health-dashboard

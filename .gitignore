@@ -6,15 +6,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 
-!user/resume_evidence/
-!user/resume_evidence/experience.yaml
-user/resume_generation/cache/
-user/resume_generation/artifacts/
-user/resume_generation/resume_result.json
-user/resume_generation/resume_run_manifest.json
-user/resume_generation/resume.tex
-user/resume_generation/resume.pdf
-user/logs/
+user/
+
+app/skill_selection/data/embeddings/
 
 build/desktop-sidecar/
 frontend/src-tauri/target/

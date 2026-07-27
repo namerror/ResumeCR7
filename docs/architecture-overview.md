@@ -477,26 +477,25 @@ The recommended service path is to keep FastAPI and add a product-facing facade 
 
 Future async product-facing routes should sit above these capability APIs rather than requiring clients to coordinate every stage call directly.
 
-## 11) Agent Quick-Read Sequence
+## 11) Contributor Quick-Read Sequence
 
 1. `AGENTS.md`
-2. `CLAUDE.md`
-3. `docs/agent-context-index.md`
-4. `docs/architecture-overview.md`
-5. `README.md`
+2. `README.md`
+3. `docs/development.md`
+4. `docs/agent-context-index.md`
+5. `docs/architecture-overview.md`
 6. `app/main.py`
-7. `app/skill_selection/selector.py`
-8. `app/project_selection/service.py`
-9. `app/project_selection/selector.py`
-10. `app/resume_evidence/api.py`
-11. `app/resume_evidence/service.py`
-12. `app/resume_evidence/loader.py`
-13. `app/resume_evidence/session.py`
-14. `app/resume_generation/main.py`
-15. `app/resume_generation/selection.py`
-16. `app/resume_generation/bullet_points.py`
-17. `app/resume_generation/api.py`
+7. `app/runtime_data.py`
+8. `app/resume_evidence/api.py`
+9. `app/resume_evidence/service.py`
+10. `app/resume_evidence/loader.py`
+11. `app/resume_evidence/session.py`
+12. `app/resume_generation/api.py`
+13. `app/resume_generation/main.py`
+14. `app/resume_generation/selection.py`
+15. `app/resume_generation/bullet_points.py`
+16. `app/skill_selection/selector.py`
+17. `app/project_selection/service.py`
 18. `docs/decisions/008-standalone-resume-evidence-and-generation-layers.md`
 19. `docs/decisions/012-fastapi-resume-service-transition.md`
 20. `docs/decisions/015-app-owned-resume-generation-api.md`
-21. `docs/archive/branch-03-grounded-resume-generation.md`

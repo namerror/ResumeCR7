@@ -2191,7 +2191,7 @@ def test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffix
     )
     payload["projects"][0].update(
         {
-            "name": "Capital Ready - Business Lending Tool",
+            "name": "Community Funding Operations Dashboard",
             "skills": long_project_skills,
         }
     )

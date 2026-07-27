@@ -1,0 +1,15 @@
+schema_version: 1
+skills:
+  technology:
+  - FastAPI
+  - PostgreSQL
+  - Docker
+  - React
+  programming:
+  - Python
+  - TypeScript
+  concepts:
+  - REST API
+  - Data Validation
+  - Observability
+  - Test Automation
