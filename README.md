@@ -65,6 +65,18 @@ right facts every time. ResumeCR7 solves a different problem:
 
 ### Requirements
 
+For the released Linux AppImage, ResumeCR7 bundles the frontend, the packaged
+FastAPI backend sidecar, and Python application dependencies. PDF rendering is
+the only current feature that needs a host toolchain.
+
+To quickly check/install the PDF toolchain on Ubuntu/Debian, you may optain the installation script from the release page or from `packaging/linux/`, then run:
+
+```bash
+bash /path/to/install-pdf-dependencies.sh
+```
+
+For local development:
+
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) for Python dependency management
 - Node.js and npm for the frontend
@@ -100,6 +112,22 @@ Open the Vite URL shown by npm.
 
 The packaged desktop build currently targets Linux AppImage. Windows and macOS
 desktop builds are planned, but not part of the current release.
+
+For released Linux AppImage users, no Python, uv, Node.js, npm, or PyInstaller
+installation is required. On Ubuntu/Debian, install the PDF rendering toolchain
+only if you want to use **Generate PDF**:
+
+```bash
+bash resumecr7-install-pdf-dependencies.sh
+```
+
+You can verify the PDF toolchain without changing the system:
+
+```bash
+bash resumecr7-check-pdf-dependencies.sh
+```
+
+From a source checkout, use the matching scripts under `packaging/linux/`.
 
 Build the Linux desktop app from the frontend directory:
 

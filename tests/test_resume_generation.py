@@ -30,6 +30,7 @@ from resume_generation import (
     ExperienceBulletPointResult,
     IntermediateResumeResult,
     JobTarget,
+    LatexPdfPrerequisiteError,
     LatexPdfRenderError,
     ProjectBulletPointResult,
     ProjectSelectionResult,
@@ -2423,6 +2424,25 @@ def test_render_latex_pdf_local_raises_for_missing_command(monkeypatch, tmp_path
     monkeypatch.setattr("resume_generation.pdf.subprocess.run", fake_run)
 
     with pytest.raises(LatexPdfRenderError, match="command not found: latexmk"):
+        render_latex_pdf(tex_path, tmp_path / "resume.pdf")
+
+
+def test_render_latex_pdf_local_classifies_missing_tex_package(monkeypatch, tmp_path):
+    tex_path = tmp_path / "resume.tex"
+    tex_path.write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+
+    def fake_run(command, *, cwd, check, capture_output, text, timeout):
+        output_dir_arg = next(part for part in command if part.startswith("-outdir="))
+        output_dir = Path(output_dir_arg.removeprefix("-outdir="))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "resume.log").write_text(
+            "! LaTeX Error: File `fontawesome5.sty' not found."
+        )
+        return subprocess.CompletedProcess(command, 12, stdout="", stderr="")
+
+    monkeypatch.setattr("resume_generation.pdf.subprocess.run", fake_run)
+
+    with pytest.raises(LatexPdfPrerequisiteError, match="PDF rendering prerequisites"):
         render_latex_pdf(tex_path, tmp_path / "resume.pdf")
 
 

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metrics, and resume generation routes.
 - Tailored LaTeX resume generation from user-authored evidence and a target job.
 - Optional local PDF rendering through `latexmk` and a TeX installation.
+- Ubuntu/Debian PDF dependency installer and checker for Linux AppImage users.
 - Optional OpenAI-backed skill selection, project selection, job-focus
   derivation, bullet generation, and link evidence enrichment, with
   deterministic baseline paths kept available.

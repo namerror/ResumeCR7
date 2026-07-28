@@ -71,6 +71,20 @@ cargo test
 cargo fmt --check
 ```
 
+Validate Linux PDF dependency scripts:
+
+```bash
+bash -n packaging/linux/*.sh
+bash packaging/linux/check-pdf-dependencies.sh
+```
+
+On Ubuntu/Debian, install the PDF runtime dependencies used by the released
+AppImage:
+
+```bash
+bash packaging/linux/install-pdf-dependencies.sh
+```
+
 ## Documentation
 
 - Update `README.md` for user-facing setup, product behavior, and contributor

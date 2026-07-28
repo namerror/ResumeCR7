@@ -45,6 +45,40 @@ def test_pyproject_exposes_desktop_optional_dependencies():
     assert any(dependency.startswith("pyinstaller") for dependency in desktop_dependencies)
 
 
+def test_linux_pdf_dependency_checker_covers_resume_template_dependencies():
+    checker = Path("packaging/linux/check-pdf-dependencies.sh").read_text(encoding="utf-8")
+
+    for dependency in [
+        "latexmk",
+        "pdflatex",
+        "kpsewhich",
+        "fontawesome5.sty",
+        "lato.sty",
+        "mwe.sty",
+        "wrapfig.sty",
+        "titlesec.sty",
+        "glyphtounicode.tex",
+    ]:
+        assert dependency in checker
+
+
+def test_linux_pdf_dependency_installer_is_pdf_only():
+    installer = Path("packaging/linux/install-pdf-dependencies.sh").read_text(encoding="utf-8")
+
+    for dependency in [
+        "latexmk",
+        "texlive-latex-recommended",
+        "texlive-latex-extra",
+        "texlive-fonts-recommended",
+        "texlive-fonts-extra",
+        "texlive-extra-utils",
+    ]:
+        assert dependency in installer
+
+    for app_dependency in ["python3", "nodejs", "npm", "uv", "pyinstaller"]:
+        assert app_dependency not in installer.lower()
+
+
 def test_api_launcher_dispatches_uvicorn(monkeypatch):
     calls: list[dict[str, object]] = []
 

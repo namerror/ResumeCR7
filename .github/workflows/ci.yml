@@ -83,5 +83,8 @@ jobs:
       - name: Install desktop dependencies
         run: uv sync --locked --extra desktop
 
+      - name: Validate Linux PDF dependency scripts
+        run: bash -n packaging/linux/*.sh
+
       - name: Build and smoke test backend sidecar
         run: uv run --extra desktop python scripts/smoke_desktop_sidecar.py

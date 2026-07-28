@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,10 +14,15 @@ DEFAULT_RESUME_PDF_ARTIFACT_PATH = settings.resume_pdf_artifact_path
 DEFAULT_RESUME_TEX_INPUT_PATH = settings.resume_tex_artifact_path
 DEFAULT_LATEX_PDF_TIMEOUT_SECONDS = 60.0
 DEFAULT_LATEX_LOCAL_COMMAND = "latexmk"
+PDF_PREREQUISITE_ERROR_PREFIX = "PDF rendering prerequisites are missing."
 
 
 class LatexPdfRenderError(RuntimeError):
     """Raised when the LaTeX renderer cannot produce a PDF."""
+
+
+class LatexPdfPrerequisiteError(LatexPdfRenderError):
+    """Raised when host PDF rendering dependencies are missing."""
 
 
 def resolve_resume_pdf_output_path(path: Path | str | None) -> Path:
@@ -59,8 +65,10 @@ def render_latex_pdf(
                 timeout=timeout_seconds,
             )
         except FileNotFoundError as exc:
-            raise LatexPdfRenderError(
-                f"LaTeX local render command not found: {DEFAULT_LATEX_LOCAL_COMMAND}"
+            raise LatexPdfPrerequisiteError(
+                _prerequisite_error_message(
+                    f"LaTeX local render command not found: {DEFAULT_LATEX_LOCAL_COMMAND}"
+                )
             ) from exc
         except subprocess.TimeoutExpired as exc:
             raise LatexPdfRenderError(
@@ -70,14 +78,15 @@ def render_latex_pdf(
         log_path = output_dir_path / f"{source_path.stem}.log"
         rendered_pdf_path = output_dir_path / f"{source_path.stem}.pdf"
         if completed.returncode != 0:
-            raise LatexPdfRenderError(
-                _local_error_message(
-                    returncode=completed.returncode,
-                    stdout=completed.stdout,
-                    stderr=completed.stderr,
-                    log_path=log_path,
-                )
+            error_message = _local_error_message(
+                returncode=completed.returncode,
+                stdout=completed.stdout,
+                stderr=completed.stderr,
+                log_path=log_path,
             )
+            if _is_latex_prerequisite_failure(error_message):
+                raise LatexPdfPrerequisiteError(_prerequisite_error_message(error_message))
+            raise LatexPdfRenderError(error_message)
         if not rendered_pdf_path.is_file():
             raise LatexPdfRenderError(
                 _local_error_message(
@@ -116,6 +125,22 @@ def _local_error_message(
         if log_text:
             parts.append(f"log: {log_text}")
     return "\n".join(parts)
+
+
+def _is_latex_prerequisite_failure(message: str) -> bool:
+    return bool(
+        re.search(r"LaTeX Error: File `[^`]+\' not found", message)
+        or re.search(r"! I can't find file `[^`]+\'", message)
+    )
+
+
+def _prerequisite_error_message(detail: str) -> str:
+    return (
+        f"{PDF_PREREQUISITE_ERROR_PREFIX} Install latexmk and TeX Live packages. "
+        "On Ubuntu/Debian, run resumecr7-install-pdf-dependencies.sh from the release assets "
+        "or packaging/linux/install-pdf-dependencies.sh from a source checkout. "
+        f"{detail}"
+    )
 
 
 def main() -> Path:

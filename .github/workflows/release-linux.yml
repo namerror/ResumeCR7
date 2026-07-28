@@ -50,6 +50,12 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      - name: Install Linux PDF runtime dependencies
+        run: bash packaging/linux/install-pdf-dependencies.sh
+
+      - name: Validate Linux PDF dependency scripts
+        run: bash -n packaging/linux/*.sh
+
       - name: Install Python dependencies
         run: uv sync --locked --extra dev --extra desktop
 
@@ -85,6 +91,8 @@ jobs:
         run: |
           mkdir -p dist/release
           cp frontend/src-tauri/target/release/bundle/appimage/*.AppImage dist/release/
+          cp packaging/linux/install-pdf-dependencies.sh dist/release/resumecr7-install-pdf-dependencies.sh
+          cp packaging/linux/check-pdf-dependencies.sh dist/release/resumecr7-check-pdf-dependencies.sh
           cd dist/release
           for artifact in *.AppImage; do
             test -s "${artifact}"

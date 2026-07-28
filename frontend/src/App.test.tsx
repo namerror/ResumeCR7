@@ -234,6 +234,28 @@ describe("App", () => {
     expect(await screen.findByText("Generate the .tex file first.")).toBeTruthy();
   });
 
+  it("shows a short pdf dependency message when latex prerequisites are missing", async () => {
+    const evidence = sampleEvidence();
+    const client = createMockClient(evidence);
+    (client.generateResumePdf as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new ApiError(
+        502,
+        "PDF rendering prerequisites are missing. Install latexmk and TeX Live packages.",
+      ),
+    );
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate PDF" }));
+
+    expect(
+      await screen.findByText(
+        "PDF rendering dependencies are missing. On Ubuntu/Debian, run resumecr7-install-pdf-dependencies.sh, then try Generate PDF again.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("enriches the selected project through targeted link scanning", async () => {
     const evidence = sampleEvidence();
     const reloaded = cloneEvidence(evidence);

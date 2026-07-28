@@ -98,6 +98,9 @@ const categoryLabels: Record<SkillCategory, string> = {
   programming: "Programming",
   concepts: "Concepts",
 };
+const PDF_PREREQUISITE_ERROR_PREFIX = "PDF rendering prerequisites are missing.";
+const PDF_PREREQUISITE_MESSAGE =
+  "PDF rendering dependencies are missing. On Ubuntu/Debian, run resumecr7-install-pdf-dependencies.sh, then try Generate PDF again.";
 
 export default function App({ client = evidenceApi }: AppProps) {
   const [baseline, setBaseline] = useState<ResumeEvidenceRegistry | null>(null);
@@ -473,6 +476,8 @@ export default function App({ client = evidenceApi }: AppProps) {
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         setApplyError("Generate the .tex file first.");
+      } else if (isPdfPrerequisiteError(error)) {
+        setApplyError(PDF_PREREQUISITE_MESSAGE);
       } else {
         setApplyError(formatError(error));
       }
@@ -1842,4 +1847,12 @@ function formatError(error: unknown): string {
     return error.message;
   }
   return "Unknown error.";
+}
+
+function isPdfPrerequisiteError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 502 &&
+    error.detail.startsWith(PDF_PREREQUISITE_ERROR_PREFIX)
+  );
 }
