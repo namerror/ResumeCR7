@@ -496,6 +496,3 @@ Future async product-facing routes should sit above these capability APIs rather
 15. `app/resume_generation/bullet_points.py`
 16. `app/skill_selection/selector.py`
 17. `app/project_selection/service.py`
-18. `docs/decisions/008-standalone-resume-evidence-and-generation-layers.md`
-19. `docs/decisions/012-fastapi-resume-service-transition.md`
-20. `docs/decisions/015-app-owned-resume-generation-api.md`

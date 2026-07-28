@@ -9,7 +9,6 @@ evidence.
 - Product and setup overview: `README.md`
 - Architecture map: `docs/architecture-overview.md`
 - Development guide: `docs/development.md`
-- Durable architecture decisions: `docs/decisions/`
 
 ## Repository Layout
 
@@ -44,7 +43,6 @@ evidence.
 - Use existing subsystem patterns before adding new abstractions.
 - Update `docs/CHANGELOG.md` only for significant user-facing additions or
   breaking changes.
-- Add a new ADR under `docs/decisions/` only for durable architecture decisions.
 - Keep local runtime data out of git. The ignored `user/` directory is for local
   development and desktop runtime state.
 

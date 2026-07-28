@@ -77,7 +77,6 @@ cargo fmt --check
   entrypoints.
 - Update `docs/architecture-overview.md` when subsystem ownership, data flow, or
   runtime boundaries change.
-- Add ADRs under `docs/decisions/` for durable architecture decisions.
 - Update `docs/CHANGELOG.md` only for significant user-facing additions or
   breaking changes.
 

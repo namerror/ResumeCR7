@@ -128,7 +128,7 @@ def validate_release(tag: str, repo_root: Path = REPO_ROOT) -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate ResumeCR7 release metadata.")
-    parser.add_argument("--tag", required=True, help="Release tag, for example v0.4.0.")
+    parser.add_argument("--tag", required=True, help="Release tag, for example v0.1.0.")
     parser.add_argument(
         "--notes-out",
         type=Path,

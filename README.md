@@ -98,7 +98,10 @@ Open the Vite URL shown by npm.
 
 ### Desktop App
 
-Build the desktop app from the frontend directory:
+The packaged desktop build currently targets Linux AppImage. Windows and macOS
+desktop builds are planned, but not part of the current release.
+
+Build the Linux desktop app from the frontend directory:
 
 ```bash
 cd frontend
@@ -122,31 +125,6 @@ sudo apt-get install -y \
 The desktop shell starts a bundled backend sidecar on `127.0.0.1`, waits for
 `/health`, and passes the backend URL to the frontend.
 
-### CLI
-
-Edit local evidence through the terminal:
-
-```bash
-uv run resumecr7-resume-evidence
-uv run resumecr7-resume-evidence --schema projects
-uv run resumecr7-resume-evidence --schema skills
-uv run resumecr7-resume-evidence --schema education
-uv run resumecr7-resume-evidence --schema experience
-uv run resumecr7-resume-evidence --schema user
-```
-
-Run resume generation:
-
-```bash
-uv run resumecr7-resume-generation
-```
-
-Render an existing LaTeX artifact to PDF:
-
-```bash
-PYTHONPATH=. python -m resume_generation.pdf
-```
-
 ## Runtime Data
 
 ResumeCR7 stores local user data under `RESUMECR7_DATA_DIR`. In local
@@ -154,7 +132,7 @@ development, the default is the repository `user/` directory. In the packaged
 desktop app, Tauri provides the OS app-data directory for
 `com.resumecr7.desktop`.
 
-Typical desktop locations:
+Current Linux desktop location and planned Windows/macOS locations:
 
 ```text
 Linux:   $XDG_DATA_HOME/com.resumecr7.desktop or ~/.local/share/com.resumecr7.desktop
@@ -203,6 +181,18 @@ Resume evidence is the source of truth. Implemented evidence files are:
   relevant coursework.
 
 See `examples/resume_evidence/` for safe starter files.
+
+## Why FastAPI For Local YAML?
+
+ResumeCR7 is local-first today, and the source of truth is a small set of YAML
+files. That can look heavier than necessary for an editor that also sends
+optional LLM requests.
+
+The FastAPI backend is intentional: it gives the app one boundary for schema
+validation, atomic file writes, generation orchestration, metrics, and future
+web-service expansion. The React workbench, desktop shell, and any future hosted
+surface can share the same product behavior instead of reimplementing resume
+evidence rules in each client.
 
 ## API Surface
 
@@ -274,7 +264,6 @@ scripts/                  build, eval, and release helper scripts
 docs/
   architecture-overview.md
   development.md
-  decisions/
   screenshots/
 ```
 
@@ -292,14 +281,6 @@ Start architecture work with `docs/architecture-overview.md` and
    `uv run python scripts/validate_release.py --tag vX.Y.Z`.
 7. Open a pull request that explains the user-visible behavior and test
    coverage.
-
-Development guardrails:
-
-- Do not invent resume claims or skills that were not provided as evidence.
-- Respect `technology`, `programming`, and `concepts` category boundaries.
-- Keep deterministic baseline behavior working even when optional model-backed
-  paths fail.
-- Keep user-authored evidence separate from generated artifacts.
 
 ## Roadmap
 

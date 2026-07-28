@@ -13,22 +13,6 @@ Use this file as a compact navigation index for coding agents and contributors.
 4. `docs/architecture-overview.md`
    - subsystem map, startup flow, runtime flows, and architecture boundaries
 
-## Durable Architecture Context
-
-Read current code first, then use ADRs for rationale:
-
-- `docs/decisions/003-grounded-resume-evidence-pipeline.md`
-- `docs/decisions/004-user-resume-evidence-root-and-projects-milestone.md`
-- `docs/decisions/005-subsystem-package-organization.md`
-- `docs/decisions/008-standalone-resume-evidence-and-generation-layers.md`
-- `docs/decisions/009-bullet-point-generation-api-boundary.md`
-- `docs/decisions/012-fastapi-resume-service-transition.md`
-- `docs/decisions/013-app-owned-resume-evidence-crud-api.md`
-- `docs/decisions/015-app-owned-resume-generation-api.md`
-- `docs/decisions/016-local-first-web-workbench-desktop-distribution.md`
-- `docs/decisions/017-desktop-packaging-and-release-workflow.md`
-- `docs/decisions/018-local-generation-config-api.md`
-
 ## Recommended Read Order
 
 1. `AGENTS.md`
