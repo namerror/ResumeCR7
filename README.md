@@ -12,7 +12,8 @@ selection and phrasing, but they are not treated as evidence.
 
 ## Who It Is For
 
-ResumeCR7 is for people who repeatedly need to explain their work clearly:
+1. I made this tool because I'm too broke to afford any AI resume builder on the market
+2. ResumeCR7 is for people who repeatedly need to explain their work clearly:
 
 - Software engineers, students, and builders with project-heavy experience.
 - Job seekers who tailor resumes for different roles.
