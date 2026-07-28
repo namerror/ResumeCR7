@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 import importlib
@@ -77,6 +78,75 @@ def test_linux_pdf_dependency_installer_is_pdf_only():
 
     for app_dependency in ["python3", "nodejs", "npm", "uv", "pyinstaller"]:
         assert app_dependency not in installer.lower()
+
+
+def test_windows_pdf_dependency_checker_covers_resume_template_dependencies():
+    checker = Path("packaging/windows/check-pdf-dependencies.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    for dependency in [
+        "latexmk",
+        "pdflatex",
+        "kpsewhich",
+        "fontawesome5.sty",
+        "lato.sty",
+        "mwe.sty",
+        "wrapfig.sty",
+        "titlesec.sty",
+        "glyphtounicode.tex",
+    ]:
+        assert dependency in checker
+
+
+def test_windows_pdf_dependency_checker_is_pdf_only():
+    checker = Path("packaging/windows/check-pdf-dependencies.ps1").read_text(
+        encoding="utf-8"
+    )
+    checker_lower = checker.lower()
+
+    for dependency in ["python", "nodejs", "npm", "uv", "pyinstaller"]:
+        assert dependency not in checker_lower
+    for installer_command in ["install-package", "winget install", "choco install"]:
+        assert installer_command not in checker_lower
+
+
+def test_windows_tauri_config_targets_nsis_current_user_installer():
+    config = json.loads(
+        Path("frontend/src-tauri/tauri.windows.conf.json").read_text(encoding="utf-8")
+    )
+
+    assert config["bundle"]["targets"] == ["nsis"]
+    assert config["bundle"]["windows"]["digestAlgorithm"] == "sha256"
+    assert config["bundle"]["windows"]["webviewInstallMode"] == {
+        "type": "downloadBootstrapper",
+        "silent": True,
+    }
+    assert config["bundle"]["windows"]["nsis"]["installMode"] == "currentUser"
+
+
+def test_desktop_package_scripts_expose_platform_builds():
+    package = json.loads(Path("frontend/package.json").read_text(encoding="utf-8"))
+    scripts = package["scripts"]
+
+    assert "tauri build --bundles appimage" in scripts["desktop:build:linux"]
+    assert "x86_64-pc-windows-msvc" in scripts["desktop:build:windows"]
+    assert "tauri build --bundles nsis" in scripts["desktop:build:windows"]
+
+
+def test_windows_release_workflow_builds_signed_nsis_assets():
+    workflow = Path(".github/workflows/release-windows.yml").read_text(encoding="utf-8")
+
+    for expected in [
+        "windows-latest",
+        "WINDOWS_CERTIFICATE",
+        "WINDOWS_CERTIFICATE_PASSWORD",
+        "Import-PfxCertificate",
+        "tauri.windows.signing.conf.json",
+        "tauri build --bundles nsis",
+        "gh release upload",
+    ]:
+        assert expected in workflow
 
 
 def test_api_launcher_dispatches_uvicorn(monkeypatch):

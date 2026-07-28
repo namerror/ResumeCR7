@@ -27,6 +27,7 @@
     "active": true,
     "targets": ["appimage"],
     "category": "Productivity",
+    "publisher": "ResumeCR7 contributors",
     "shortDescription": "Local-first resume evidence and generation workbench.",
     "icon": ["icons/icon.png"],
     "externalBin": ["binaries/resumecr7-backend"]

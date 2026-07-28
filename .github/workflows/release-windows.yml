@@ -1,0 +1,164 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Windows NSIS release
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.11.25"
+          enable-cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Python dependencies
+        run: uv sync --locked --extra dev --extra desktop
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Validate release metadata
+        run: uv run python scripts/validate_release.py --tag "${{ github.ref_name }}" --notes-out release-notes.md
+
+      - name: Run Python tests
+        run: uv run pytest
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Validate Windows PDF dependency checker syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.PSParser]::Tokenize((Get-Content packaging/windows/check-pdf-dependencies.ps1 -Raw), [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+
+      - name: Build Windows sidecar
+        run: uv run --extra desktop python scripts/build_desktop_sidecar.py --target-triple x86_64-pc-windows-msvc
+
+      - name: Smoke test release sidecar
+        shell: pwsh
+        run: |
+          $sidecar = "frontend/src-tauri/binaries/resumecr7-backend-x86_64-pc-windows-msvc.exe"
+          uv run --extra desktop python scripts/smoke_desktop_sidecar.py --binary $sidecar --timeout-seconds 30
+
+      - name: Import Windows signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)) {
+            throw "Missing WINDOWS_CERTIFICATE secret."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "Missing WINDOWS_CERTIFICATE_PASSWORD secret."
+          }
+
+          $certDir = Join-Path $env:RUNNER_TEMP "resumecr7-certificate"
+          New-Item -ItemType Directory -Path $certDir -Force | Out-Null
+          $encodedPath = Join-Path $certDir "certificate.txt"
+          $pfxPath = Join-Path $certDir "certificate.pfx"
+          Set-Content -Path $encodedPath -Value $env:WINDOWS_CERTIFICATE
+          certutil -decode $encodedPath $pfxPath
+          Remove-Item -Path $encodedPath -Force
+
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if ($null -eq $cert -or [string]::IsNullOrWhiteSpace($cert.Thumbprint)) {
+            throw "Unable to import Windows signing certificate."
+          }
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Write Tauri signing config
+        shell: pwsh
+        run: |
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT
+                digestAlgorithm = "sha256"
+                timestampUrl = "http://timestamp.digicert.com"
+                webviewInstallMode = @{
+                  type = "downloadBootstrapper"
+                  silent = $true
+                }
+                nsis = @{
+                  installMode = "currentUser"
+                  languages = @("English")
+                  displayLanguageSelector = $false
+                }
+              }
+            }
+          } | ConvertTo-Json -Depth 8
+          Set-Content -Path frontend/src-tauri/tauri.windows.signing.conf.json -Value $config -Encoding utf8
+
+      - name: Build signed Windows NSIS installer
+        working-directory: frontend
+        run: npx tauri build --bundles nsis --config src-tauri/tauri.windows.signing.conf.json
+
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist/release -Force | Out-Null
+          Copy-Item frontend/src-tauri/target/release/bundle/nsis/*.exe dist/release/
+          Get-ChildItem dist/release -Filter *.exe | ForEach-Object {
+            if ($_.Length -le 0) {
+              throw "Empty release artifact: $($_.FullName)"
+            }
+            $hash = Get-FileHash -Algorithm SHA256 $_.FullName
+            "$($hash.Hash.ToLowerInvariant())  $($_.Name)" | Set-Content -Path "$($_.FullName).sha256" -Encoding ascii
+          }
+
+      - name: Create or update draft GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem dist/release | ForEach-Object { $_.FullName }
+          if (gh release view $env:GITHUB_REF_NAME *> $null) {
+            gh release upload $env:GITHUB_REF_NAME @assets --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @assets --draft --title "ResumeCR7 $env:GITHUB_REF_NAME" --notes-file release-notes.md
+          }
+
+      - name: Remove signing material
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -Path frontend/src-tauri/tauri.windows.signing.conf.json -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path (Join-Path $env:RUNNER_TEMP "resumecr7-certificate") -Recurse -Force -ErrorAction SilentlyContinue

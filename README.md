@@ -65,11 +65,13 @@ right facts every time. ResumeCR7 solves a different problem:
 
 ### Requirements
 
-For the released Linux AppImage, ResumeCR7 bundles the frontend, the packaged
-FastAPI backend sidecar, and Python application dependencies. PDF rendering is
-the only current feature that needs a host toolchain.
+For the released Linux AppImage and Windows installer, ResumeCR7 bundles the
+frontend, the packaged FastAPI backend sidecar, and Python application
+dependencies. PDF rendering is the only current feature that needs a host
+toolchain - it's fine to run without it if you only need `.tex` output.
 
-To quickly check/install the PDF toolchain on Ubuntu/Debian, you may optain the installation script from the release page or from `packaging/linux/`, then run:
+To quickly check/install the PDF toolchain on Ubuntu/Debian, use the
+installation script from the release page or from `packaging/linux/`, then run:
 
 ```bash
 bash /path/to/install-pdf-dependencies.sh
@@ -110,10 +112,11 @@ Open the Vite URL shown by npm.
 
 ### Desktop App
 
-The packaged desktop build currently targets Linux AppImage. Windows and macOS
-desktop builds are planned, but not part of the current release.
+The packaged desktop release targets Linux AppImage and a signed Windows NSIS
+setup installer. macOS desktop builds are planned, but not part of the current
+release.
 
-For released Linux AppImage users, no Python, uv, Node.js, npm, or PyInstaller
+**For released Linux AppImage users**, no Python, uv, Node.js, npm, or PyInstaller
 installation is required. On Ubuntu/Debian, install the PDF rendering toolchain
 only if you want to use **Generate PDF**:
 
@@ -129,12 +132,24 @@ bash resumecr7-check-pdf-dependencies.sh
 
 From a source checkout, use the matching scripts under `packaging/linux/`.
 
+**For released Windows installer users**, no Python, uv, Node.js, npm, or
+PyInstaller installation is required. Install MiKTeX or TeX Live only if you
+want to use **Generate PDF**.
+
+You can verify the Windows PDF toolchain without changing the system:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File resumecr7-check-pdf-dependencies.ps1
+```
+
+From a source checkout, use `packaging/windows/check-pdf-dependencies.ps1`.
+
 Build the Linux desktop app from the frontend directory:
 
 ```bash
 cd frontend
 npm install
-npm run desktop:build
+npm run desktop:build:linux
 ```
 
 On Ubuntu, Tauri builds require WebView/GTK dependencies:
@@ -150,6 +165,19 @@ sudo apt-get install -y \
   librsvg2-dev
 ```
 
+Build the Windows desktop app from the frontend directory on a Windows machine:
+
+```powershell
+cd frontend
+npm install
+npm run desktop:build:windows
+```
+
+Windows release signing uses a PFX code-signing certificate imported into the
+current-user certificate store during CI. Configure GitHub secrets
+`WINDOWS_CERTIFICATE` and `WINDOWS_CERTIFICATE_PASSWORD` before publishing a
+tagged Windows release.
+
 The desktop shell starts a bundled backend sidecar on `127.0.0.1`, waits for
 `/health`, and passes the backend URL to the frontend.
 
@@ -160,7 +188,7 @@ development, the default is the repository `user/` directory. In the packaged
 desktop app, Tauri provides the OS app-data directory for
 `com.resumecr7.desktop`.
 
-Current Linux desktop location and planned Windows/macOS locations:
+Current desktop data locations:
 
 ```text
 Linux:   $XDG_DATA_HOME/com.resumecr7.desktop or ~/.local/share/com.resumecr7.desktop
@@ -314,9 +342,8 @@ Start architecture work with `docs/architecture-overview.md` and
 
 Near-term work:
 
-- Support for Windows and macOS desktop builds.
-- Signed installers before broad desktop distribution.
-- Automatic updater integration.
+- Support for macOS desktop builds.
+- Automatic updater integration after signed installer releases are stable.
 - Async generation-run lifecycle after the local facade shape stabilizes.
 - Easier manipulation, editing of generated resume, maybe a real-time editor.
 - Quicker generation with multithreaded or multiprocess LLM calls.

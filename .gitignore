@@ -13,6 +13,7 @@ app/skill_selection/data/embeddings/
 build/desktop-sidecar/
 frontend/src-tauri/target/
 frontend/src-tauri/binaries/resumecr7-backend-*
+frontend/src-tauri/tauri.windows.signing.conf.json
 
 .vscode
 

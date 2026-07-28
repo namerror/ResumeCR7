@@ -78,12 +78,43 @@ bash -n packaging/linux/*.sh
 bash packaging/linux/check-pdf-dependencies.sh
 ```
 
+Validate the Windows PDF dependency checker syntax from PowerShell:
+
+```powershell
+$errors = $null
+[System.Management.Automation.PSParser]::Tokenize((Get-Content packaging/windows/check-pdf-dependencies.ps1 -Raw), [ref]$errors) | Out-Null
+if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+```
+
 On Ubuntu/Debian, install the PDF runtime dependencies used by the released
 AppImage:
 
 ```bash
 bash packaging/linux/install-pdf-dependencies.sh
 ```
+
+On Windows, install MiKTeX or TeX Live only when PDF rendering is needed, then
+verify the toolchain:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging/windows/check-pdf-dependencies.ps1
+```
+
+Build platform desktop bundles from `frontend/`:
+
+```bash
+npm run desktop:build:linux
+```
+
+```powershell
+npm run desktop:build:windows
+```
+
+Windows release signing requires GitHub secrets `WINDOWS_CERTIFICATE` containing
+a base64-encoded PFX and `WINDOWS_CERTIFICATE_PASSWORD` containing its export
+password. The Windows release workflow imports the certificate into
+`Cert:\CurrentUser\My`, writes a temporary Tauri signing overlay, and builds the
+signed NSIS installer on `windows-latest`.
 
 ## Documentation
 

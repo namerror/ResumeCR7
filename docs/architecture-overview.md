@@ -30,6 +30,10 @@ This document maps the current ResumeCR7 structure so agents can move quickly ac
   - legacy compatibility shims plus the local CLI entrypoint
 - `resume_generation/`
   - legacy compatibility shims for existing imports and local module entrypoints
+- `frontend/src-tauri/`
+  - Tauri v2 desktop shell, platform bundle config, and packaged FastAPI sidecar launch
+- `packaging/`
+  - OS-specific helper scripts for checking or installing optional PDF rendering dependencies
 - `app/skill_selection/selector.py`
   - API orchestration for method selection, metrics, logging, and response shaping
 - `app/models.py`, `app/scoring/*`, `app/services/*`
@@ -477,7 +481,24 @@ The recommended service path is to keep FastAPI and add a product-facing facade 
 
 Future async product-facing routes should sit above these capability APIs rather than requiring clients to coordinate every stage call directly.
 
-## 11) Contributor Quick-Read Sequence
+## 11) Desktop Packaging
+
+The desktop product keeps the same local-first runtime on each supported OS:
+Tauri starts the bundled FastAPI sidecar on loopback, sets
+`RESUMECR7_PACKAGED=true`, and points `RESUMECR7_DATA_DIR` at the OS app-data
+directory.
+
+- Linux releases build an AppImage and ship Ubuntu/Debian helper scripts for
+  optional PDF rendering dependencies.
+- Windows releases build a signed NSIS setup installer on a native Windows CI
+  runner. PyInstaller builds the `.exe` sidecar on Windows, and the workflow
+  imports a PFX signing certificate from GitHub secrets before Tauri invokes
+  signtool.
+- PDF rendering remains host-toolchain based. The app can always generate the
+  `.tex` artifact; `latexmk`, `pdflatex`, `kpsewhich`, and template packages are
+  required only for **Generate PDF**.
+
+## 12) Contributor Quick-Read Sequence
 
 1. `AGENTS.md`
 2. `README.md`

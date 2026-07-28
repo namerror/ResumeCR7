@@ -9,6 +9,8 @@
     "sidecar:build": "uv run --project .. --extra desktop python ../scripts/build_desktop_sidecar.py",
     "desktop:dev": "npm run sidecar:build && tauri dev",
     "desktop:build": "npm run sidecar:build && tauri build",
+    "desktop:build:linux": "npm run sidecar:build && tauri build --bundles appimage",
+    "desktop:build:windows": "npm run sidecar:build -- --target-triple x86_64-pc-windows-msvc && tauri build --bundles nsis",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:watch": "vitest"

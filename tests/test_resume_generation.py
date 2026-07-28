@@ -2427,6 +2427,24 @@ def test_render_latex_pdf_local_raises_for_missing_command(monkeypatch, tmp_path
         render_latex_pdf(tex_path, tmp_path / "resume.pdf")
 
 
+def test_render_latex_pdf_missing_command_mentions_windows_checker(monkeypatch, tmp_path):
+    tex_path = tmp_path / "resume.tex"
+    tex_path.write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n")
+
+    def fake_run(command, *, cwd, check, capture_output, text, timeout):
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr("resume_generation.pdf.subprocess.run", fake_run)
+    monkeypatch.setattr(resume_pdf.platform, "system", lambda: "Windows")
+
+    with pytest.raises(LatexPdfPrerequisiteError) as excinfo:
+        render_latex_pdf(tex_path, tmp_path / "resume.pdf")
+
+    message = str(excinfo.value)
+    assert "MiKTeX or TeX Live" in message
+    assert "resumecr7-check-pdf-dependencies.ps1" in message
+
+
 def test_render_latex_pdf_local_classifies_missing_tex_package(monkeypatch, tmp_path):
     tex_path = tmp_path / "resume.tex"
     tex_path.write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n")

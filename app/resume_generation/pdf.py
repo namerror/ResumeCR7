@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -135,12 +136,28 @@ def _is_latex_prerequisite_failure(message: str) -> bool:
 
 
 def _prerequisite_error_message(detail: str) -> str:
+    guidance = _pdf_dependency_guidance()
     return (
-        f"{PDF_PREREQUISITE_ERROR_PREFIX} Install latexmk and TeX Live packages. "
-        "On Ubuntu/Debian, run resumecr7-install-pdf-dependencies.sh from the release assets "
-        "or packaging/linux/install-pdf-dependencies.sh from a source checkout. "
+        f"{PDF_PREREQUISITE_ERROR_PREFIX} {guidance} "
         f"{detail}"
     )
+
+
+def _pdf_dependency_guidance(system_name: str | None = None) -> str:
+    current_system = system_name or platform.system()
+    if current_system == "Linux":
+        return (
+            "Install latexmk and TeX Live packages. On Ubuntu/Debian, run "
+            "resumecr7-install-pdf-dependencies.sh from the release assets or "
+            "packaging/linux/install-pdf-dependencies.sh from a source checkout."
+        )
+    if current_system == "Windows":
+        return (
+            "Install latexmk and a TeX distribution such as MiKTeX or TeX Live. "
+            "Run resumecr7-check-pdf-dependencies.ps1 from the release assets or "
+            "packaging/windows/check-pdf-dependencies.ps1 from a source checkout."
+        )
+    return "Install latexmk and a TeX distribution that provides the ResumeCR7 template packages."
 
 
 def main() -> Path:

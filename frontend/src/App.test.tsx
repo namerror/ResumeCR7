@@ -251,7 +251,7 @@ describe("App", () => {
 
     expect(
       await screen.findByText(
-        "PDF rendering dependencies are missing. On Ubuntu/Debian, run resumecr7-install-pdf-dependencies.sh, then try Generate PDF again.",
+        "PDF rendering dependencies are missing. Install latexmk and a TeX distribution, then try Generate PDF again.",
       ),
     ).toBeTruthy();
   });
