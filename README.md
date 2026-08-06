@@ -279,6 +279,14 @@ OPENAI_API_KEY=your_key_here
 job-focus generation, bullet generation, and enabled link scanning. Baseline
 paths remain functional without it.
 
+HTTP clients used by LLM-backed features also honor standard proxy environment
+variables, including `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`
+and their lowercase variants. For HTTP/HTTPS proxies, set proxy URLs with an
+`http://` or `https://` scheme. If `ALL_PROXY` or another proxy variable uses a
+SOCKS scheme such as `socks://`, `socks5://`, or `socks5h://`, the Python
+environment must include SOCKS support through the declared `httpx[socks]`
+dependency.
+
 ## Repository Structure
 
 ```text

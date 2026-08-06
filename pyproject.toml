@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.128,<0.129",
-    "httpx>=0.28,<0.29",
+    "httpx[socks]>=0.28,<0.29",
     "numpy>=2.4,<2.5",
     "openai>=2.24,<2.25",
     "prompt_toolkit>=3.0,<3.1",

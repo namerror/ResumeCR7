@@ -27,6 +27,19 @@ def test_pyproject_exposes_package_metadata():
     assert __version__
 
 
+def test_python_dependencies_include_httpx_socks_support():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    requirements = Path("requirements.txt").read_text(encoding="utf-8").splitlines()
+
+    assert any(
+        dependency.startswith("httpx[socks]")
+        for dependency in pyproject["project"]["dependencies"]
+    )
+    assert any(
+        requirement.startswith("httpx[socks]==") for requirement in requirements
+    )
+
+
 def test_pyproject_exposes_expected_console_scripts():
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
