@@ -81,9 +81,15 @@ def test_build_bulletpoint_instructions_distinguishes_exact_and_flexible_counts(
 
     assert "Return exactly 3 bullet point strings." in exact
     assert "Return between 2 and 4 bullet point strings" in flexible
-    assert "mostly raw, human-written factual context" in exact
-    assert "should not copy its logic, tone, or wording" in exact
-    assert "recruiting-relevant information from the live evidence" in exact
+    assert "raw factual notes" in exact
+    assert "do not copy the evidence wording, structure, or tone" in exact
+    assert "action + purpose/context + method/tool + supported impact" in exact
+    assert "Target 18 to 26 words and never exceed 32 words" in exact
+    assert "Use metrics only when the evidence supports them" in exact
+    assert "make the first bullet explain what the project/system does" in exact
+    assert "Do not use semicolons" in exact
+    assert "Do not use internal dash separators" in exact
+    assert "Vary the opening verbs across bullets" in exact
     assert "Use plain ASCII text only" in exact
     assert "pdfLaTeX" in exact
     assert "approximation signs" in exact
