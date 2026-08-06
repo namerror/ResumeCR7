@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from app.runtime_data import bootstrap_runtime_data
 from app.resume_evidence import (
     EducationFile,
     ExperienceFile,
+    ExperienceRecord,
     UserInfoFile,
     load_registered_evidence,
 )
@@ -42,6 +44,7 @@ from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor,
 DEFAULT_RESUME_RESULT_ARTIFACT_PATH = settings.resume_result_artifact_path
 DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH = settings.resume_run_manifest_artifact_path
 logger = logging.getLogger("resume_generation")
+_RESUME_DATE_PATTERN = re.compile(r"^\s*(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?\s*$")
 
 
 def resolve_resume_result_artifact_path(path: Path | str | None = None) -> Path:
@@ -67,10 +70,70 @@ def _select_resume_experience(
     *,
     top_n: int | None,
 ) -> ExperienceFile:
-    active_records = [item for item in experience.experience if item.active]
+    active_records = sorted(
+        (item for item in experience.experience if item.active),
+        key=_experience_order_key,
+    )
     if top_n is not None:
         active_records = active_records[:top_n]
     return ExperienceFile(schema_version=experience.schema_version, experience=active_records)
+
+
+def _experience_order_key(
+    item: ExperienceRecord,
+) -> tuple[tuple[int, int, int, str], tuple[int, int, int, str]]:
+    return (
+        _resume_date_desc_key(item.end, none_is_latest=True, missing_parts_latest=True),
+        _resume_date_asc_key(item.start, missing_parts_latest=False),
+    )
+
+
+def _resume_date_asc_key(
+    value: str,
+    *,
+    missing_parts_latest: bool,
+) -> tuple[int, int, int, str]:
+    year, month, day, fallback = _resume_date_parts(
+        value,
+        missing_parts_latest=missing_parts_latest,
+    )
+    return (year, month, day, fallback)
+
+
+def _resume_date_desc_key(
+    value: str | None,
+    *,
+    none_is_latest: bool,
+    missing_parts_latest: bool,
+) -> tuple[int, int, int, str]:
+    if value is None:
+        sentinel = 9999 if none_is_latest else -9999
+        return (-sentinel, -12, -31, "")
+    year, month, day, fallback = _resume_date_parts(
+        value,
+        missing_parts_latest=missing_parts_latest,
+    )
+    return (-year, -month, -day, fallback)
+
+
+def _resume_date_parts(
+    value: str,
+    *,
+    missing_parts_latest: bool,
+) -> tuple[int, int, int, str]:
+    match = _RESUME_DATE_PATTERN.match(value)
+    if match is None:
+        return (0, 0, 0, value.strip().lower())
+
+    month_default = 12 if missing_parts_latest else 1
+    day_default = 31 if missing_parts_latest else 1
+    year, month, day = match.groups()
+    return (
+        int(year),
+        int(month) if month is not None else month_default,
+        int(day) if day is not None else day_default,
+        "",
+    )
 
 
 def write_resume_result_artifact(

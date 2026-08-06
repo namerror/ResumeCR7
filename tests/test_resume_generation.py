@@ -302,54 +302,77 @@ def _loaded_evidence(
 @pytest.mark.parametrize(
     ("top_n", "expected_ids"),
     [
-        (None, ["backend-engineer", "platform-engineer"]),
+        (
+            None,
+            [
+                "backend-engineer",
+                "recent-ended-role",
+                "early-start-same-end",
+                "platform-engineer",
+            ],
+        ),
         (0, []),
         (1, ["backend-engineer"]),
-        (2, ["backend-engineer", "platform-engineer"]),
+        (2, ["backend-engineer", "recent-ended-role"]),
     ],
 )
-def test_select_resume_experience_caps_active_records_in_order(
+def test_select_resume_experience_orders_latest_experiences_first(
     tmp_path,
     top_n,
     expected_ids,
 ):
+    def experience_record(
+        *,
+        record_id: str,
+        active: bool,
+        start: str,
+        end: str | None,
+    ) -> dict:
+        return {
+            "id": record_id,
+            "name": f"{record_id} Company",
+            "role": "Engineer",
+            "summary": "Built platform tooling.",
+            "highlights": ["Improved deployment workflows."],
+            "active": active,
+            "skills": {
+                "technology": ["Kubernetes"],
+                "programming": ["Python"],
+                "concepts": ["CI/CD"],
+            },
+            "location": "Remote",
+            "start": start,
+            "end": end,
+            "links": None,
+        }
+
     experience_payload = _experience_payload()
     experience_payload["experience"].extend(
         [
-            {
-                "id": "inactive-role",
-                "name": "Inactive Company",
-                "role": "Frontend Engineer",
-                "summary": "Older inactive experience.",
-                "highlights": ["This should not generate."],
-                "active": False,
-                "skills": {
-                    "technology": ["Angular"],
-                    "programming": ["JavaScript"],
-                    "concepts": ["UI"],
-                },
-                "location": "Remote",
-                "start": "2022",
-                "end": "2023",
-                "links": None,
-            },
-            {
-                "id": "platform-engineer",
-                "name": "Platform Company",
-                "role": "Platform Engineer",
-                "summary": "Built platform tooling.",
-                "highlights": ["Improved deployment workflows."],
-                "active": True,
-                "skills": {
-                    "technology": ["Kubernetes"],
-                    "programming": ["Python"],
-                    "concepts": ["CI/CD"],
-                },
-                "location": "Remote",
-                "start": "2023",
-                "end": "2024",
-                "links": None,
-            },
+            experience_record(
+                record_id="inactive-role",
+                active=False,
+                start="2026",
+                end=None,
+            ),
+            experience_record(
+                record_id="platform-engineer",
+                active=True,
+                start="2023",
+                end="2024",
+            ),
+            experience_record(
+                record_id="early-start-same-end",
+                active=True,
+                start="2021",
+                end="2024",
+            ),
+            experience_record(
+                record_id="recent-ended-role",
+                active=True,
+                start="2025",
+                end="2026",
+            ),
         ]
     )
     experience_path = _write_yaml(tmp_path / "experience.yaml", experience_payload)
