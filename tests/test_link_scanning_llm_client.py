@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import app.link_scanning.llm_client as link_llm_client
+from app.link_scanning.github_client import GitHubRepoContext, GitHubRepoFileContext
 from app.link_scanning.llm_client import (
     LinkScanningLLMClientError,
     build_link_scan_instructions,
@@ -17,6 +18,11 @@ from app.link_scanning.llm_client import (
     scan_evidence_links_with_llm,
 )
 from resume_evidence.models import ExperienceRecord, ProjectRecord, ProjectSkills
+
+
+@pytest.fixture(autouse=True)
+def _disable_github_token(monkeypatch):
+    monkeypatch.setattr(link_llm_client, "get_github_token", lambda: "")
 
 
 def _project() -> ProjectRecord:
@@ -51,6 +57,24 @@ def _github_project() -> ProjectRecord:
             "https://github.com/openai/resumecr7",
             "https://example.com/resumecr7",
         ],
+    )
+
+
+def _github_context() -> GitHubRepoContext:
+    return GitHubRepoContext(
+        repo_scope="https://github.com/openai/resumecr7",
+        owner="openai",
+        repo="resumecr7",
+        default_branch="main",
+        html_url="https://github.com/openai/resumecr7",
+        description="Resume evidence workbench.",
+        files=(
+            GitHubRepoFileContext(
+                path="README.md",
+                html_url="https://github.com/openai/resumecr7/blob/main/README.md",
+                text="ResumeCR7 is a FastAPI and React workbench for grounded resume evidence.",
+            ),
+        ),
     )
 
 
@@ -176,6 +200,44 @@ def test_build_link_scan_prompt_payload_marks_github_repo_targets():
     assert any("architecture" in rule for rule in payload["grounding_rules"])
 
 
+def test_build_link_scan_prompt_payload_includes_authorized_github_context():
+    payload = json.loads(
+        build_link_scan_prompt_payload(
+            evidence_type="project",
+            evidence=_github_project(),
+            requested_highlight_count=6,
+            authorized_github_contexts=[_github_context()],
+            web_search_enabled=False,
+        )
+    )
+
+    assert payload["scan_targets"][0]["instructions"].startswith(
+        "Use the supplied authorized_github_repositories context"
+    )
+    assert payload["authorized_github_repositories"] == [
+        {
+            "repo_scope": "https://github.com/openai/resumecr7",
+            "owner": "openai",
+            "repo": "resumecr7",
+            "default_branch": "main",
+            "html_url": "https://github.com/openai/resumecr7",
+            "description": "Resume evidence workbench.",
+            "files": [
+                {
+                    "path": "README.md",
+                    "source_url": "https://github.com/openai/resumecr7/blob/main/README.md",
+                    "text": (
+                        "ResumeCR7 is a FastAPI and React workbench for grounded resume evidence."
+                    ),
+                }
+            ],
+        }
+    ]
+    assert payload["grounding_rules"][0].startswith(
+        "Read supplied GitHub repository targets"
+    )
+
+
 def test_build_link_scan_instructions_forbids_skill_addition():
     instructions = build_link_scan_instructions()
 
@@ -202,6 +264,21 @@ def test_build_link_scan_response_create_kwargs_uses_web_search_and_strict_schem
     assert kwargs["temperature"] == 0
     assert kwargs["text"]["format"]["name"] == "link_evidence_enrichment"
     assert kwargs["text"]["format"]["strict"] is True
+
+
+def test_build_link_scan_response_create_kwargs_can_disable_web_search():
+    kwargs = build_link_scan_response_create_kwargs(
+        model="test-model",
+        instructions="instructions",
+        prompt_payload="{}",
+        schema=build_link_scan_schema(),
+        max_output_tokens=444,
+        use_web_search=False,
+    )
+
+    assert "tools" not in kwargs
+    assert "tool_choice" not in kwargs
+    assert "include" not in kwargs
 
 
 def test_resolve_link_scan_max_output_tokens_uses_dynamic_highlight_budget(monkeypatch):
@@ -331,6 +408,73 @@ def test_scan_evidence_links_with_llm_accepts_same_github_repo_source(monkeypatc
     assert result.metadata["scan_targets"][0]["repo_scope"] == (
         "https://github.com/openai/resumecr7"
     )
+
+
+def test_scan_evidence_links_with_llm_uses_authorized_github_context_without_web_search(
+    monkeypatch,
+):
+    captured = {}
+    project = ProjectRecord(
+        id="resumecr7",
+        name="ResumeCR7",
+        summary="FastAPI resume engine for grounded resume generation.",
+        highlights=["Built project and skill selection APIs."],
+        active=True,
+        skills=ProjectSkills(
+            technology=["FastAPI"],
+            programming=["Python"],
+            concepts=["API"],
+        ),
+        links=["https://github.com/openai/resumecr7"],
+    )
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {
+                        "highlights": [
+                            {
+                                "text": "README shows ResumeCR7 uses FastAPI and React for grounded resume evidence.",
+                                "source_url": "https://github.com/openai/resumecr7/blob/main/README.md",
+                            }
+                        ]
+                    }
+                ),
+                output=[],
+                usage=SimpleNamespace(input_tokens=30, output_tokens=12, total_tokens=42),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    def fake_fetch_github_repo_context(**kwargs):
+        captured["github_fetch"] = kwargs
+        return _github_context()
+
+    monkeypatch.setattr(link_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(link_llm_client.settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(link_llm_client, "get_github_token", lambda: "github-token")
+    monkeypatch.setattr(
+        link_llm_client,
+        "fetch_github_repo_context",
+        fake_fetch_github_repo_context,
+    )
+
+    result = scan_evidence_links_with_llm(
+        evidence_type="project",
+        evidence=project,
+    )
+
+    assert captured["github_fetch"]["token"] == "github-token"
+    kwargs = captured["kwargs"]
+    assert "tools" not in kwargs
+    payload = json.loads(kwargs["input"])
+    assert payload["authorized_github_repositories"][0]["files"][0]["path"] == "README.md"
+    assert result.metadata["web_search_enabled"] is False
+    assert result.metadata["authorized_github_repositories"][0]["file_count"] == 1
 
 
 def test_scan_evidence_links_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):

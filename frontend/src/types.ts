@@ -167,6 +167,7 @@ export interface BulletCountRangeConfig {
 }
 
 export type OpenAIApiKeySource = "environment" | "config" | "none";
+export type GitHubTokenSource = "environment" | "config" | "none";
 
 export interface ConfigDisplayDefaults {
   skill_selection_top_n: string;
@@ -197,6 +198,9 @@ export interface ResumeGenerationConfig {
   openai_api_key_configured: boolean;
   openai_api_key_saved: boolean;
   openai_api_key_source: OpenAIApiKeySource;
+  github_token_configured: boolean;
+  github_token_saved: boolean;
+  github_token_source: GitHubTokenSource;
   display_defaults: ConfigDisplayDefaults;
   default_values: ConfigDefaultValues;
 }
@@ -210,5 +214,9 @@ export interface ResumeGenerationConfigPatch {
   openai?: {
     api_key?: string | null;
     clear_api_key?: boolean;
+  };
+  github?: {
+    token?: string | null;
+    clear_token?: boolean;
   };
 }

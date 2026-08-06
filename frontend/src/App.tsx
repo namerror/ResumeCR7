@@ -111,6 +111,8 @@ export default function App({ client = evidenceApi }: AppProps) {
   const [jobTargetDraft, setJobTargetDraft] = useState<JobTarget | null>(null);
   const [openAiKeyDraft, setOpenAiKeyDraft] = useState("");
   const [clearOpenAiKey, setClearOpenAiKey] = useState(false);
+  const [githubTokenDraft, setGithubTokenDraft] = useState("");
+  const [clearGithubToken, setClearGithubToken] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("user");
   const [selectedIds, setSelectedIds] = useState<SelectedIds>({});
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("checking");
@@ -143,6 +145,8 @@ export default function App({ client = evidenceApi }: AppProps) {
     setConfigDraft(cloneEvidence(config));
     setOpenAiKeyDraft("");
     setClearOpenAiKey(false);
+    setGithubTokenDraft("");
+    setClearGithubToken(false);
   }, []);
 
   const resetJobTarget = useCallback((jobTarget: JobTarget) => {
@@ -188,7 +192,11 @@ export default function App({ client = evidenceApi }: AppProps) {
     () => configExposedValuesChanged(configBaseline, configDraft),
     [configBaseline, configDraft],
   );
-  const configSecretDirty = openAiKeyDraft.trim().length > 0 || clearOpenAiKey;
+  const configSecretDirty =
+    openAiKeyDraft.trim().length > 0 ||
+    clearOpenAiKey ||
+    githubTokenDraft.trim().length > 0 ||
+    clearGithubToken;
   const configDirty = configValuesDirty || configSecretDirty;
   const jobTargetDirty = useMemo(
     () =>
@@ -289,6 +297,8 @@ export default function App({ client = evidenceApi }: AppProps) {
             draft: configDraft,
             openAiKeyDraft,
             clearOpenAiKey,
+            githubTokenDraft,
+            clearGithubToken,
           }),
         );
         operationCount += 1;
@@ -671,14 +681,32 @@ export default function App({ client = evidenceApi }: AppProps) {
               ) : null}
               {activeSection === "config" ? (
                 <ConfigEditor
+                  clearGithubToken={clearGithubToken}
                   clearOpenAiKey={clearOpenAiKey}
                   config={configDraft}
+                  githubTokenDraft={githubTokenDraft}
                   openAiKeyDraft={openAiKeyDraft}
                   onChange={mutateConfig}
+                  onClearGithubToken={(value) => {
+                    setClearGithubToken(value);
+                    if (value) {
+                      setGithubTokenDraft("");
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
                   onClearOpenAiKey={(value) => {
                     setClearOpenAiKey(value);
                     if (value) {
                       setOpenAiKeyDraft("");
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
+                  onGithubTokenChange={(value) => {
+                    setGithubTokenDraft(value);
+                    if (value.trim()) {
+                      setClearGithubToken(false);
                     }
                     setApplyError(null);
                     setMessage(null);
@@ -987,22 +1015,31 @@ function ResumeGenerationPanel({
 }
 
 function ConfigEditor({
+  clearGithubToken,
   clearOpenAiKey,
   config,
+  githubTokenDraft,
   openAiKeyDraft,
   onChange,
+  onClearGithubToken,
   onClearOpenAiKey,
+  onGithubTokenChange,
   onOpenAiKeyChange,
 }: {
+  clearGithubToken: boolean;
   clearOpenAiKey: boolean;
   config: ResumeGenerationConfig;
+  githubTokenDraft: string;
   openAiKeyDraft: string;
   onChange: (mutator: (next: ResumeGenerationConfig) => void) => void;
+  onClearGithubToken: (value: boolean) => void;
   onClearOpenAiKey: (value: boolean) => void;
+  onGithubTokenChange: (value: string) => void;
   onOpenAiKeyChange: (value: string) => void;
 }) {
   const bulletRange = config.bullet_count_range;
-  const keyStatus = openAiKeyStatus(config, openAiKeyDraft, clearOpenAiKey);
+  const openAiStatus = openAiKeyStatus(config, openAiKeyDraft, clearOpenAiKey);
+  const githubStatus = githubTokenStatus(config, githubTokenDraft, clearGithubToken);
   return (
     <div className="editor-surface">
       <SectionHeader title="Config" eyebrow="Runtime" />
@@ -1141,7 +1178,7 @@ function ConfigEditor({
         <div className="config-section">
           <div className="config-section-header">
             <h3>OpenAI</h3>
-            <span className="config-status">{keyStatus}</span>
+            <span className="config-status">{openAiStatus}</span>
           </div>
           <div className="secret-row">
             <PasswordField
@@ -1163,6 +1200,35 @@ function ConfigEditor({
                 <Trash2 aria-hidden="true" size={16} />
               )}
               {clearOpenAiKey ? "Keep" : "Clear"}
+            </button>
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-section-header">
+            <h3>GitHub</h3>
+            <span className="config-status">{githubStatus}</span>
+          </div>
+          <div className="secret-row">
+            <PasswordField
+              label="GitHub Token"
+              placeholder={config.github_token_configured ? "saved" : "not set"}
+              value={githubTokenDraft}
+              onChange={onGithubTokenChange}
+            />
+            <button
+              className="button secondary compact"
+              disabled={!config.github_token_saved}
+              title={clearGithubToken ? "Keep saved GitHub token" : "Clear saved GitHub token"}
+              type="button"
+              onClick={() => onClearGithubToken(!clearGithubToken)}
+            >
+              {clearGithubToken ? (
+                <RotateCcw aria-hidden="true" size={16} />
+              ) : (
+                <Trash2 aria-hidden="true" size={16} />
+              )}
+              {clearGithubToken ? "Keep" : "Clear"}
             </button>
           </div>
         </div>
@@ -1695,13 +1761,17 @@ function triggerDownload(blob: Blob, filename: string): void {
 
 function buildGenerationConfigPatch({
   baseline,
+  clearGithubToken,
   clearOpenAiKey,
   draft,
+  githubTokenDraft,
   openAiKeyDraft,
 }: {
   baseline: ResumeGenerationConfig;
+  clearGithubToken: boolean;
   clearOpenAiKey: boolean;
   draft: ResumeGenerationConfig;
+  githubTokenDraft: string;
   openAiKeyDraft: string;
 }): ResumeGenerationConfigPatch {
   const patch: ResumeGenerationConfigPatch = {};
@@ -1730,6 +1800,13 @@ function buildGenerationConfigPatch({
     patch.openai = { api_key: trimmedKey };
   } else if (clearOpenAiKey) {
     patch.openai = { clear_api_key: true };
+  }
+
+  const trimmedGithubToken = githubTokenDraft.trim();
+  if (trimmedGithubToken) {
+    patch.github = { token: trimmedGithubToken };
+  } else if (clearGithubToken) {
+    patch.github = { clear_token: true };
   }
 
   return patch;
@@ -1800,6 +1877,26 @@ function openAiKeyStatus(
     return "set by environment";
   }
   if (config.openai_api_key_saved) {
+    return "saved";
+  }
+  return "not set";
+}
+
+function githubTokenStatus(
+  config: ResumeGenerationConfig,
+  githubTokenDraft: string,
+  clearGithubToken: boolean,
+): string {
+  if (clearGithubToken) {
+    return "will clear";
+  }
+  if (githubTokenDraft.trim()) {
+    return config.github_token_saved ? "will replace" : "will save";
+  }
+  if (config.github_token_source === "environment") {
+    return "set by environment";
+  }
+  if (config.github_token_saved) {
     return "saved";
   }
   return "not set";

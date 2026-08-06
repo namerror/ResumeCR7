@@ -383,7 +383,7 @@ Implemented now:
 - `app.resume_generation.assembly` builds the typed intermediate resume result.
 - `app.resume_generation.latex` renders the current LaTeX artifact.
 - `app.resume_generation.pdf` renders configured/default `.tex` artifacts to PDF.
-- `app.resume_generation.enrich` scans project and experience links in batch and can append unique highlights to YAML evidence.
+- `app.resume_generation.enrich` scans project and experience links in batch and can append unique highlights to YAML evidence; GitHub repository links can use authorized REST context from `app.link_scanning`.
 - `app.resume_generation.api` exposes `/resume-generation/enrich-link-evidence`, `/resume-generation/tex`, and `/resume-generation/pdf`.
 - `app.resume_generation.cache` can reuse compatible stage responses across runs.
 - Top-level `resume_generation` modules are compatibility shims for existing imports and `python -m resume_generation.*`.

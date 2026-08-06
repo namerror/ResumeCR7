@@ -183,6 +183,27 @@ class ConfigOpenAIPatch(StrictSchemaModel):
         return self
 
 
+class ConfigGitHubPatch(StrictSchemaModel):
+    token: str | None = None
+    clear_token: bool = False
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("token must not be empty; use clear_token to remove it")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_clear_or_replace(self) -> "ConfigGitHubPatch":
+        if self.clear_token and "token" in self.model_fields_set:
+            raise ValueError("Provide either token or clear_token, not both")
+        return self
+
+
 class ResumeGenerationConfigPatch(StrictSchemaModel):
     skill_selection: ConfigSkillSelectionValues | None = None
     project_selection: ConfigProjectSelectionValues | None = None
@@ -190,6 +211,7 @@ class ResumeGenerationConfigPatch(StrictSchemaModel):
     link_scanning: ConfigLinkScanningValues | None = None
     bullet_count_range: BulletCountRangeConfig | None = None
     openai: ConfigOpenAIPatch | None = None
+    github: ConfigGitHubPatch | None = None
 
 
 class ConfigDisplayDefaults(StrictSchemaModel):
@@ -221,6 +243,9 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     openai_api_key_configured: bool
     openai_api_key_saved: bool
     openai_api_key_source: Literal["environment", "config", "none"]
+    github_token_configured: bool
+    github_token_saved: bool
+    github_token_source: Literal["environment", "config", "none"]
     display_defaults: ConfigDisplayDefaults
     default_values: ConfigDefaultValues
 
@@ -251,10 +276,12 @@ async def patch_resume_generation_config(
     request: Request,
     payload: ResumeGenerationConfigPatch,
 ) -> ResumeGenerationConfigResponse:
-    if _patch_changes_openai_key(payload) and not _is_secure_config_request(request):
+    if (
+        _patch_changes_openai_key(payload) or _patch_changes_github_token(payload)
+    ) and not _is_secure_config_request(request):
         raise HTTPException(
             status_code=403,
-            detail="OpenAI API key updates require HTTPS or a local loopback request.",
+            detail="Secret updates require HTTPS or a local loopback request.",
         )
 
     try:
@@ -375,6 +402,13 @@ def _apply_config_patch(
         elif "api_key" in patch.openai.model_fields_set:
             updated["openai"]["api_key"] = patch.openai.api_key
 
+    if patch.github is not None:
+        updated.setdefault("github", {})
+        if patch.github.clear_token:
+            updated["github"]["token"] = None
+        elif "token" in patch.github.model_fields_set:
+            updated["github"]["token"] = patch.github.token
+
     return updated
 
 
@@ -382,6 +416,7 @@ def _config_response(
     config: ResumeGenerationConfig,
 ) -> ResumeGenerationConfigResponse:
     openai_source = _openai_api_key_source(config)
+    github_source = _github_token_source(config)
     return ResumeGenerationConfigResponse(
         schema_version=1,
         config_path=str(resolve_generation_config_path()),
@@ -402,6 +437,9 @@ def _config_response(
         openai_api_key_configured=openai_source != "none",
         openai_api_key_saved=bool(config.openai.api_key),
         openai_api_key_source=openai_source,
+        github_token_configured=github_source != "none",
+        github_token_saved=bool(config.github.token),
+        github_token_source=github_source,
         display_defaults=_config_display_defaults(),
         default_values=_config_default_values(),
     )
@@ -448,6 +486,18 @@ def _openai_api_key_source(
     return "none"
 
 
+def _github_token_source(
+    config: ResumeGenerationConfig,
+) -> Literal["environment", "config", "none"]:
+    if getattr(settings, "RESUMECR7_GITHUB_TOKEN", "").strip():
+        return "environment"
+    if getattr(settings, "GITHUB_TOKEN", "").strip():
+        return "environment"
+    if config.github.token:
+        return "config"
+    return "none"
+
+
 def _job_target_response(job_target: JobTarget) -> JobTargetResponse:
     return JobTargetResponse(
         schema_version=job_target.schema_version,
@@ -461,6 +511,12 @@ def _patch_changes_openai_key(payload: ResumeGenerationConfigPatch) -> bool:
     if payload.openai is None:
         return False
     return payload.openai.clear_api_key or "api_key" in payload.openai.model_fields_set
+
+
+def _patch_changes_github_token(payload: ResumeGenerationConfigPatch) -> bool:
+    if payload.github is None:
+        return False
+    return payload.github.clear_token or "token" in payload.github.model_fields_set
 
 
 def _is_secure_config_request(request: Request) -> bool:

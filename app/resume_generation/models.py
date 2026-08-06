@@ -348,9 +348,22 @@ class OpenAIConfig(StrictSchemaModel):
         return normalized or None
 
 
+class GitHubConfig(StrictSchemaModel):
+    token: str | None = None
+
+    @field_validator("token")
+    @classmethod
+    def validate_token(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class ResumeGenerationConfig(StrictSchemaModel):
     schema_version: Literal[1]
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
     app: GenerationAppConfig = Field(default_factory=GenerationAppConfig)
     skill_selection: SkillSelectionConfig = Field(default_factory=SkillSelectionConfig)
     project_selection: ProjectSelectionConfig = Field(default_factory=ProjectSelectionConfig)

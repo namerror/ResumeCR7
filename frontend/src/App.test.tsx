@@ -311,6 +311,8 @@ describe("App", () => {
     expect(screen.getAllByText("3 to 3 (default)").length).toBeGreaterThan(0);
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).type).toBe("password");
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("GitHub Token") as HTMLInputElement).type).toBe("password");
+    expect((screen.getByLabelText("GitHub Token") as HTMLInputElement).value).toBe("");
   });
 
   it("applies exposed config edits and changed OpenAI keys", async () => {
@@ -323,6 +325,9 @@ describe("App", () => {
     reloadedConfig.openai_api_key_configured = true;
     reloadedConfig.openai_api_key_saved = true;
     reloadedConfig.openai_api_key_source = "config";
+    reloadedConfig.github_token_configured = true;
+    reloadedConfig.github_token_saved = true;
+    reloadedConfig.github_token_source = "config";
     const client = createMockClient(evidence, evidence, config, reloadedConfig);
 
     render(<App client={client} />);
@@ -341,6 +346,9 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("OpenAI API Key"), {
       target: { value: "sk-test" },
     });
+    fireEvent.change(screen.getByLabelText("GitHub Token"), {
+      target: { value: "github_pat_test" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /apply/i }));
 
     await waitFor(() => {
@@ -349,6 +357,7 @@ describe("App", () => {
         project_selection: { top_n: 3 },
         experience_selection: { top_n: 2 },
         openai: { api_key: "sk-test" },
+        github: { token: "github_pat_test" },
       });
     });
   });

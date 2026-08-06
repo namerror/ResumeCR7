@@ -27,6 +27,8 @@ def generation_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", root)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(settings, "RESUMECR7_GITHUB_TOKEN", "")
+    monkeypatch.setattr(settings, "GITHUB_TOKEN", "")
     return root
 
 
@@ -37,6 +39,7 @@ def _write_config(path: Path, payload: dict) -> None:
 def test_resume_generation_config_get_redacts_openai_key(generation_root):
     payload = default_generation_config_payload()
     payload["openai"]["api_key"] = "sk-secret"
+    payload["github"]["token"] = "github-secret"
     payload["project_selection"]["top_n"] = None
     _write_config(generation_root / "config.yaml", payload)
 
@@ -52,7 +55,11 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["openai_api_key_configured"] is True
     assert data["openai_api_key_saved"] is True
     assert data["openai_api_key_source"] == "config"
+    assert data["github_token_configured"] is True
+    assert data["github_token_saved"] is True
+    assert data["github_token_source"] == "config"
     assert "sk-secret" not in response.text
+    assert "github-secret" not in response.text
 
 
 def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_root):
@@ -122,6 +129,36 @@ def test_resume_generation_config_patch_replaces_and_clears_openai_key(generatio
     assert saved["openai"]["api_key"] is None
 
 
+def test_resume_generation_config_patch_replaces_and_clears_github_token(generation_root):
+    payload = default_generation_config_payload()
+    _write_config(generation_root / "config.yaml", payload)
+
+    replace_response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        json={"github": {"token": "github_pat_new"}},
+    )
+
+    assert replace_response.status_code == 200
+    assert "github_pat_new" not in replace_response.text
+    data = replace_response.json()
+    assert data["github_token_configured"] is True
+    assert data["github_token_saved"] is True
+    assert data["github_token_source"] == "config"
+    saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
+    assert saved["github"]["token"] == "github_pat_new"
+
+    clear_response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        json={"github": {"clear_token": True}},
+    )
+
+    assert clear_response.status_code == 200
+    saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
+    assert saved["github"]["token"] is None
+
+
 def test_resume_generation_config_rejects_api_key_update_over_remote_http(generation_root):
     payload = default_generation_config_payload()
     _write_config(generation_root / "config.yaml", payload)
@@ -131,6 +168,23 @@ def test_resume_generation_config_rejects_api_key_update_over_remote_http(genera
         "/resume-generation/config",
         base_url="http://resumecr7.example",
         json={"openai": {"api_key": "sk-new"}},
+    )
+
+    assert response.status_code == 403
+    assert "HTTPS or a local loopback request" in response.text
+
+
+def test_resume_generation_config_rejects_github_token_update_over_remote_http(
+    generation_root,
+):
+    payload = default_generation_config_payload()
+    _write_config(generation_root / "config.yaml", payload)
+
+    response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        base_url="http://resumecr7.example",
+        json={"github": {"token": "github_pat_new"}},
     )
 
     assert response.status_code == 403

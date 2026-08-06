@@ -153,6 +153,9 @@ describe("evidence api client", () => {
       openai_api_key_configured: false,
       openai_api_key_saved: false,
       openai_api_key_source: "none" as const,
+      github_token_configured: false,
+      github_token_saved: false,
+      github_token_source: "none" as const,
       display_defaults: {
         skill_selection_top_n: "20 (default)",
         project_selection_top_n: "unlimited (default)",
@@ -192,6 +195,7 @@ describe("evidence api client", () => {
     await api.updateGenerationConfig({
       skill_selection: { top_n: 12 },
       openai: { api_key: "sk-test" },
+      github: { token: "github_pat_test" },
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -207,6 +211,7 @@ describe("evidence api client", () => {
         body: JSON.stringify({
           skill_selection: { top_n: 12 },
           openai: { api_key: "sk-test" },
+          github: { token: "github_pat_test" },
         }),
       }),
     );

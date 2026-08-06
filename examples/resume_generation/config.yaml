@@ -1,6 +1,8 @@
 schema_version: 1
 openai:
   api_key: null
+github:
+  token: null
 app:
   base_url: http://127.0.0.1:8000
   timeout_seconds: 120.0

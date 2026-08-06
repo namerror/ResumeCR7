@@ -98,6 +98,9 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
     openai_api_key_configured: false,
     openai_api_key_saved: false,
     openai_api_key_source: "none",
+    github_token_configured: false,
+    github_token_saved: false,
+    github_token_source: "none",
     display_defaults: {
       skill_selection_top_n: "20 (default)",
       project_selection_top_n: "unlimited (default)",

@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT: int = 500
 
     OPENAI_API_KEY: str = ""
+    RESUMECR7_GITHUB_TOKEN: str = ""
+    GITHUB_TOKEN: str = ""
 
     @model_validator(mode="after")
     def resolve_data_roots(self) -> "Settings":
@@ -166,3 +168,31 @@ def _load_openai_api_key_from_generation_config(config_path: Path) -> str:
 
     api_key = openai_config.get("api_key")
     return api_key.strip() if isinstance(api_key, str) else ""
+
+
+def get_github_token(config_path: Path | str | None = None) -> str:
+    for env_name in ("RESUMECR7_GITHUB_TOKEN", "GITHUB_TOKEN"):
+        env_token = getattr(settings, env_name, "")
+        if env_token.strip():
+            return env_token.strip()
+    return _load_github_token_from_generation_config(
+        Path(config_path) if config_path is not None else settings.generation_config_path
+    )
+
+
+def _load_github_token_from_generation_config(config_path: Path) -> str:
+    if not config_path.exists():
+        return ""
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        payload = yaml.safe_load(handle)
+
+    if not isinstance(payload, dict):
+        return ""
+
+    github_config = payload.get("github")
+    if not isinstance(github_config, dict):
+        return ""
+
+    token = github_config.get("token")
+    return token.strip() if isinstance(token, str) else ""

@@ -273,11 +273,17 @@ PROJ_METHOD=llm              # baseline, llm
 DEV_MODE=true
 LOG_LEVEL=INFO
 OPENAI_API_KEY=your_key_here
+RESUMECR7_GITHUB_TOKEN=github_pat_for_private_repo_scanning
 ```
 
 `OPENAI_API_KEY` is only required for embeddings, LLM-backed selection,
 job-focus generation, bullet generation, and enabled link scanning. Baseline
 paths remain functional without it.
+
+Private GitHub repository link scanning can use `RESUMECR7_GITHUB_TOKEN`
+or `GITHUB_TOKEN`, or a saved token in the local generation config. Use a
+fine-grained GitHub token scoped to only the repositories you want ResumeCR7 to
+read, with repository contents read access.
 
 HTTP clients used by LLM-backed features also honor standard proxy environment
 variables, including `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`

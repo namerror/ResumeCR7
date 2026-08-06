@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.data_paths import resolve_default_data_dir
-from app.config import Settings, get_openai_api_key, settings as global_settings
+from app.config import Settings, get_github_token, get_openai_api_key, settings as global_settings
 
 
 SCOPED_ENV_VARS = [
@@ -27,6 +27,8 @@ SCOPED_ENV_VARS = [
     "RESUME_GENERATION_ROOT",
     "RESUMECR7_LOG_DIR",
     "OPENAI_API_KEY",
+    "RESUMECR7_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
 ]
 LEGACY_ENV_VARS = [
     "METHOD",
@@ -295,3 +297,27 @@ def test_get_openai_api_key_prefers_env_over_generation_config(monkeypatch, tmp_
     monkeypatch.setattr(global_settings, "OPENAI_API_KEY", "")
 
     assert get_openai_api_key() == "yaml-key"
+
+
+def test_get_github_token_prefers_env_over_generation_config(monkeypatch, tmp_path):
+    _clear_selection_env(monkeypatch)
+    generation_root = tmp_path / "resume_generation"
+    generation_root.mkdir()
+    (generation_root / "config.yaml").write_text(
+        "schema_version: 1\ngithub:\n  token: yaml-token\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(global_settings, "RESUME_GENERATION_ROOT", generation_root)
+    monkeypatch.setattr(global_settings, "RESUMECR7_GITHUB_TOKEN", " env-token ")
+    monkeypatch.setattr(global_settings, "GITHUB_TOKEN", "")
+
+    assert get_github_token() == "env-token"
+
+    monkeypatch.setattr(global_settings, "RESUMECR7_GITHUB_TOKEN", "")
+    monkeypatch.setattr(global_settings, "GITHUB_TOKEN", " fallback-env-token ")
+
+    assert get_github_token() == "fallback-env-token"
+
+    monkeypatch.setattr(global_settings, "GITHUB_TOKEN", "")
+
+    assert get_github_token() == "yaml-token"

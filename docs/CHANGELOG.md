@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Support authenticated GitHub repository context for link evidence enrichment,
+  including private repositories accessible through a read-only GitHub token.
+
 ### Fixed
 - Support proxy settings that require SOCKS when sending requests to OpenAI endpoints 
 
