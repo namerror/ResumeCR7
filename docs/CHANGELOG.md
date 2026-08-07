@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-08-07
+
+### Added
+- Configurable user-facing resume output directory for generated `.tex` and `.pdf`
+  copies, separate from internal generation artifacts.
+
+### Fixed
+- Descending order of experience entries by latest end date, secondarily by earliest start date.
+- Improved prompt quality for bullet generation, including stricter requirements for bullet length, action verbs, and avoidance of unstructured bullet lists and unclear project purposes or redundant technical details.
+- Improved resume layout formatting by moving the job position next to the company name in "Experience" entries, leaving space for the long skill lists in the second row.
+
 ## [0.1.1] - 2026-08-06
 
 ### Added
