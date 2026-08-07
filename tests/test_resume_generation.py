@@ -2188,9 +2188,12 @@ def test_render_resume_latex_uses_template_sections_and_runtime_result():
         r"\resumeItem{\textbf{Relevant Coursework:} Data Structures, Algorithms}"
         in rendered
     )
+    assert r"\resumeExperienceSubheading" in rendered
+    assert r"{Example Company}{Backend Engineer}{2024 -- Present}" in rendered
+    assert r"{FastAPI, Python}{Example City, ST}" in rendered
     assert (
         r"{Backend Engineer $|$ \emph{FastAPI, Python}}{Example City, ST}"
-        in rendered
+        not in rendered
     )
     assert r"\resumeItem{Designed schema-validated APIs \& workers.}" in rendered
     assert (
@@ -2288,6 +2291,7 @@ def test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffix
     assert r"\newcolumntype{L}{>{\raggedright\arraybackslash}X}" in rendered
     assert r"\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}" in rendered
     assert r"\newcommand{\resumeHeadingRightWidth}{1.75in}" in rendered
+    assert r"\newcommand{\resumeExperienceSubheading}[5]" in rendered
     assert (
         r"\begin{tabularx}{0.97\textwidth}[t]{@{}L R{\resumeHeadingRightWidth}@{}}"
         in rendered
@@ -2297,6 +2301,16 @@ def test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffix
         in rendered
     )
     assert r"\begin{tabularx}{0.97\textwidth}{@{}L@{}}" in rendered
+    assert (
+        r"{Example Company}{Research Software Engineer - Quantum Information}"
+        r"{June 2025 -- August 2025}"
+        in rendered
+    )
+    assert (
+        r"{Julia, Python, Error Correcting Codes, Quantum Error Correction, "
+        r"Distributed Computing"
+        in rendered
+    )
     assert r"\small#1 & #2 \\" not in rendered
     assert r"\begin{tabular*}{0.97\textwidth}" not in rendered
     for skill in long_experience_skills + long_project_skills:

@@ -96,6 +96,14 @@ _LATEX_HEADER = r"""\documentclass[letterpaper,9pt]{article}
 \end{tabularx}\vspace{-7pt}
 }
 
+\newcommand{\resumeExperienceSubheading}[5]{
+\vspace{-2pt}\item
+\begin{tabularx}{0.97\textwidth}[t]{@{}L R{\resumeHeadingRightWidth}@{}}
+\textbf{#1} $|$ \textit{\small #2} & #3 \\
+\textit{\small#4} & \textit{\small #5} \\
+\end{tabularx}\vspace{-7pt}
+}
+
 \newcommand{\resumeSubSubheading}[2]{
 \item
 \begin{tabularx}{0.97\textwidth}{@{}L R{\resumeHeadingRightWidth}@{}}
@@ -307,12 +315,12 @@ def render_experience(items: list[ResumeExperienceItem]) -> str:
     ]
     for item in items:
         role = latex_escape(item.role)
-        skills = _render_skill_suffix(item.skills)
+        skills = _join_escaped(item.skills)
         lines.extend(
             [
-                r"    \resumeSubheading",
-                rf"    {{{latex_escape(item.name)}}}{{{latex_escape(_date_range(item.start, item.end))}}}",
-                rf"    {{{role}{skills}}}{{{latex_escape(item.location)}}}",
+                r"    \resumeExperienceSubheading",
+                rf"    {{{latex_escape(item.name)}}}{{{role}}}{{{latex_escape(_date_range(item.start, item.end))}}}",
+                rf"    {{{skills}}}{{{latex_escape(item.location)}}}",
             ]
         )
         lines.extend(_render_bullet_list(item.bullet_points, indent="    "))
