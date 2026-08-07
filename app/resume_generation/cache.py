@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
@@ -106,6 +106,45 @@ class ResumeGenerationStageCache:
                 )
 
         data = fetch()
+        stored = should_store(data) if should_store is not None else True
+        if stored:
+            self._write(path=path, stage=stage, cache_key=cache_key, data=data)
+        return ResumeGenerationStageCacheResult(
+            data=data,
+            source="http",
+            cache_key=cache_key,
+            stored=stored,
+        )
+
+    async def get_or_store_result_async(
+        self,
+        *,
+        stage: str,
+        payload: dict[str, Any],
+        fetch: Callable[[], Awaitable[dict[str, Any]]],
+        cache_payload: dict[str, Any] | None = None,
+        namespace: str | None = None,
+        should_use_cached: Callable[[dict[str, Any]], bool] | None = None,
+        should_store: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> ResumeGenerationStageCacheResult:
+        cache_key = self.cache_key(
+            stage=stage,
+            payload=cache_payload if cache_payload is not None else payload,
+        )
+        path = self._entry_path(stage=stage, cache_key=cache_key, namespace=namespace)
+
+        if not self.force_refresh:
+            cached_data = self._read(path=path, stage=stage, cache_key=cache_key)
+            if cached_data is not None and (
+                should_use_cached is None or should_use_cached(cached_data)
+            ):
+                return ResumeGenerationStageCacheResult(
+                    data=cached_data,
+                    source="cache",
+                    cache_key=cache_key,
+                )
+
+        data = await fetch()
         stored = should_store(data) if should_store is not None else True
         if stored:
             self._write(path=path, stage=stage, cache_key=cache_key, data=data)

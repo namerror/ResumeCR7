@@ -11,6 +11,7 @@ from app.bulletpoints_generation.models import BulletGenerationRequest
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
     generate_bulletpoints_service,
+    generate_bulletpoints_service_async,
 )
 from app.config import settings
 from app.job_focus_generation.models import JobFocusRequest
@@ -50,6 +51,7 @@ SELECTION_CACHE_IGNORED_FIELDS = {
     "llm_output_token_budget",
 }
 _ORIGINAL_HTTPX_CLIENT = httpx.Client
+_ORIGINAL_HTTPX_ASYNC_CLIENT = httpx.AsyncClient
 
 
 class ResumeGenerationError(RuntimeError):
@@ -97,6 +99,37 @@ class LocalStageClient:
         return _LocalStageResponse(200, response.model_dump(mode="json"))
 
 
+class LocalAsyncStageClient:
+    """Async HTTP-client-shaped adapter for in-process backend stage services."""
+
+    async def __aenter__(self) -> "LocalAsyncStageClient":
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        return None
+
+    async def post(self, endpoint: str, json: dict[str, Any]) -> _LocalStageResponse:
+        try:
+            if endpoint == "/select-skills":
+                response = select_skills_service(SkillSelectRequest.model_validate(json))
+            elif endpoint == "/select-projects":
+                response = select_projects_service(ProjectSelectRequest.model_validate(json))
+            elif endpoint == "/derive-job-focus":
+                response = derive_job_focus_service(JobFocusRequest.model_validate(json))
+            elif endpoint == "/generate-bulletpoints":
+                response = await generate_bulletpoints_service_async(
+                    BulletGenerationRequest.model_validate(json)
+                )
+            else:
+                return _LocalStageResponse(404, {"detail": f"Unknown stage: {endpoint}"})
+        except (BulletPointGenerationError, JobFocusGenerationError) as exc:
+            return _LocalStageResponse(502, {"detail": str(exc)})
+        except ValueError as exc:
+            return _LocalStageResponse(400, {"detail": str(exc)})
+
+        return _LocalStageResponse(200, response.model_dump(mode="json"))
+
+
 def open_stage_client(config: ResumeGenerationConfig, httpx_client: object) -> object:
     if httpx_client is not _ORIGINAL_HTTPX_CLIENT:
         return httpx_client(
@@ -104,6 +137,15 @@ def open_stage_client(config: ResumeGenerationConfig, httpx_client: object) -> o
             timeout=config.app.timeout_seconds,
         )
     return LocalStageClient()
+
+
+def open_async_stage_client(config: ResumeGenerationConfig, httpx_client: object) -> object:
+    if httpx_client is not _ORIGINAL_HTTPX_ASYNC_CLIENT:
+        return httpx_client(
+            base_url=config.app.base_url,
+            timeout=config.app.timeout_seconds,
+        )
+    return LocalAsyncStageClient()
 
 
 def _exclude_none(data: BaseModel) -> dict[str, Any]:
@@ -277,6 +319,31 @@ def _post_json(
     return data
 
 
+async def _post_json_async(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        response = await client.post(endpoint, json=payload)
+    except httpx.HTTPError as exc:
+        raise ResumeGenerationError(f"HTTP request to {endpoint} failed: {exc}") from exc
+
+    if response.status_code >= 400:
+        raise ResumeGenerationError(
+            f"HTTP request to {endpoint} returned {response.status_code}: {response.text}"
+        )
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ResumeGenerationError(f"HTTP response from {endpoint} was not valid JSON") from exc
+
+    if not isinstance(data, dict):
+        raise ResumeGenerationError(f"HTTP response from {endpoint} must be a JSON object")
+    return data
+
+
 def _should_cache_stage_response(
     *,
     stage: str,
@@ -408,6 +475,101 @@ def _cached_post_json(
         namespace=namespace,
         should_use_cached=should_use_cached,
         fetch=lambda: _post_json(client, endpoint, request_payload),
+        should_store=lambda data: _should_cache_stage_response(
+            stage=stage,
+            response_data=data,
+        ),
+    )
+    token_usage = extract_response_token_usage(stage, result.data)
+    if token_usage_monitor is not None:
+        token_usage_monitor.observe(stage, token_usage)
+    cache_status = (
+        "hit"
+        if result.source == "cache"
+        else "skipped"
+        if not result.stored
+        else "refresh"
+        if cache.force_refresh
+        else "miss"
+    )
+    record = {
+        "stage": stage,
+        "endpoint": endpoint,
+        "namespace": namespace,
+        "source": result.source,
+        "cache_status": cache_status,
+        "cache_key": result.cache_key,
+        **_budget_record_fields(
+            payload=payload,
+            response_data=result.data,
+            stage=stage,
+        ),
+        **token_usage.model_dump(),
+    }
+    if stage_response_records is not None:
+        stage_response_records.append(record)
+    logger.info(
+        "resume_generation_stage_response",
+        extra={
+            "event": "resume_generation_stage_response",
+            **record,
+        },
+    )
+    return result.data
+
+
+async def _cached_post_json_async(
+    *,
+    cache: ResumeGenerationStageCache | None,
+    stage: str,
+    client: httpx.AsyncClient,
+    endpoint: str,
+    payload: dict[str, Any],
+    cache_payload: dict[str, Any] | None = None,
+    fetch_payload: dict[str, Any] | None = None,
+    namespace: str | None = None,
+    should_use_cached: Callable[[dict[str, Any]], bool] | None = None,
+    token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
+    stage_response_records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if cache is None:
+        data = await _post_json_async(client, endpoint, payload)
+        token_usage = extract_response_token_usage(stage, data)
+        if token_usage_monitor is not None:
+            token_usage_monitor.observe(stage, token_usage)
+        record = {
+            "stage": stage,
+            "endpoint": endpoint,
+            "namespace": namespace,
+            "source": "http",
+            "cache_status": "disabled",
+            "cache_key": None,
+            **_budget_record_fields(
+                payload=payload,
+                response_data=data,
+                stage=stage,
+            ),
+            **token_usage.model_dump(),
+        }
+        if stage_response_records is not None:
+            stage_response_records.append(record)
+        logger.info(
+            "resume_generation_stage_response",
+            extra={
+                "event": "resume_generation_stage_response",
+                **record,
+            },
+        )
+        return data
+
+    request_payload = fetch_payload if fetch_payload is not None else payload
+    result = await cache.get_or_store_result_async(
+        stage=stage,
+        payload=request_payload,
+        cache_payload=cache_payload,
+        namespace=namespace,
+        should_use_cached=should_use_cached,
+        fetch=lambda: _post_json_async(client, endpoint, request_payload),
         should_store=lambda data: _should_cache_stage_response(
             stage=stage,
             response_data=data,

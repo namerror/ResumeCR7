@@ -28,7 +28,7 @@ from app.resume_generation.latex import (
 from app.resume_generation.main import (
     resolve_resume_result_artifact_path,
     resolve_resume_run_manifest_artifact_path,
-    run_resume_generation_pipeline,
+    run_resume_generation_pipeline_async,
     write_resume_latex_from_config,
 )
 from app.resume_generation.models import (
@@ -586,9 +586,9 @@ async def generate_resume_tex(
     effective_payload = payload or ResumeTexGenerationRequest()
     try:
         if effective_payload.job_target is None:
-            resume_result = run_resume_generation_pipeline()
+            resume_result = await run_resume_generation_pipeline_async()
         else:
-            resume_result = run_resume_generation_pipeline(
+            resume_result = await run_resume_generation_pipeline_async(
                 job_target_override=effective_payload.job_target,
             )
         tex_path = write_resume_latex_from_config(resume_result)

@@ -42,6 +42,8 @@ experience_bullet_point_generation:
   dev_mode: true
   llm_model: gpt-5-mini
   llm_max_output_tokens: null
+concurrency:
+  bullet_point_requests: 3
 cache:
   enabled: true
   path: null

@@ -36,6 +36,7 @@ from app.resume_generation.models import (
     ProjectLinkScanResult,
     ProjectSelectionConfig,
     ProjectSelectionResult,
+    ResumeGenerationConcurrencyConfig,
     ResumeGenerationCacheConfig,
     ResumeEducationItem,
     ResumeExperienceItem,
@@ -49,7 +50,9 @@ from app.resume_generation.models import (
     SkillSelectionResult,
 )
 from app.resume_generation.bullet_points import (
+    generate_experience_bullet_points_async,
     generate_experience_bullet_points,
+    generate_project_bullet_points_async,
     generate_project_bullet_points,
 )
 from app.resume_generation.job_focus import derive_job_focus
@@ -90,6 +93,7 @@ _LAZY_EXPORT_MODULES = {
     "build_resume_run_manifest": ".main",
     "resolve_resume_result_artifact_path": ".main",
     "resolve_resume_run_manifest_artifact_path": ".main",
+    "run_resume_generation_pipeline_async": ".main",
     "run_resume_generation_pipeline": ".main",
     "write_resume_pdf_from_config": ".main",
     "write_resume_result_artifact": ".main",
@@ -139,6 +143,7 @@ __all__ = [
     "ResumeEducationItem",
     "ResumeExperienceItem",
     "ResumeGenerationConfig",
+    "ResumeGenerationConcurrencyConfig",
     "ResumeGenerationError",
     "ResumeOutputConfig",
     "ResumeProjectItem",
@@ -156,7 +161,9 @@ __all__ = [
     "derive_job_focus",
     "ensure_generation_config_defaults",
     "generate_experience_bullet_points",
+    "generate_experience_bullet_points_async",
     "generate_project_bullet_points",
+    "generate_project_bullet_points_async",
     "generate_selection_context",
     "latex_escape",
     "load_generation_config",
@@ -176,6 +183,7 @@ __all__ = [
     "resolve_resume_user_pdf_output_path",
     "run_link_evidence_enrichment",
     "run_resume_generation_pipeline",
+    "run_resume_generation_pipeline_async",
     "write_resume_result_artifact",
     "write_resume_latex_artifact",
     "write_resume_pdf_from_config",

@@ -91,7 +91,7 @@ def _experience_request_payload(**overrides) -> dict:
 def test_generate_bulletpoints_api_success_with_default_count_and_details(monkeypatch):
     captured = {}
 
-    def fake_generate(**kwargs):
+    async def fake_generate(**kwargs):
         captured["count_range"] = kwargs["count_range"]
         return LLMBulletPointResult(
             bullet_points=[
@@ -110,7 +110,7 @@ def test_generate_bulletpoints_api_success_with_default_count_and_details(monkey
         )
 
     before = api_request("GET", "/metrics-lite").json()
-    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", fake_generate)
+    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm_async", fake_generate)
     monkeypatch.setattr(bullet_service.settings, "BULLETPOINTS_DEFAULT_COUNT", 3)
 
     response = api_request("POST", "/generate-bulletpoints", json=_request_payload())
@@ -141,14 +141,14 @@ def test_generate_bulletpoints_api_success_with_default_count_and_details(monkey
 def test_generate_bulletpoints_api_uses_request_count_range(monkeypatch):
     captured = {}
 
-    def fake_generate(**kwargs):
+    async def fake_generate(**kwargs):
         captured["count_range"] = kwargs["count_range"]
         return LLMBulletPointResult(
             bullet_points=["Built APIs.", "Validated evidence."],
             metadata={"model": "test-model", "total_tokens": 0},
         )
 
-    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", fake_generate)
+    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm_async", fake_generate)
 
     response = api_request(
         "POST",
@@ -164,7 +164,7 @@ def test_generate_bulletpoints_api_uses_request_count_range(monkeypatch):
 def test_generate_bulletpoints_api_passes_output_token_budget(monkeypatch):
     captured = {}
 
-    def fake_generate(**kwargs):
+    async def fake_generate(**kwargs):
         captured.update(kwargs)
         return LLMBulletPointResult(
             bullet_points=["Built APIs."],
@@ -176,7 +176,7 @@ def test_generate_bulletpoints_api_passes_output_token_budget(monkeypatch):
             },
         )
 
-    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", fake_generate)
+    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm_async", fake_generate)
 
     response = api_request(
         "POST",
@@ -205,14 +205,14 @@ def test_generate_bulletpoints_api_passes_output_token_budget(monkeypatch):
 def test_generate_bulletpoints_api_accepts_experience_record(monkeypatch):
     captured = {}
 
-    def fake_generate(**kwargs):
+    async def fake_generate(**kwargs):
         captured.update(kwargs)
         return LLMBulletPointResult(
             bullet_points=["Designed schema-validated APIs for backend platforms."],
             metadata={"model": "test-model", "total_tokens": 0},
         )
 
-    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", fake_generate)
+    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm_async", fake_generate)
 
     response = api_request(
         "POST",
@@ -255,10 +255,14 @@ def test_generate_bulletpoints_api_rejects_missing_or_ambiguous_evidence():
 
 
 def test_generate_bulletpoints_api_returns_502_on_llm_failure(monkeypatch):
-    def raise_client_error(**_kwargs):
+    async def raise_client_error(**_kwargs):
         raise BulletPointLLMClientError("network down")
 
-    monkeypatch.setattr(bullet_service, "generate_bulletpoints_with_llm", raise_client_error)
+    monkeypatch.setattr(
+        bullet_service,
+        "generate_bulletpoints_with_llm_async",
+        raise_client_error,
+    )
 
     response = api_request("POST", "/generate-bulletpoints", json=_request_payload())
 

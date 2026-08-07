@@ -42,7 +42,9 @@ from resume_generation import (
     build_skill_selection_payload,
     derive_job_focus,
     generate_experience_bullet_points,
+    generate_experience_bullet_points_async,
     generate_project_bullet_points,
+    generate_project_bullet_points_async,
     generate_selection_context,
     latex_escape,
     load_generation_config,
@@ -553,6 +555,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     )
     assert config.experience_bullet_point_generation.bullet_count_range is not None
     assert config.experience_bullet_point_generation.bullet_count_range.min == 1
+    assert config.concurrency.bullet_point_requests == 3
     assert config.cache.enabled is True
     assert config.cache.force_refresh is False
     assert config.resume_output.path is None
@@ -873,6 +876,16 @@ def test_load_generation_config_rejects_invalid_bullet_count_range(tmp_path):
         load_generation_config(path)
 
 
+def test_load_generation_config_rejects_invalid_bullet_concurrency(tmp_path):
+    path = _write_yaml(
+        tmp_path / "config.yaml",
+        _config_payload(concurrency={"bullet_point_requests": 0}),
+    )
+
+    with pytest.raises(ValidationError, match="concurrency.bullet_point_requests"):
+        load_generation_config(path)
+
+
 def test_load_generation_config_rejects_legacy_shared_bullet_config(tmp_path):
     path = _write_yaml(
         tmp_path / "config.yaml",
@@ -1051,6 +1064,102 @@ def test_generate_project_bullet_points_posts_once_per_selected_project(monkeypa
     assert payload["llm_max_output_tokens"] == 990
     assert [item.project_id for item in result] == ["active-project"]
     assert result[0].bullet_points == ["Generated bullet for active-project."]
+
+
+def test_generate_project_bullet_points_async_limits_concurrency_and_preserves_order(
+    monkeypatch,
+    tmp_path,
+):
+    config_payload = _config_payload(concurrency={"bullet_point_requests": 2})
+    config_path = _write_yaml(tmp_path / "config.yaml", config_payload)
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_payload = _projects_payload()
+    projects_payload["projects"].append(
+        {
+            "id": "second-active-project",
+            "name": "Second Active Project",
+            "summary": "Another FastAPI backend service.",
+            "highlights": ["Built another service."],
+            "active": True,
+            "skills": {
+                "technology": ["FastAPI"],
+                "programming": ["Python"],
+                "concepts": ["API"],
+            },
+            "links": None,
+        }
+    )
+    projects_path = _write_yaml(tmp_path / "projects.yaml", projects_payload)
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+    config = load_generation_config(config_path)
+    job_target = load_job_target(job_path)
+    projects_by_id = _loaded_evidence(projects_path, skills_path)["projects"].projects_by_id()
+    selected_projects = [
+        projects_by_id["active-project"],
+        projects_by_id["second-active-project"],
+    ]
+    current_in_flight = 0
+    max_in_flight = 0
+    requests: list[str] = []
+    stage_response_records: list[dict] = []
+
+    class FakeAsyncClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, endpoint: str, json: dict):
+            nonlocal current_in_flight, max_in_flight
+            project_id = json["project"]["id"]
+            requests.append(project_id)
+            current_in_flight += 1
+            max_in_flight = max(max_in_flight, current_in_flight)
+            await asyncio.sleep(0.03 if project_id == "active-project" else 0.01)
+            current_in_flight -= 1
+            return httpx.Response(
+                200,
+                json={
+                    "bullet_points": [f"Generated bullet for {project_id}."],
+                    "details": {
+                        "method": "llm",
+                        "_bulletpoints_llm": {
+                            "prompt_tokens": 1,
+                            "completion_tokens": 1,
+                            "total_tokens": 2,
+                            "api_calls": 1,
+                            "latency_ms": 10.0,
+                        },
+                    },
+                },
+            )
+
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.AsyncClient", FakeAsyncClient)
+
+    result = asyncio.run(
+        generate_project_bullet_points_async(
+            selected_projects=selected_projects,
+            config=config,
+            job_target=job_target,
+            stage_response_records=stage_response_records,
+        )
+    )
+
+    assert set(requests) == {"active-project", "second-active-project"}
+    assert max_in_flight == 2
+    assert [item.project_id for item in result] == [
+        "active-project",
+        "second-active-project",
+    ]
+    assert [record["namespace"] for record in stage_response_records] == [
+        "active-project",
+        "second-active-project",
+    ]
 
 
 def test_generate_experience_bullet_points_posts_once_per_active_experience(
@@ -4359,9 +4468,12 @@ def api_request(method: str, path: str, **kwargs):
 
 
 def test_generate_bulletpoints_route_logs_http_source(monkeypatch, caplog):
+    async def fake_generate_bulletpoints_service(_payload):
+        return BulletGenerationResponse(bullet_points=["Built APIs."])
+
     monkeypatch.setattr(
-        "app.main.generate_bulletpoints_service",
-        lambda payload: BulletGenerationResponse(bullet_points=["Built APIs."]),
+        "app.main.generate_bulletpoints_service_async",
+        fake_generate_bulletpoints_service,
     )
 
     with caplog.at_level(logging.INFO, logger="app_main"):
@@ -4618,7 +4730,7 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     tex_path.write_text("rendered tex\n", encoding="utf-8")
     calls: list[str] = []
 
-    def fake_run_resume_generation_pipeline():
+    async def fake_run_resume_generation_pipeline():
         calls.append("pipeline")
         return resume_result
 
@@ -4628,7 +4740,7 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
         return tex_path
 
     monkeypatch.setattr(
-        "app.resume_generation.api.run_resume_generation_pipeline",
+        "app.resume_generation.api.run_resume_generation_pipeline_async",
         fake_run_resume_generation_pipeline,
     )
     monkeypatch.setattr(
@@ -4662,7 +4774,7 @@ def test_resume_generation_tex_route_accepts_job_target_override(
     tex_path.write_text("rendered tex\n", encoding="utf-8")
     captured: dict[str, object] = {}
 
-    def fake_run_resume_generation_pipeline(**kwargs):
+    async def fake_run_resume_generation_pipeline(**kwargs):
         captured.update(kwargs)
         return resume_result
 
@@ -4671,7 +4783,7 @@ def test_resume_generation_tex_route_accepts_job_target_override(
         return tex_path
 
     monkeypatch.setattr(
-        "app.resume_generation.api.run_resume_generation_pipeline",
+        "app.resume_generation.api.run_resume_generation_pipeline_async",
         fake_run_resume_generation_pipeline,
     )
     monkeypatch.setattr(

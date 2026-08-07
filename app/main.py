@@ -23,7 +23,7 @@ from app.bulletpoints_generation.models import (
 from app.bulletpoints_generation.llm_client import DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
-    generate_bulletpoints_service,
+    generate_bulletpoints_service_async,
     record_bulletpoint_generation_error,
 )
 from app.link_scanning.models import LinkScanRequest, LinkScanResponse
@@ -171,7 +171,7 @@ async def generate_bulletpoints(payload: BulletGenerationRequest) -> BulletGener
         },
     )
     try:
-        return generate_bulletpoints_service(payload)
+        return await generate_bulletpoints_service_async(payload)
     except ValueError as ve:
         record_bulletpoint_generation_error()
         raise HTTPException(status_code=400, detail=str(ve))

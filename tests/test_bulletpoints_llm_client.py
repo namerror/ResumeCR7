@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ from app.bulletpoints_generation.llm_client import (
     build_bulletpoint_prompt_payload,
     build_bulletpoint_schema,
     generate_bulletpoints_with_llm,
+    generate_bulletpoints_with_llm_async,
     resolve_bulletpoint_max_output_tokens,
 )
 from app.bulletpoints_generation.models import BulletCountRange, BulletJobContext
@@ -205,6 +207,53 @@ def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
     assert result.metadata["total_tokens"] == 30
     assert result.metadata["resolved_llm_max_output_tokens"] == kwargs["max_output_tokens"]
     assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+
+
+def test_generate_bulletpoints_with_llm_async_uses_async_openai(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        async def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {
+                        "bullet_points": [
+                            "Built FastAPI APIs for grounded resume generation.",
+                            "Validated user-authored project evidence for tailored resumes.",
+                        ]
+                    }
+                ),
+                usage=SimpleNamespace(input_tokens=20, output_tokens=10, total_tokens=30),
+            )
+
+    class DummyAsyncOpenAI:
+        def __init__(self, **kwargs):
+            captured["init"] = kwargs
+            captured["closed"] = False
+            self.responses = DummyResponses()
+
+        async def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(bullet_llm_client, "AsyncOpenAI", DummyAsyncOpenAI)
+    monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(bullet_llm_client.settings, "BULLETPOINTS_LLM_MODEL", "test-model")
+
+    result = asyncio.run(
+        generate_bulletpoints_with_llm_async(
+            context=BulletJobContext(title="Backend Engineer"),
+            project=_project(),
+            count_range=BulletCountRange(min=2, max=4),
+        )
+    )
+
+    assert captured["init"]["api_key"] == "test-key"
+    assert captured["kwargs"]["model"] == "test-model"
+    assert captured["kwargs"]["text"]["format"]["name"] == "project_bullet_points"
+    assert captured["closed"] is True
+    assert result.bullet_points[0].startswith("Built FastAPI")
+    assert result.metadata["total_tokens"] == 30
 
 
 def test_resolve_bulletpoint_max_output_tokens_scales_and_caps():

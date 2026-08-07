@@ -307,6 +307,19 @@ class ResumeGenerationCacheConfig(StrictSchemaModel):
         return normalized
 
 
+class ResumeGenerationConcurrencyConfig(StrictSchemaModel):
+    bullet_point_requests: int = 3
+
+    @field_validator("bullet_point_requests")
+    @classmethod
+    def validate_bullet_point_requests(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("concurrency.bullet_point_requests must be greater than or equal to 1")
+        if value > 10:
+            raise ValueError("concurrency.bullet_point_requests must be less than or equal to 10")
+        return value
+
+
 def _default_resume_output_dir() -> str:
     return str(settings.resume_generation_output_root)
 
@@ -427,6 +440,9 @@ class ResumeGenerationConfig(StrictSchemaModel):
     )
     experience_bullet_point_generation: BulletPointGenerationConfig = Field(
         default_factory=BulletPointGenerationConfig
+    )
+    concurrency: ResumeGenerationConcurrencyConfig = Field(
+        default_factory=ResumeGenerationConcurrencyConfig
     )
     cache: ResumeGenerationCacheConfig = Field(default_factory=ResumeGenerationCacheConfig)
     resume_output: ResumeOutputConfig = Field(default_factory=ResumeOutputConfig)

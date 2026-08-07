@@ -1,6 +1,7 @@
 # entry point for resume generation
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -25,7 +26,9 @@ from app.resume_generation.config import (
 )
 from app.resume_generation.assembly import assemble_intermediate_resume_result
 from app.resume_generation.bullet_points import (
+    generate_experience_bullet_points_async,
     generate_experience_bullet_points,
+    generate_project_bullet_points_async,
     generate_project_bullet_points,
 )
 from app.resume_generation.cache import ResumeGenerationStageCache
@@ -66,6 +69,54 @@ def _token_usage_extra(usage: TokenUsage) -> dict[str, int | float]:
         "api_calls": usage.api_calls,
         "latency_ms": round(usage.latency_ms, 3),
     }
+
+
+def _observe_stage_response_records(
+    *,
+    records: list[dict[str, Any]],
+    token_usage_monitor: ResumeGenerationTokenUsageMonitor,
+    stage_response_records: list[dict[str, Any]],
+) -> None:
+    for record in records:
+        stage = record.get("stage")
+        if isinstance(stage, str):
+            token_usage_monitor.observe(
+                stage,
+                TokenUsage(
+                    prompt_tokens=int(record.get("prompt_tokens", 0) or 0),
+                    completion_tokens=int(record.get("completion_tokens", 0) or 0),
+                    total_tokens=int(record.get("total_tokens", 0) or 0),
+                    api_calls=int(record.get("api_calls", 0) or 0),
+                    latency_ms=float(record.get("latency_ms", 0.0) or 0.0),
+                ),
+            )
+        stage_response_records.append(record)
+
+
+async def _gather_resume_generation_tasks(*awaitables: Any) -> list[Any]:
+    tasks = [asyncio.create_task(awaitable) for awaitable in awaitables]
+    try:
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_EXCEPTION,
+        )
+        for task in done:
+            error = task.exception()
+            if error is not None:
+                for pending_task in pending:
+                    pending_task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                raise error
+        if pending:
+            await asyncio.gather(*pending)
+        return [task.result() for task in tasks]
+    except BaseException:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
 
 
 def _select_resume_experience(
@@ -376,6 +427,255 @@ def run_resume_generation_pipeline(
     )
 
     # TODO: optionally overall content validation
+
+    logger.info(
+        "resume_generation_stage_start",
+        extra={"event": "resume_generation_stage_start", "stage": "assembly"},
+    )
+    resume_result = assemble_intermediate_resume_result(
+        user_info=_user_info,
+        education=_education,
+        experience=selected_experience,
+        selection_context=context,
+        selected_projects=context.selected_projects,
+        project_bullet_points=bullet_points,
+        experience_bullet_points=experience_bullet_points,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "assembly",
+            **_token_usage_extra(TokenUsage()),
+        },
+    )
+
+    artifact_path = write_resume_result_artifact(
+        resume_result,
+        resolved_result_artifact_path,
+    )
+    logger.info(
+        "resume_generation_artifact_written",
+        extra={
+            "event": "resume_generation_artifact_written",
+            "path": str(artifact_path),
+        },
+    )
+    manifest = build_resume_run_manifest(
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
+        job_target_source=job_target_source,
+        context=context,
+        job_focus=job_focus,
+        stage_response_records=stage_response_records,
+        token_usage_monitor=token_usage_monitor,
+        resume_result_artifact_path=artifact_path,
+    )
+    manifest_path = write_resume_run_manifest_artifact(
+        manifest,
+        resolved_manifest_artifact_path,
+    )
+    logger.info(
+        "resume_generation_artifact_written",
+        extra={
+            "event": "resume_generation_artifact_written",
+            "path": str(manifest_path),
+        },
+    )
+
+    logger.info(
+        "resume_generation_token_usage_summary",
+        extra={
+            "event": "resume_generation_token_usage_summary",
+            **token_usage_monitor.summary(),
+        },
+    )
+
+    logger.info(
+        "resume_generation_pipeline_complete",
+        extra={"event": "resume_generation_pipeline_complete"},
+    )
+
+    return resume_result
+
+
+async def run_resume_generation_pipeline_async(
+    *,
+    config_path: Path | str | None = None,
+    job_target_path: Path | str | None = None,
+    job_target_override: JobTarget | None = None,
+    evidence_paths: dict[str, Path | str] | None = None,
+    resume_result_artifact_path: Path | str | None = None,
+    resume_run_manifest_artifact_path: Path | str | None = None,
+) -> IntermediateResumeResult:
+    resolved_config_path = resolve_generation_config_path(config_path)
+    resolved_job_target_path = resolve_job_target_path(job_target_path)
+    resolved_result_artifact_path = resolve_resume_result_artifact_path(
+        resume_result_artifact_path
+    )
+    resolved_manifest_artifact_path = resolve_resume_run_manifest_artifact_path(
+        resume_run_manifest_artifact_path
+    )
+    logger.info(
+        "resume_generation_pipeline_start",
+        extra={
+            "event": "resume_generation_pipeline_start",
+            "config_path": str(resolved_config_path),
+            "job_target_path": str(resolved_job_target_path),
+        },
+    )
+    config = load_generation_config(resolved_config_path)
+    job_target_source = "request" if job_target_override is not None else "file"
+    job_target = job_target_override
+    if job_target is None:
+        job_target = load_job_target(resolved_job_target_path)
+    loaded_evidence = load_registered_evidence(evidence_paths)
+    cache = ResumeGenerationStageCache.from_config(
+        config.cache,
+        config_path=resolved_config_path,
+    )
+    token_usage_monitor = ResumeGenerationTokenUsageMonitor()
+    stage_response_records: list[dict[str, Any]] = []
+
+    _user_info = loaded_evidence.get("user")
+    if not isinstance(_user_info, UserInfoFile):
+        raise TypeError("Loaded evidence did not include a valid user info file")
+
+    _education = loaded_evidence.get("education")
+    if not isinstance(_education, EducationFile):
+        raise TypeError("Loaded evidence did not include a valid education file")
+
+    _experience = loaded_evidence.get("experience")
+    if not isinstance(_experience, ExperienceFile):
+        raise TypeError("Loaded evidence did not include a valid experience file")
+
+    logger.info(
+        "resume_generation_stage_start",
+        extra={"event": "resume_generation_stage_start", "stage": "selection"},
+    )
+    context = generate_selection_context(
+        loaded_evidence=loaded_evidence,
+        config=config,
+        job_target=job_target,
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
+        evidence_paths=evidence_paths,
+        cache=cache,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "selection",
+            "selected_project_count": len(context.selected_projects),
+            **_token_usage_extra(
+                token_usage_monitor.combined_total(
+                    ("skill_selection", "project_selection")
+                )
+            ),
+        },
+    )
+
+    selected_experience = _select_resume_experience(
+        _experience,
+        top_n=config.experience_selection.top_n,
+    )
+
+    logger.info(
+        "resume_generation_stage_start",
+        extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
+    )
+    job_focus = derive_job_focus(
+        config=config,
+        job_target=job_target,
+        cache=cache,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "job_focus_generation",
+            **_token_usage_extra(
+                token_usage_monitor.stage_total("job_focus_generation")
+            ),
+        },
+    )
+
+    logger.info(
+        "resume_generation_stage_start",
+        extra={
+            "event": "resume_generation_stage_start",
+            "stage": "project_bullet_points",
+            "project_count": len(context.selected_projects),
+        },
+    )
+    logger.info(
+        "resume_generation_stage_start",
+        extra={
+            "event": "resume_generation_stage_start",
+            "stage": "experience_bullet_points",
+            "experience_count": len(selected_experience.experience),
+        },
+    )
+    bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
+    project_bullet_stage_records: list[dict[str, Any]] = []
+    experience_bullet_stage_records: list[dict[str, Any]] = []
+    bullet_points, experience_bullet_points = await _gather_resume_generation_tasks(
+        generate_project_bullet_points_async(
+            selected_projects=context.selected_projects,
+            config=config,
+            job_target=job_target,
+            job_focus=job_focus,
+            cache=cache,
+            stage_response_records=project_bullet_stage_records,
+            semaphore=bullet_semaphore,
+        ),
+        generate_experience_bullet_points_async(
+            experience=selected_experience.experience,
+            config=config,
+            job_target=job_target,
+            job_focus=job_focus,
+            cache=cache,
+            stage_response_records=experience_bullet_stage_records,
+            semaphore=bullet_semaphore,
+        ),
+    )
+    _observe_stage_response_records(
+        records=project_bullet_stage_records,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    _observe_stage_response_records(
+        records=experience_bullet_stage_records,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "project_bullet_points",
+            "result_count": len(bullet_points),
+            **_token_usage_extra(
+                token_usage_monitor.stage_total("project_bullet_points")
+            ),
+        },
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "experience_bullet_points",
+            "result_count": len(experience_bullet_points),
+            **_token_usage_extra(
+                token_usage_monitor.stage_total("experience_bullet_points")
+            ),
+        },
+    )
 
     logger.info(
         "resume_generation_stage_start",
