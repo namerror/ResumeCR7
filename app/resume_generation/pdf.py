@@ -32,6 +32,34 @@ def resolve_resume_pdf_output_path(path: Path | str | None) -> Path:
     return Path(normalized) if normalized else settings.resume_pdf_artifact_path
 
 
+def resolve_resume_user_pdf_output_path(output_dir: Path | str) -> Path:
+    normalized = str(output_dir).strip()
+    if not normalized:
+        raise ValueError("resume_output.output_dir must not be empty")
+    output_dir_path = Path(normalized).expanduser()
+    artifact_root = settings.resume_generation_artifacts_root.resolve(strict=False)
+    resolved_output_dir = output_dir_path.resolve(strict=False)
+    if resolved_output_dir == artifact_root or resolved_output_dir.is_relative_to(
+        artifact_root
+    ):
+        raise ValueError(
+            "resume_output.output_dir must be outside the internal artifacts directory"
+        )
+    return output_dir_path / "resume.pdf"
+
+
+def copy_resume_pdf_to_user_output(
+    artifact_path: Path | str,
+    output_dir: Path | str,
+) -> Path:
+    output_path = resolve_resume_user_pdf_output_path(output_dir)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    shutil.copyfile(artifact_path, tmp_path)
+    os.replace(tmp_path, output_path)
+    return output_path
+
+
 def render_latex_pdf(
     tex_path: Path | str | None = None,
     pdf_path: Path | str | None = None,

@@ -557,6 +557,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     assert config.cache.force_refresh is False
     assert config.resume_output.path is None
     assert config.resume_output.pdf_path is None
+    assert config.resume_output.output_dir == str(settings.resume_generation_output_root)
     assert config.resume_output.render_pdf is False
     assert config.resume_output.pdf_timeout_seconds == 60.0
     assert resolve_resume_latex_output_path(config.resume_output.path) == (
@@ -630,6 +631,7 @@ def test_generation_default_paths_follow_settings(monkeypatch, tmp_path):
     assert resolve_resume_pdf_output_path(None) == (
         generation_root / "artifacts" / "resume.pdf"
     )
+    assert settings.resume_generation_output_root == generation_root / "output"
 
 
 def test_load_generation_config_accepts_cache_config(tmp_path):
@@ -661,6 +663,7 @@ def test_load_generation_config_accepts_resume_output_path(tmp_path):
     config = load_generation_config(path)
 
     assert config.resume_output.path == str(output_path)
+    assert config.resume_output.output_dir == str(tmp_path)
     assert resolve_resume_latex_output_path(config.resume_output.path) == output_path
 
 
@@ -673,6 +676,7 @@ def test_load_generation_config_defaults_blank_resume_output_path(tmp_path):
     config = load_generation_config(path)
 
     assert config.resume_output.path is None
+    assert config.resume_output.output_dir == str(settings.resume_generation_output_root)
     assert resolve_resume_latex_output_path(config.resume_output.path) == (
         DEFAULT_RESUME_TEX_ARTIFACT_PATH
     )
@@ -697,6 +701,7 @@ def test_load_generation_config_accepts_pdf_resume_output_settings(tmp_path):
 
     assert config.resume_output.path == str(tex_path)
     assert config.resume_output.pdf_path == str(pdf_path)
+    assert config.resume_output.output_dir == str(tmp_path)
     assert config.resume_output.render_pdf is True
     assert config.resume_output.pdf_timeout_seconds == 45.0
     assert resolve_resume_pdf_output_path(config.resume_output.pdf_path) == pdf_path
@@ -714,6 +719,20 @@ def test_load_generation_config_defaults_blank_pdf_resume_output_path(tmp_path):
     assert resolve_resume_pdf_output_path(config.resume_output.pdf_path) == (
         DEFAULT_RESUME_PDF_ARTIFACT_PATH
     )
+
+
+def test_load_generation_config_rejects_artifact_output_dir(monkeypatch, tmp_path):
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+    path = _write_yaml(
+        tmp_path / "config.yaml",
+        _config_payload(
+            resume_output={"output_dir": str(generation_root / "artifacts" / "user")},
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        load_generation_config(path)
 
 
 def test_load_generation_config_rejects_invalid_pdf_resume_output_settings(tmp_path):
@@ -2356,15 +2375,20 @@ def test_write_resume_latex_artifact_writes_tex_file(tmp_path):
     assert "\\section{Projects}" in rendered
 
 
-def test_write_resume_latex_from_config_writes_configured_output(
+def test_write_resume_latex_from_config_writes_artifact_and_configured_output(
+    monkeypatch,
     tmp_path,
     caplog,
 ):
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
     resume_result = _sample_intermediate_resume_result()
-    output_path = tmp_path / "out" / "resume.tex"
+    output_dir = tmp_path / "out"
+    output_path = output_dir / "resume.tex"
+    artifact_path = generation_root / "artifacts" / "resume.tex"
     config_path = _write_yaml(
         tmp_path / "config.yaml",
-        _config_payload(resume_output={"path": str(output_path)}),
+        _config_payload(resume_output={"output_dir": str(output_dir)}),
     )
 
     with caplog.at_level(logging.INFO, logger="resume_generation"):
@@ -2374,14 +2398,22 @@ def test_write_resume_latex_from_config_writes_configured_output(
         )
 
     assert written_path == output_path
+    assert artifact_path.read_text(encoding="utf-8").endswith("\\end{document}\n")
     assert output_path.read_text(encoding="utf-8").endswith("\\end{document}\n")
-    records = [
+    artifact_records = [
         record
         for record in caplog.records
         if getattr(record, "event", None) == "resume_generation_latex_artifact_written"
     ]
-    assert len(records) == 1
-    assert records[0].path == str(output_path)
+    output_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "resume_generation_latex_output_written"
+    ]
+    assert len(artifact_records) == 1
+    assert artifact_records[0].path == str(artifact_path)
+    assert len(output_records) == 1
+    assert output_records[0].path == str(output_path)
 
 
 def test_render_latex_pdf_local_runs_latexmk_and_writes_pdf(monkeypatch, tmp_path):
@@ -2505,15 +2537,20 @@ def test_write_resume_pdf_from_config_renders_when_enabled(
     tmp_path,
     caplog,
 ):
-    tex_path = tmp_path / "resume.tex"
-    pdf_path = tmp_path / "resume.pdf"
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+    tex_path = generation_root / "artifacts" / "resume.tex"
+    artifact_pdf_path = generation_root / "artifacts" / "resume.pdf"
+    output_dir = tmp_path / "out"
+    output_pdf_path = output_dir / "resume.pdf"
+    tex_path.parent.mkdir(parents=True, exist_ok=True)
     tex_path.write_text("\\documentclass{article}\\begin{document}Hi\\end{document}\n")
     config_path = _write_yaml(
         tmp_path / "config.yaml",
         _config_payload(
             resume_output={
+                "output_dir": str(output_dir),
                 "render_pdf": True,
-                "pdf_path": str(pdf_path),
                 "pdf_timeout_seconds": 22,
             }
         ),
@@ -2533,9 +2570,9 @@ def test_write_resume_pdf_from_config_renders_when_enabled(
                 "timeout_seconds": timeout_seconds,
             }
         )
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
-        pdf_path.write_bytes(b"%PDF-1.4\n")
-        return pdf_path
+        Path(pdf_arg).parent.mkdir(parents=True, exist_ok=True)
+        Path(pdf_arg).write_bytes(b"%PDF-1.4\n")
+        return Path(pdf_arg)
 
     monkeypatch.setattr(
         "resume_generation.main.render_latex_pdf",
@@ -2545,21 +2582,30 @@ def test_write_resume_pdf_from_config_renders_when_enabled(
     with caplog.at_level(logging.INFO, logger="resume_generation"):
         written_path = write_resume_pdf_from_config(tex_path, config_path=config_path)
 
-    assert written_path == pdf_path
+    assert written_path == output_pdf_path
+    assert artifact_pdf_path.read_bytes() == b"%PDF-1.4\n"
+    assert output_pdf_path.read_bytes() == b"%PDF-1.4\n"
     assert calls == [
         {
             "tex_arg": tex_path,
-            "pdf_arg": str(pdf_path),
+            "pdf_arg": artifact_pdf_path,
             "timeout_seconds": 22.0,
         }
     ]
-    records = [
+    artifact_records = [
         record
         for record in caplog.records
         if getattr(record, "event", None) == "resume_generation_pdf_artifact_written"
     ]
-    assert len(records) == 1
-    assert records[0].path == str(pdf_path)
+    output_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "resume_generation_pdf_output_written"
+    ]
+    assert len(artifact_records) == 1
+    assert artifact_records[0].path == str(artifact_pdf_path)
+    assert len(output_records) == 1
+    assert output_records[0].path == str(output_pdf_path)
 
 
 def test_resume_pdf_main_uses_default_paths(monkeypatch):
@@ -4597,6 +4643,7 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     data = response.json()
     assert data["resume_result"]["top"]["name"] == "Example Candidate"
     assert data["tex_path"] == str(tex_path)
+    assert data["artifact_tex_path"].endswith("user/resume_generation/artifacts/resume.tex")
     assert data["tex_content"] == "rendered tex\n"
     assert data["resume_result_path"].endswith(
         "user/resume_generation/artifacts/resume_result.json"
@@ -4652,15 +4699,19 @@ def test_resume_generation_tex_route_accepts_job_target_override(
 
 
 def test_resume_generation_pdf_route_returns_rendered_pdf(monkeypatch, tmp_path):
-    tex_path = tmp_path / "resume.tex"
-    pdf_path = tmp_path / "resume.pdf"
-    tex_path.write_text("tex", encoding="utf-8")
-    pdf_path.write_bytes(b"%PDF-1.4\n")
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+    artifact_tex_path = generation_root / "artifacts" / "resume.tex"
+    artifact_pdf_path = generation_root / "artifacts" / "resume.pdf"
+    output_dir = tmp_path / "out"
+    output_tex_path = output_dir / "resume.tex"
+    output_pdf_path = output_dir / "resume.pdf"
+    artifact_tex_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_tex_path.write_text("tex", encoding="utf-8")
     config = ResumeGenerationConfig.model_validate(
         _config_payload(
             resume_output={
-                "path": str(tex_path),
-                "pdf_path": str(pdf_path),
+                "output_dir": str(output_dir),
                 "pdf_timeout_seconds": 11,
             }
         )
@@ -4675,7 +4726,9 @@ def test_resume_generation_pdf_route_returns_rendered_pdf(monkeypatch, tmp_path)
                 "timeout_seconds": timeout_seconds,
             }
         )
-        return pdf_path
+        Path(pdf_arg).parent.mkdir(parents=True, exist_ok=True)
+        Path(pdf_arg).write_bytes(b"%PDF-1.4\n")
+        return Path(pdf_arg)
 
     monkeypatch.setattr(
         "app.resume_generation.api.load_generation_config",
@@ -4690,22 +4743,28 @@ def test_resume_generation_pdf_route_returns_rendered_pdf(monkeypatch, tmp_path)
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert response.headers["x-resumecr7-tex-path"] == str(tex_path)
-    assert response.headers["x-resumecr7-pdf-path"] == str(pdf_path)
+    assert response.headers["x-resumecr7-tex-path"] == str(output_tex_path)
+    assert response.headers["x-resumecr7-pdf-path"] == str(output_pdf_path)
+    assert response.headers["x-resumecr7-artifact-tex-path"] == str(artifact_tex_path)
+    assert response.headers["x-resumecr7-artifact-pdf-path"] == str(artifact_pdf_path)
     assert response.content == b"%PDF-1.4\n"
+    assert output_tex_path.read_text(encoding="utf-8") == "tex"
+    assert output_pdf_path.read_bytes() == b"%PDF-1.4\n"
     assert calls == [
         {
-            "tex_arg": tex_path,
-            "pdf_arg": str(pdf_path),
+            "tex_arg": artifact_tex_path,
+            "pdf_arg": artifact_pdf_path,
             "timeout_seconds": 11.0,
         }
     ]
 
 
 def test_resume_generation_pdf_route_returns_404_for_missing_tex(monkeypatch, tmp_path):
-    tex_path = tmp_path / "missing.tex"
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+    tex_path = generation_root / "artifacts" / "missing.tex"
     config = ResumeGenerationConfig.model_validate(
-        _config_payload(resume_output={"path": str(tex_path)})
+        _config_payload(resume_output={"output_dir": str(tmp_path / "out")})
     )
 
     def fake_render_latex_pdf(*_args, **_kwargs):
@@ -4730,10 +4789,13 @@ def test_resume_generation_pdf_route_returns_502_for_latex_failure(
     monkeypatch,
     tmp_path,
 ):
-    tex_path = tmp_path / "resume.tex"
+    generation_root = tmp_path / "resume_generation"
+    monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", generation_root)
+    tex_path = generation_root / "artifacts" / "resume.tex"
+    tex_path.parent.mkdir(parents=True, exist_ok=True)
     tex_path.write_text("tex", encoding="utf-8")
     config = ResumeGenerationConfig.model_validate(
-        _config_payload(resume_output={"path": str(tex_path)})
+        _config_payload(resume_output={"output_dir": str(tmp_path / "out")})
     )
 
     def fake_render_latex_pdf(*_args, **_kwargs):

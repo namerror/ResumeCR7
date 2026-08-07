@@ -187,6 +187,9 @@ RESUMECR7_DATA_DIR/
       resume_run_manifest.json
       resume.tex
       resume.pdf
+    output/
+      resume.tex
+      resume.pdf
   logs/
     resumecr7.log
     desktop-sidecar.log
@@ -194,6 +197,14 @@ RESUMECR7_DATA_DIR/
 
 The `user/` directory is intentionally ignored by git. Safe fictional examples
 live under `examples/`.
+
+Resume generation writes internal artifacts under `resume_generation/artifacts/`
+on every run; newer artifacts replace older artifacts and are useful for local
+inspection and monitoring. The Config page also stores a user-facing resume
+output directory in `resume_generation/config.yaml`. After `.tex` or PDF
+generation, ResumeCR7 copies `resume.tex` and `resume.pdf` to that configured
+output directory. PDF rendering always uses the internal artifact `.tex` as its
+source, then copies the finished PDF to the user output directory.
 
 ## Evidence Model
 
@@ -248,8 +259,8 @@ Primary product routes:
 | `GET/PUT/DELETE` | `/resume-evidence/experience/{id}` | Read, replace, or delete experience |
 | `GET/POST` | `/resume-evidence/education` | List or create education records |
 | `GET/PUT/DELETE` | `/resume-evidence/education/{id}` | Read, replace, or delete education |
-| `POST` | `/resume-generation/tex` | Run the full resume pipeline and return `.tex` |
-| `POST` | `/resume-generation/pdf` | Render the current `.tex` artifact and return PDF bytes |
+| `POST` | `/resume-generation/tex` | Run the full resume pipeline, write the `.tex` artifact, copy the user `.tex`, and return paths/content |
+| `POST` | `/resume-generation/pdf` | Render the current `.tex` artifact, copy the user PDF, and return PDF bytes |
 | `POST` | `/resume-generation/enrich-link-evidence` | Enrich project or experience evidence from links |
 
 Lower-level capability routes are also available for testing and integration:

@@ -118,6 +118,7 @@ export interface ResumeTexGenerationResponse {
   resume_result_path: string;
   manifest_path: string;
   tex_path: string;
+  artifact_tex_path: string;
   tex_content: string;
 }
 
@@ -187,6 +188,14 @@ export interface ConfigDefaultValues {
   bullet_count_range: BulletCountRangeConfig;
 }
 
+export interface ConfigResumeOutputValues {
+  output_dir: string;
+  tex_path: string;
+  pdf_path: string;
+  artifact_tex_path: string;
+  artifact_pdf_path: string;
+}
+
 export interface ResumeGenerationConfig {
   schema_version: 1;
   config_path: string;
@@ -194,6 +203,7 @@ export interface ResumeGenerationConfig {
   project_selection: ConfigTopNValues;
   experience_selection: ConfigTopNValues;
   link_scanning: ConfigLinkScanningValues;
+  resume_output: ConfigResumeOutputValues;
   bullet_count_range: BulletCountRangeConfig | null;
   openai_api_key_configured: boolean;
   openai_api_key_saved: boolean;
@@ -210,6 +220,9 @@ export interface ResumeGenerationConfigPatch {
   project_selection?: Partial<ConfigTopNValues>;
   experience_selection?: Partial<ConfigTopNValues>;
   link_scanning?: Partial<ConfigLinkScanningValues>;
+  resume_output?: {
+    output_dir?: string | null;
+  };
   bullet_count_range?: BulletCountRangeConfig | null;
   openai?: {
     api_key?: string | null;
@@ -219,4 +232,12 @@ export interface ResumeGenerationConfigPatch {
     token?: string | null;
     clear_token?: boolean;
   };
+}
+
+export interface ResumePdfGenerationResponse {
+  blob: Blob;
+  texPath: string | null;
+  pdfPath: string | null;
+  artifactTexPath: string | null;
+  artifactPdfPath: string | null;
 }

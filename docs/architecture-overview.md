@@ -214,13 +214,14 @@ flowchart TD
     D --> E[derive job focus through in-process service]
     E --> F[generate project and experience bullets through in-process service]
     F --> G[assemble intermediate resume result]
-    G --> H[write JSON manifest/result and LaTeX artifact]
+    G --> H[write JSON manifest/result and internal LaTeX artifact]
+    H --> I[copy user-facing resume.tex to configured output_dir]
 ```
 
 - The full pipeline is backend-owned orchestration in `app/resume_generation/`.
 - Top-level `resume_generation/` remains a compatibility entrypoint for existing local commands and imports.
 - Stage calls use app service functions by default, not loopback HTTP.
-- Generated artifacts under `user/resume_generation/` are derived runtime state, not source evidence.
+- Generated artifacts under `user/resume_generation/artifacts/` are derived runtime state, not source evidence. User-facing `.tex` and `.pdf` files are copied to the configured output directory after internal artifact generation.
 
 ## 4) Current Skill-Selection Logic
 
@@ -369,20 +370,21 @@ user/resume_evidence/*.yaml
   -> in-process backend service calls
   -> structured intermediate resume result
   -> deterministic assembly
-  -> JSON, manifest, and LaTeX artifacts
+  -> JSON, manifest, and internal LaTeX/PDF artifacts
+  -> user-facing resume.tex/resume.pdf copies in configured output_dir
 ```
 
 Implemented now:
 
-- `user/resume_generation/config.yaml` stores user-level generation and stage request options.
+- `user/resume_generation/config.yaml` stores user-level generation, stage request options, and the user-facing resume output directory.
 - `user/resume_generation/job_target.yaml` stores the target job title and optional description.
 - `app/resume_generation/main.py` owns the pipeline-level loading of config, job target, and evidence.
 - `app.resume_generation.generate_selection_context(...)` adapts already-loaded evidence into skill and project selection service requests.
 - `app.resume_generation.derive_job_focus(...)` calls the job-focus service through the stage cache boundary.
 - `app.resume_generation.generate_project_bullet_points(...)` and `generate_experience_bullet_points(...)` call the bullet generation service for selected evidence records.
 - `app.resume_generation.assembly` builds the typed intermediate resume result.
-- `app.resume_generation.latex` renders the current LaTeX artifact.
-- `app.resume_generation.pdf` renders configured/default `.tex` artifacts to PDF.
+- `app.resume_generation.latex` renders the current internal LaTeX artifact and copies user-facing `resume.tex`.
+- `app.resume_generation.pdf` renders the internal `.tex` artifact to the internal PDF artifact, then copies user-facing `resume.pdf`.
 - `app.resume_generation.enrich` scans project and experience links in batch and can append unique highlights to YAML evidence; GitHub repository links can use authorized REST context from `app.link_scanning`.
 - `app.resume_generation.api` exposes `/resume-generation/enrich-link-evidence`, `/resume-generation/tex`, and `/resume-generation/pdf`.
 - `app.resume_generation.cache` can reuse compatible stage responses across runs.
@@ -439,6 +441,8 @@ The recommended service path is to keep FastAPI and add a product-facing facade 
   - `user/resume_generation/artifacts/resume_run_manifest.json`
   - `user/resume_generation/artifacts/resume.tex`
   - `user/resume_generation/artifacts/resume.pdf`
+  - `user/resume_generation/output/resume.tex`
+  - `user/resume_generation/output/resume.pdf`
 
 ## 10) Routes And Interfaces
 
@@ -459,9 +463,9 @@ The recommended service path is to keep FastAPI and add a product-facing facade 
 - `POST /resume-generation/enrich-link-evidence`
   - batch project/experience link enrichment facade that can write appended highlights back to YAML evidence
 - `POST /resume-generation/tex`
-  - full resume-generation facade that writes result, manifest, and `.tex` artifacts and returns `.tex` content
+  - full resume-generation facade that writes result, manifest, internal `.tex` artifact, user `.tex` copy, and returns paths/content
 - `POST /resume-generation/pdf`
-  - PDF rendering facade that renders the configured/default `.tex` artifact and returns PDF bytes
+  - PDF rendering facade that renders the internal `.tex` artifact, copies the user PDF, and returns PDF bytes
 - `GET /resume-evidence`
   - current product-facing API for reading all registered evidence
 - `/resume-evidence/projects`, `/resume-evidence/experience`, and `/resume-evidence/education`

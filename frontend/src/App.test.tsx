@@ -322,6 +322,7 @@ describe("App", () => {
     reloadedConfig.skill_selection.top_n = 12;
     reloadedConfig.project_selection.top_n = 3;
     reloadedConfig.experience_selection.top_n = 2;
+    reloadedConfig.resume_output.output_dir = "user/resume_generation/final";
     reloadedConfig.openai_api_key_configured = true;
     reloadedConfig.openai_api_key_saved = true;
     reloadedConfig.openai_api_key_source = "config";
@@ -343,6 +344,9 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("# of experience entries to include in the resume"), {
       target: { value: "2" },
     });
+    fireEvent.change(screen.getByLabelText("Resume output directory"), {
+      target: { value: "user/resume_generation/final" },
+    });
     fireEvent.change(screen.getByLabelText("OpenAI API Key"), {
       target: { value: "sk-test" },
     });
@@ -356,6 +360,7 @@ describe("App", () => {
         skill_selection: { top_n: 12 },
         project_selection: { top_n: 3 },
         experience_selection: { top_n: 2 },
+        resume_output: { output_dir: "user/resume_generation/final" },
         openai: { api_key: "sk-test" },
         github: { token: "github_pat_test" },
       });
@@ -429,12 +434,17 @@ function createMockClient(
       resume_result: {},
       resume_result_path: "user/resume_generation/resume_result.json",
       manifest_path: "user/resume_generation/resume_run_manifest.json",
-      tex_path: "user/resume_generation/resume.tex",
+      tex_path: "user/resume_generation/output/resume.tex",
+      artifact_tex_path: "user/resume_generation/artifacts/resume.tex",
       tex_content: "tex",
     }),
-    generateResumePdf: vi.fn().mockResolvedValue(
-      new Blob(["%PDF-1.4\n"], { type: "application/pdf" }),
-    ),
+    generateResumePdf: vi.fn().mockResolvedValue({
+      blob: new Blob(["%PDF-1.4\n"], { type: "application/pdf" }),
+      texPath: "user/resume_generation/output/resume.tex",
+      pdfPath: "user/resume_generation/output/resume.pdf",
+      artifactTexPath: "user/resume_generation/artifacts/resume.tex",
+      artifactPdfPath: "user/resume_generation/artifacts/resume.pdf",
+    }),
     enrichResumeLinkEvidence: vi.fn().mockResolvedValue({
       dry_run: false,
       scanned_count: 1,

@@ -66,7 +66,8 @@ describe("evidence api client", () => {
         resume_result: {},
         resume_result_path: "user/resume_generation/resume_result.json",
         manifest_path: "user/resume_generation/resume_run_manifest.json",
-        tex_path: "user/resume_generation/resume.tex",
+        tex_path: "user/resume_generation/output/resume.tex",
+        artifact_tex_path: "user/resume_generation/artifacts/resume.tex",
         tex_content: "tex",
       }),
     });
@@ -88,8 +89,15 @@ describe("evidence api client", () => {
 
   it("returns pdf blobs from the pdf endpoint", async () => {
     const blob = new Blob(["%PDF-1.4\n"], { type: "application/pdf" });
+    const headers = new Headers({
+      "X-ResumeCR7-Tex-Path": "user/resume_generation/output/resume.tex",
+      "X-ResumeCR7-Pdf-Path": "user/resume_generation/output/resume.pdf",
+      "X-ResumeCR7-Artifact-Tex-Path": "user/resume_generation/artifacts/resume.tex",
+      "X-ResumeCR7-Artifact-Pdf-Path": "user/resume_generation/artifacts/resume.pdf",
+    });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      headers,
       blob: vi.fn().mockResolvedValue(blob),
     });
     const api = createEvidenceApi({
@@ -99,7 +107,13 @@ describe("evidence api client", () => {
 
     const result = await api.generateResumePdf();
 
-    expect(result).toBe(blob);
+    expect(result).toEqual({
+      blob,
+      texPath: "user/resume_generation/output/resume.tex",
+      pdfPath: "user/resume_generation/output/resume.pdf",
+      artifactTexPath: "user/resume_generation/artifacts/resume.tex",
+      artifactPdfPath: "user/resume_generation/artifacts/resume.pdf",
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/resume-generation/pdf",
       expect.objectContaining({

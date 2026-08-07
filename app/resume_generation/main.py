@@ -30,14 +30,17 @@ from app.resume_generation.bullet_points import (
 )
 from app.resume_generation.cache import ResumeGenerationStageCache
 from app.resume_generation.job_focus import derive_job_focus
-from app.resume_generation.latex import write_resume_latex_artifact
+from app.resume_generation.latex import (
+    copy_resume_latex_to_user_output,
+    write_resume_latex_artifact,
+)
 from app.resume_generation.models import (
     IntermediateResumeResult,
     JobFocusResult,
     JobTarget,
     ResumeSelectionContext,
 )
-from app.resume_generation.pdf import render_latex_pdf
+from app.resume_generation.pdf import copy_resume_pdf_to_user_output, render_latex_pdf
 from app.resume_generation.selection import generate_selection_context
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
@@ -451,10 +454,7 @@ def write_resume_latex_from_config(
     config_path: Path | str | None = None,
 ) -> Path:
     config = load_generation_config(config_path)
-    artifact_path = write_resume_latex_artifact(
-        resume_result,
-        config.resume_output.path,
-    )
+    artifact_path = write_resume_latex_artifact(resume_result, settings.resume_tex_artifact_path)
     logger.info(
         "resume_generation_latex_artifact_written",
         extra={
@@ -462,11 +462,22 @@ def write_resume_latex_from_config(
             "path": str(artifact_path),
         },
     )
-    return artifact_path
+    output_path = copy_resume_latex_to_user_output(
+        artifact_path,
+        config.resume_output.output_dir,
+    )
+    logger.info(
+        "resume_generation_latex_output_written",
+        extra={
+            "event": "resume_generation_latex_output_written",
+            "path": str(output_path),
+        },
+    )
+    return output_path
 
 
 def write_resume_pdf_from_config(
-    tex_path: Path | str,
+    tex_path: Path | str | None = None,
     *,
     config_path: Path | str | None = None,
 ) -> Path | None:
@@ -482,8 +493,8 @@ def write_resume_pdf_from_config(
         return None
 
     artifact_path = render_latex_pdf(
-        tex_path,
-        config.resume_output.pdf_path,
+        tex_path or settings.resume_tex_artifact_path,
+        settings.resume_pdf_artifact_path,
         timeout_seconds=config.resume_output.pdf_timeout_seconds,
     )
     logger.info(
@@ -493,7 +504,18 @@ def write_resume_pdf_from_config(
             "path": str(artifact_path),
         },
     )
-    return artifact_path
+    output_path = copy_resume_pdf_to_user_output(
+        artifact_path,
+        config.resume_output.output_dir,
+    )
+    logger.info(
+        "resume_generation_pdf_output_written",
+        extra={
+            "event": "resume_generation_pdf_output_written",
+            "path": str(output_path),
+        },
+    )
+    return output_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -507,8 +529,8 @@ def main(argv: list[str] | None = None) -> int:
         log_dir=settings.RESUMECR7_LOG_DIR,
     )
     resume_result = run_resume_generation_pipeline()
-    latex_path = write_resume_latex_from_config(resume_result)
-    write_resume_pdf_from_config(latex_path)
+    write_resume_latex_from_config(resume_result)
+    write_resume_pdf_from_config(settings.resume_tex_artifact_path)
     return 0
 
 

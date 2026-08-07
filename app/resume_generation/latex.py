@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from pathlib import Path
 
 from app.config import settings
@@ -231,6 +232,38 @@ def resolve_resume_latex_output_path(path: Path | str | None) -> Path:
 
 def resolve_resume_latex_output_path_from_config(config: ResumeOutputConfig) -> Path:
     return resolve_resume_latex_output_path(config.path)
+
+
+def resolve_resume_user_output_dir(path: Path | str) -> Path:
+    normalized = str(path).strip()
+    if not normalized:
+        raise ValueError("resume_output.output_dir must not be empty")
+    output_dir = Path(normalized).expanduser()
+    artifact_root = settings.resume_generation_artifacts_root.resolve(strict=False)
+    resolved_output_dir = output_dir.resolve(strict=False)
+    if resolved_output_dir == artifact_root or resolved_output_dir.is_relative_to(
+        artifact_root
+    ):
+        raise ValueError(
+            "resume_output.output_dir must be outside the internal artifacts directory"
+        )
+    return output_dir
+
+
+def resolve_resume_user_latex_output_path(output_dir: Path | str) -> Path:
+    return resolve_resume_user_output_dir(output_dir) / "resume.tex"
+
+
+def copy_resume_latex_to_user_output(
+    artifact_path: Path | str,
+    output_dir: Path | str,
+) -> Path:
+    output_path = resolve_resume_user_latex_output_path(output_dir)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    shutil.copyfile(artifact_path, tmp_path)
+    os.replace(tmp_path, output_path)
+    return output_path
 
 
 def render_heading(top: ResumeTopSection) -> str:

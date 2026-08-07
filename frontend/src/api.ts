@@ -15,6 +15,7 @@ import type {
   ResumeEvidenceRegistry,
   ResumeGenerationConfig,
   ResumeGenerationConfigPatch,
+  ResumePdfGenerationResponse,
   ResumeTexGenerationRequest,
   ResumeTexGenerationResponse,
   SkillsFile,
@@ -47,7 +48,7 @@ export interface EvidenceApi {
   updateSkills(payload: SkillsInput): Promise<SkillsFile>;
   updateUser(payload: UserInfoInput): Promise<UserInfoFile>;
   generateResumeTex(payload?: ResumeTexGenerationRequest): Promise<ResumeTexGenerationResponse>;
-  generateResumePdf(): Promise<Blob>;
+  generateResumePdf(): Promise<ResumePdfGenerationResponse>;
   enrichResumeLinkEvidence(
     payload: ResumeLinkEnrichmentRequest,
   ): Promise<ResumeLinkEnrichmentResponse>;
@@ -98,7 +99,10 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
     return (await response.json()) as T;
   }
 
-  async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  async function requestBlobResponse(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<{ blob: Blob; response: Response }> {
     const headers = new Headers(init.headers);
     if (init.body && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
@@ -113,7 +117,7 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
       throw new ApiError(response.status, await readErrorDetail(response));
     }
 
-    return response.blob();
+    return { blob: await response.blob(), response };
   }
 
   return {
@@ -180,10 +184,16 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
         body: JSON.stringify(payload),
       }),
     generateResumePdf: () =>
-      requestBlob("/resume-generation/pdf", {
+      requestBlobResponse("/resume-generation/pdf", {
         method: "POST",
         body: JSON.stringify({}),
-      }),
+      }).then(({ blob, response }) => ({
+        blob,
+        texPath: response.headers.get("X-ResumeCR7-Tex-Path"),
+        pdfPath: response.headers.get("X-ResumeCR7-Pdf-Path"),
+        artifactTexPath: response.headers.get("X-ResumeCR7-Artifact-Tex-Path"),
+        artifactPdfPath: response.headers.get("X-ResumeCR7-Artifact-Pdf-Path"),
+      })),
     enrichResumeLinkEvidence: (payload) =>
       request<ResumeLinkEnrichmentResponse>("/resume-generation/enrich-link-evidence", {
         method: "POST",

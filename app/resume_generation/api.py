@@ -21,7 +21,10 @@ from app.resume_generation.config import (
     write_job_target_payload,
 )
 from app.resume_generation.enrich import run_link_evidence_enrichment
-from app.resume_generation.latex import resolve_resume_latex_output_path
+from app.resume_generation.latex import (
+    copy_resume_latex_to_user_output,
+    resolve_resume_user_latex_output_path,
+)
 from app.resume_generation.main import (
     resolve_resume_result_artifact_path,
     resolve_resume_run_manifest_artifact_path,
@@ -35,7 +38,12 @@ from app.resume_generation.models import (
     ResumeGenerationConfig,
     StrictSchemaModel,
 )
-from app.resume_generation.pdf import LatexPdfRenderError, render_latex_pdf
+from app.resume_generation.pdf import (
+    LatexPdfRenderError,
+    copy_resume_pdf_to_user_output,
+    render_latex_pdf,
+    resolve_resume_user_pdf_output_path,
+)
 from app.resume_generation.selection import ResumeGenerationError
 
 router = APIRouter(prefix="/resume-generation", tags=["resume-generation"])
@@ -110,6 +118,7 @@ class ResumeTexGenerationResponse(StrictSchemaModel):
     resume_result_path: str
     manifest_path: str
     tex_path: str
+    artifact_tex_path: str
     tex_content: str
 
 
@@ -162,6 +171,20 @@ class ConfigLinkScanningValues(StrictSchemaModel):
         return value
 
 
+class ConfigResumeOutputValues(StrictSchemaModel):
+    output_dir: str | None = None
+
+    @field_validator("output_dir")
+    @classmethod
+    def validate_output_dir(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("resume_output.output_dir must not be empty")
+        return normalized
+
+
 class ConfigOpenAIPatch(StrictSchemaModel):
     api_key: str | None = None
     clear_api_key: bool = False
@@ -209,6 +232,7 @@ class ResumeGenerationConfigPatch(StrictSchemaModel):
     project_selection: ConfigProjectSelectionValues | None = None
     experience_selection: ConfigExperienceSelectionValues | None = None
     link_scanning: ConfigLinkScanningValues | None = None
+    resume_output: ConfigResumeOutputValues | None = None
     bullet_count_range: BulletCountRangeConfig | None = None
     openai: ConfigOpenAIPatch | None = None
     github: ConfigGitHubPatch | None = None
@@ -232,6 +256,14 @@ class ConfigDefaultValues(StrictSchemaModel):
     bullet_count_range: BulletCountRangeConfig
 
 
+class ConfigResumeOutputResponse(StrictSchemaModel):
+    output_dir: str
+    tex_path: str
+    pdf_path: str
+    artifact_tex_path: str
+    artifact_pdf_path: str
+
+
 class ResumeGenerationConfigResponse(StrictSchemaModel):
     schema_version: Literal[1]
     config_path: str
@@ -239,6 +271,7 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     project_selection: ConfigProjectSelectionValues
     experience_selection: ConfigExperienceSelectionValues
     link_scanning: ConfigLinkScanningValues
+    resume_output: ConfigResumeOutputResponse
     bullet_count_range: BulletCountRangeConfig | None
     openai_api_key_configured: bool
     openai_api_key_saved: bool
@@ -386,6 +419,12 @@ def _apply_config_patch(
                 patch.link_scanning.max_tokens_per_highlight
             )
 
+    if patch.resume_output is not None:
+        updated.setdefault("resume_output", {})
+        fields = patch.resume_output.model_fields_set
+        if "output_dir" in fields:
+            updated["resume_output"]["output_dir"] = patch.resume_output.output_dir
+
     if "bullet_count_range" in patch.model_fields_set:
         bullet_range = (
             patch.bullet_count_range.model_dump(mode="python")
@@ -432,6 +471,13 @@ def _config_response(
         link_scanning=ConfigLinkScanningValues(
             highlight_count=config.link_scanning.highlight_count,
             max_tokens_per_highlight=config.link_scanning.max_tokens_per_highlight,
+        ),
+        resume_output=ConfigResumeOutputResponse(
+            output_dir=config.resume_output.output_dir,
+            tex_path=str(resolve_resume_user_latex_output_path(config.resume_output.output_dir)),
+            pdf_path=str(resolve_resume_user_pdf_output_path(config.resume_output.output_dir)),
+            artifact_tex_path=str(settings.resume_tex_artifact_path),
+            artifact_pdf_path=str(settings.resume_pdf_artifact_path),
         ),
         bullet_count_range=config.project_bullet_point_generation.bullet_count_range,
         openai_api_key_configured=openai_source != "none",
@@ -557,6 +603,7 @@ async def generate_resume_tex(
         resume_result_path=str(resolve_resume_result_artifact_path()),
         manifest_path=str(resolve_resume_run_manifest_artifact_path()),
         tex_path=str(tex_path),
+        artifact_tex_path=str(settings.resume_tex_artifact_path),
         tex_content=tex_content,
     )
 
@@ -567,11 +614,19 @@ async def generate_resume_pdf(
 ) -> Response:
     try:
         config = load_generation_config(resolve_generation_config_path())
-        tex_path = resolve_resume_latex_output_path(config.resume_output.path)
-        pdf_path = render_latex_pdf(
-            tex_path,
-            config.resume_output.pdf_path,
+        artifact_tex_path = settings.resume_tex_artifact_path
+        artifact_pdf_path = render_latex_pdf(
+            artifact_tex_path,
+            settings.resume_pdf_artifact_path,
             timeout_seconds=config.resume_output.pdf_timeout_seconds,
+        )
+        pdf_path = copy_resume_pdf_to_user_output(
+            artifact_pdf_path,
+            config.resume_output.output_dir,
+        )
+        tex_path = copy_resume_latex_to_user_output(
+            artifact_tex_path,
+            config.resume_output.output_dir,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -586,6 +641,8 @@ async def generate_resume_pdf(
         headers={
             "X-ResumeCR7-Tex-Path": str(tex_path),
             "X-ResumeCR7-Pdf-Path": str(pdf_path),
+            "X-ResumeCR7-Artifact-Tex-Path": str(artifact_tex_path),
+            "X-ResumeCR7-Artifact-Pdf-Path": str(artifact_pdf_path),
             "Content-Disposition": f'attachment; filename="{pdf_path.name}"',
         },
     )

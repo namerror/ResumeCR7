@@ -94,6 +94,13 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
       highlight_count: 6,
       max_tokens_per_highlight: 500,
     },
+    resume_output: {
+      output_dir: "user/resume_generation/output",
+      tex_path: "user/resume_generation/output/resume.tex",
+      pdf_path: "user/resume_generation/output/resume.pdf",
+      artifact_tex_path: "user/resume_generation/artifacts/resume.tex",
+      artifact_pdf_path: "user/resume_generation/artifacts/resume.pdf",
+    },
     bullet_count_range: null,
     openai_api_key_configured: false,
     openai_api_key_saved: false,

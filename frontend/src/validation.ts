@@ -81,6 +81,7 @@ export function validateGenerationConfig(draft: ResumeGenerationConfig): string[
     "Link scanning max tokens per highlight",
     draft.link_scanning.max_tokens_per_highlight,
   );
+  requireText(errors, "Resume output directory", draft.resume_output.output_dir);
 
   if (draft.bullet_count_range !== null) {
     const { min, max } = draft.bullet_count_range;

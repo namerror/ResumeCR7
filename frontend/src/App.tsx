@@ -480,9 +480,12 @@ export default function App({ client = evidenceApi }: AppProps) {
     setCurrentOperation("Generating PDF");
 
     try {
-      const pdf = await client.generateResumePdf();
-      triggerDownload(pdf, "resume.pdf");
-      setMessage("Generated PDF.");
+      const result = await client.generateResumePdf();
+      setMessage(
+        result.pdfPath
+          ? `Generated PDF at ${result.pdfPath}. Source .tex: ${result.texPath ?? "unknown"}.`
+          : "Generated PDF.",
+      );
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         setApplyError("Generate the .tex file first.");
@@ -1176,6 +1179,23 @@ function ConfigEditor({
         </div>
 
         <div className="config-section">
+          <h3>Resume Output</h3>
+          <div className="field-grid">
+            <TextField
+              label="Resume output directory"
+              value={config.resume_output.output_dir}
+              onChange={(outputDir) =>
+                onChange((next) => {
+                  next.resume_output.output_dir = outputDir;
+                  next.resume_output.tex_path = `${outputDir.replace(/\/+$/, "")}/resume.tex`;
+                  next.resume_output.pdf_path = `${outputDir.replace(/\/+$/, "")}/resume.pdf`;
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
           <div className="config-section-header">
             <h3>OpenAI</h3>
             <span className="config-status">{openAiStatus}</span>
@@ -1740,25 +1760,6 @@ function StatePanel({
   );
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
-  if (
-    typeof document === "undefined" ||
-    typeof URL === "undefined" ||
-    typeof URL.createObjectURL !== "function"
-  ) {
-    return;
-  }
-
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = href;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(href);
-}
-
 function buildGenerationConfigPatch({
   baseline,
   clearGithubToken,
@@ -1793,6 +1794,9 @@ function buildGenerationConfigPatch({
   }
   if (!deepEqual(baseline.bullet_count_range, draft.bullet_count_range)) {
     patch.bullet_count_range = draft.bullet_count_range;
+  }
+  if (baseline.resume_output.output_dir !== draft.resume_output.output_dir) {
+    patch.resume_output = { output_dir: draft.resume_output.output_dir.trim() };
   }
 
   const trimmedKey = openAiKeyDraft.trim();
@@ -1834,6 +1838,9 @@ function configExposedValuesChanged(
       project_selection: baseline.project_selection,
       experience_selection: baseline.experience_selection,
       link_scanning: baseline.link_scanning,
+      resume_output: {
+        output_dir: baseline.resume_output.output_dir,
+      },
       bullet_count_range: baseline.bullet_count_range,
     },
     {
@@ -1841,6 +1848,9 @@ function configExposedValuesChanged(
       project_selection: draft.project_selection,
       experience_selection: draft.experience_selection,
       link_scanning: draft.link_scanning,
+      resume_output: {
+        output_dir: draft.resume_output.output_dir,
+      },
       bullet_count_range: draft.bullet_count_range,
     },
   );

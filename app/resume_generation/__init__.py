@@ -56,9 +56,12 @@ from app.resume_generation.job_focus import derive_job_focus
 from app.resume_generation.cache import ResumeGenerationStageCache, ResumeGenerationStageCacheResult
 from app.resume_generation.latex import (
     DEFAULT_RESUME_TEX_ARTIFACT_PATH,
+    copy_resume_latex_to_user_output,
     latex_escape,
     render_resume_latex,
     resolve_resume_latex_output_path,
+    resolve_resume_user_latex_output_path,
+    resolve_resume_user_output_dir,
     write_resume_latex_artifact,
 )
 from app.resume_generation.pdf import (
@@ -67,8 +70,10 @@ from app.resume_generation.pdf import (
     DEFAULT_RESUME_TEX_INPUT_PATH,
     LatexPdfPrerequisiteError,
     LatexPdfRenderError,
+    copy_resume_pdf_to_user_output,
     render_latex_pdf,
     resolve_resume_pdf_output_path,
+    resolve_resume_user_pdf_output_path,
 )
 from app.resume_generation.selection import (
     ResumeGenerationError,
@@ -145,6 +150,8 @@ __all__ = [
     "assemble_intermediate_resume_result",
     "build_resume_run_manifest",
     "build_skill_selection_payload",
+    "copy_resume_latex_to_user_output",
+    "copy_resume_pdf_to_user_output",
     "default_generation_config_payload",
     "derive_job_focus",
     "ensure_generation_config_defaults",
@@ -164,6 +171,9 @@ __all__ = [
     "resolve_resume_run_manifest_artifact_path",
     "resolve_resume_pdf_output_path",
     "resolve_resume_latex_output_path",
+    "resolve_resume_user_latex_output_path",
+    "resolve_resume_user_output_dir",
+    "resolve_resume_user_pdf_output_path",
     "run_link_evidence_enrichment",
     "run_resume_generation_pipeline",
     "write_resume_result_artifact",

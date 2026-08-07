@@ -52,6 +52,13 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["experience_selection"]["top_n"] is None
     assert data["display_defaults"]["project_selection_top_n"] == "unlimited (default)"
     assert data["display_defaults"]["experience_selection_top_n"] == "unlimited (default)"
+    assert data["resume_output"] == {
+        "output_dir": str(generation_root / "output"),
+        "tex_path": str(generation_root / "output" / "resume.tex"),
+        "pdf_path": str(generation_root / "output" / "resume.pdf"),
+        "artifact_tex_path": str(generation_root / "artifacts" / "resume.tex"),
+        "artifact_pdf_path": str(generation_root / "artifacts" / "resume.pdf"),
+    }
     assert data["openai_api_key_configured"] is True
     assert data["openai_api_key_saved"] is True
     assert data["openai_api_key_source"] == "config"
@@ -66,6 +73,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     payload = default_generation_config_payload()
     payload["job_focus_generation"]["llm_model"] = "custom-job-focus"
     payload["project_selection"]["llm_output_token_budget"]["max"] = 5000
+    output_dir = generation_root / "final"
     _write_config(generation_root / "config.yaml", payload)
 
     response = api_request(
@@ -79,6 +87,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
                 "highlight_count": 4,
                 "max_tokens_per_highlight": 300,
             },
+            "resume_output": {"output_dir": str(output_dir)},
             "bullet_count_range": {"min": 2, "max": 4},
         },
     )
@@ -87,6 +96,9 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     data = response.json()
     assert data["skill_selection"]["top_n"] == 12
     assert data["experience_selection"]["top_n"] == 2
+    assert data["resume_output"]["output_dir"] == str(output_dir)
+    assert data["resume_output"]["tex_path"] == str(output_dir / "resume.tex")
+    assert data["resume_output"]["pdf_path"] == str(output_dir / "resume.pdf")
     assert data["bullet_count_range"] == {"min": 2, "max": 4}
     saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
     assert saved["experience_selection"]["top_n"] == 2
@@ -101,6 +113,25 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
         "max": 4,
     }
     assert saved["link_scanning"]["max_tokens_per_highlight"] == 300
+    assert saved["resume_output"]["output_dir"] == str(output_dir)
+
+
+def test_resume_generation_config_patch_rejects_artifact_output_dir(generation_root):
+    payload = default_generation_config_payload()
+    _write_config(generation_root / "config.yaml", payload)
+
+    response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        json={
+            "resume_output": {
+                "output_dir": str(generation_root / "artifacts"),
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert "outside the internal artifacts directory" in response.text
 
 
 def test_resume_generation_config_patch_replaces_and_clears_openai_key(generation_root):

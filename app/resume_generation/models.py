@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.config import settings
 from app.job_focus_generation.models import JobFocus as JobFocusResult
 from app.resume_evidence.models import ProjectRecord
 
@@ -306,11 +307,58 @@ class ResumeGenerationCacheConfig(StrictSchemaModel):
         return normalized
 
 
+def _default_resume_output_dir() -> str:
+    return str(settings.resume_generation_output_root)
+
+
 class ResumeOutputConfig(StrictSchemaModel):
+    output_dir: str = Field(default_factory=_default_resume_output_dir)
     path: str | None = None
     pdf_path: str | None = None
     render_pdf: bool = False
     pdf_timeout_seconds: float = 60.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_output_paths(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        migrated = dict(data)
+        output_dir = str(migrated.get("output_dir") or "").strip()
+        if output_dir:
+            return migrated
+
+        legacy_candidates = [
+            str(migrated.get("path") or "").strip(),
+            str(migrated.get("pdf_path") or "").strip(),
+        ]
+        artifact_root = settings.resume_generation_artifacts_root.resolve(strict=False)
+        for candidate in legacy_candidates:
+            if not candidate:
+                continue
+            candidate_parent = Path(candidate).expanduser().parent
+            if candidate_parent.resolve(strict=False) == artifact_root:
+                continue
+            migrated["output_dir"] = str(candidate_parent)
+            return migrated
+        return migrated
+
+    @field_validator("output_dir")
+    @classmethod
+    def validate_output_dir(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("resume_output.output_dir must not be empty")
+        output_dir = Path(normalized).expanduser()
+        artifact_root = settings.resume_generation_artifacts_root.resolve(strict=False)
+        resolved_output_dir = output_dir.resolve(strict=False)
+        if resolved_output_dir == artifact_root or resolved_output_dir.is_relative_to(
+            artifact_root
+        ):
+            raise ValueError(
+                "resume_output.output_dir must be outside the internal artifacts directory"
+            )
+        return str(output_dir)
 
     @field_validator("path")
     @classmethod

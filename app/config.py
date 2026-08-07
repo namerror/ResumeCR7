@@ -85,6 +85,10 @@ class Settings(BaseSettings):
         return self.RESUME_GENERATION_ROOT / "artifacts"
 
     @property
+    def resume_generation_output_root(self) -> Path:
+        return self.RESUME_GENERATION_ROOT / "output"
+
+    @property
     def resume_result_artifact_path(self) -> Path:
         return self.resume_generation_artifacts_root / "resume_result.json"
 

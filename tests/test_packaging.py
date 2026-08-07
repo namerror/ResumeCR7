@@ -297,7 +297,7 @@ def test_resume_generation_console_script_dispatches_pipeline(monkeypatch):
         return Path("resume.tex")
 
     def fake_write_resume_pdf_from_config(tex_path: Path):
-        assert tex_path == Path("resume.tex")
+        assert tex_path == resume_generation_main.settings.resume_tex_artifact_path
         calls.append("pdf")
         return None
 
