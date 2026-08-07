@@ -15,7 +15,7 @@ from app.project_selection.models import (
     ProjectJobContext,
     ProjectOutputTokenBudget,
 )
-from app.skill_selection.llm_client import supports_temperature
+from app.skill_selection.llm_client import _extract_output_text, supports_temperature
 
 logger = logging.getLogger("project_llm_client")
 
@@ -32,9 +32,6 @@ class ProjectLLMClientError(RuntimeError):
 class LLMProjectScoreResult:
     scores: dict[str, Any]
     metadata: dict[str, Any]
-
-
-DEFAULT_PROJECT_OUTPUT_TOKEN_BUDGET = ProjectOutputTokenBudget()
 
 
 def build_project_score_schema(project_ids: list[str]) -> dict[str, Any]:
@@ -135,25 +132,34 @@ def resolve_project_max_output_tokens(
     max_output_tokens: int | None = None,
     output_token_budget: ProjectOutputTokenBudget | Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    budget = (
-        output_token_budget
-        if output_token_budget is not None
-        else DEFAULT_PROJECT_OUTPUT_TOKEN_BUDGET
-    )
-    budget_config = _budget_dict(budget)
+    token_budget_inputs = {
+        "candidate_count": candidate_count,
+        "prompt_json_chars": len(prompt_payload),
+        "prompt_1k_chars": math.ceil(len(prompt_payload) / 1000),
+    }
     if max_output_tokens is not None:
         return {
             "mode": "override",
             "requested_llm_max_output_tokens": max_output_tokens,
             "resolved_llm_max_output_tokens": max_output_tokens,
-            "config": budget_config,
-            "inputs": {
-                "candidate_count": candidate_count,
-                "prompt_json_chars": len(prompt_payload),
-                "prompt_1k_chars": math.ceil(len(prompt_payload) / 1000),
-            },
+            "config": (
+                _budget_dict(output_token_budget)
+                if output_token_budget is not None
+                else None
+            ),
+            "inputs": token_budget_inputs,
         }
 
+    if output_token_budget is None:
+        return {
+            "mode": "uncapped",
+            "requested_llm_max_output_tokens": None,
+            "resolved_llm_max_output_tokens": None,
+            "config": None,
+            "inputs": token_budget_inputs,
+        }
+
+    budget_config = _budget_dict(output_token_budget)
     prompt_1k_chars = math.ceil(len(prompt_payload) / 1000)
     calculated = (
         int(budget_config["base"])
@@ -182,13 +188,12 @@ def build_project_response_create_kwargs(
     instructions: str,
     prompt_payload: str,
     schema: dict[str, Any],
-    max_output_tokens: int,
+    max_output_tokens: int | None,
 ) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "model": model,
         "instructions": instructions,
         "input": prompt_payload,
-        "max_output_tokens": max_output_tokens,
         "tools": [],
         "text": {
             "format": {
@@ -199,6 +204,8 @@ def build_project_response_create_kwargs(
             }
         },
     }
+    if max_output_tokens is not None:
+        kwargs["max_output_tokens"] = max_output_tokens
     if supports_temperature(model):
         kwargs["temperature"] = 0
     return kwargs
@@ -252,14 +259,23 @@ def score_projects_with_llm(
         )
         raise ProjectLLMClientError(f"Project LLM request failed: {exc}") from exc
 
-    retry_max_output_tokens = max(effective_max_output_tokens * 2, 3000)
-    retry_max_output_tokens = _apply_optional_cap(
-        retry_max_output_tokens,
-        token_budget["config"].get("max"),
-    )
-    max_output_tokens_by_attempt = list(
-        dict.fromkeys([effective_max_output_tokens, retry_max_output_tokens])
-    )
+    max_output_tokens_by_attempt: list[int | None]
+    if effective_max_output_tokens is None:
+        max_output_tokens_by_attempt = [None]
+    else:
+        retry_max_output_tokens = max(effective_max_output_tokens * 2, 3000)
+        budget_config = (
+            token_budget["config"]
+            if isinstance(token_budget["config"], dict)
+            else {}
+        )
+        retry_max_output_tokens = _apply_optional_cap(
+            retry_max_output_tokens,
+            budget_config.get("max"),
+        )
+        max_output_tokens_by_attempt = list(
+            dict.fromkeys([effective_max_output_tokens, retry_max_output_tokens])
+        )
 
     for attempt_index, attempt_max_output_tokens in enumerate(
         max_output_tokens_by_attempt,
@@ -307,7 +323,7 @@ def score_projects_with_llm(
         }
         attempts.append(attempt_metadata)
 
-        output_text = getattr(response, "output_text", None)
+        output_text = _extract_output_text(response)
         if not output_text:
             retry_reason = "Project LLM response did not include output_text"
             attempt_metadata["error"] = retry_reason

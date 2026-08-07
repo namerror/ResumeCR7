@@ -49,7 +49,9 @@ def test_bootstrap_runtime_data_writes_schema_valid_defaults(tmp_path):
     assert config.openai.api_key is None
     assert config.skill_selection.method == "llm"
     assert config.skill_selection.top_n == 20
+    assert config.skill_selection.llm_max_output_tokens is None
     assert config.project_selection.top_n is None
+    assert config.project_selection.llm_output_token_budget is None
     assert config.link_scanning.llm_model == "gpt-5.6-terra"
     assert config.link_scanning.max_tokens_per_highlight == 500
     assert config.cache.enabled is True

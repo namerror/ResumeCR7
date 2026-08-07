@@ -72,6 +72,13 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
 def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_root):
     payload = default_generation_config_payload()
     payload["job_focus_generation"]["llm_model"] = "custom-job-focus"
+    payload["project_selection"]["llm_output_token_budget"] = {
+        "base": 900,
+        "per_candidate": 40,
+        "per_prompt_1k_chars": 40,
+        "min": 1200,
+        "max": None,
+    }
     payload["project_selection"]["llm_output_token_budget"]["max"] = 5000
     output_dir = generation_root / "final"
     _write_config(generation_root / "config.yaml", payload)

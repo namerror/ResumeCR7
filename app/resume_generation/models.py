@@ -40,7 +40,7 @@ class SkillSelectionConfig(StrictSchemaModel):
     baseline_filter: bool | None = False
     dev_mode: bool | None = True
     llm_model: str | None = "gpt-5-nano"
-    llm_max_output_tokens: int | None = 1200
+    llm_max_output_tokens: int | None = None
 
     @field_validator("top_n")
     @classmethod
@@ -101,9 +101,7 @@ class ProjectSelectionConfig(StrictSchemaModel):
     dev_mode: bool | None = True
     llm_model: str | None = "gpt-5-nano"
     llm_max_output_tokens: int | None = None
-    llm_output_token_budget: ProjectOutputTokenBudgetConfig | None = Field(
-        default_factory=ProjectOutputTokenBudgetConfig
-    )
+    llm_output_token_budget: ProjectOutputTokenBudgetConfig | None = None
 
     @field_validator("top_n")
     @classmethod

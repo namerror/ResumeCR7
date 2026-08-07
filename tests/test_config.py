@@ -56,7 +56,7 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.PROJ_TOP_N is None
     assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
     assert settings.PROJ_LLM_MODEL == "gpt-5-nano"
-    assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
+    assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS is None
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
     assert settings.BULLETPOINTS_DEFAULT_COUNT == 3
     assert settings.LINK_SCANNING_ENABLED is False
@@ -276,7 +276,7 @@ def test_legacy_selection_env_vars_are_not_honored(monkeypatch):
     assert settings.SKILL_BASELINE_FILTER is False
     assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
     assert settings.PROJ_LLM_MODEL == "gpt-5-nano"
-    assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS == 1200
+    assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS is None
     assert settings.BULLETPOINTS_LLM_MODEL == "gpt-5-mini"
     assert settings.LINK_SCANNING_LLM_MODEL == "gpt-5.6-terra"
 

@@ -57,7 +57,7 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     kwargs = captured["kwargs"]
     assert kwargs["model"] == "test-model"
     assert kwargs["temperature"] == 0
-    assert kwargs["max_output_tokens"] == 1200
+    assert "max_output_tokens" not in kwargs
     assert kwargs["text"]["format"]["name"] == "project_scores"
     assert kwargs["text"]["format"]["strict"] is True
     schema = kwargs["text"]["format"]["schema"]
@@ -71,8 +71,9 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     assert result.scores == {"resumecr7": 3, "portfolio": 1}
     assert result.metadata["total_tokens"] == 17
     assert result.metadata["model"] == "test-model"
-    assert result.metadata["resolved_llm_max_output_tokens"] == 1200
-    assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+    assert result.metadata["resolved_llm_max_output_tokens"] is None
+    assert result.metadata["llm_output_token_budget_mode"] == "uncapped"
+    assert result.metadata["llm_output_token_budget"] is None
 
 
 def test_resolve_project_max_output_tokens_scales_and_caps():
@@ -132,6 +133,68 @@ def test_score_projects_with_llm_accepts_explicit_max_output_override(monkeypatc
     assert result.metadata["requested_llm_max_output_tokens"] == 333
     assert result.metadata["resolved_llm_max_output_tokens"] == 333
     assert result.metadata["llm_output_token_budget_mode"] == "override"
+
+
+def test_score_projects_with_llm_uses_explicit_output_token_budget(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(output_text='{"resumecr7":3}', usage=None)
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(project_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(project_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    result = score_projects_with_llm(
+        context=ProjectJobContext(title="Backend Engineer"),
+        candidates=[_candidate("resumecr7", "ResumeCR7")],
+        output_token_budget={
+            "base": 800,
+            "per_candidate": 50,
+            "per_prompt_1k_chars": 25,
+            "min": 1100,
+            "max": None,
+        },
+    )
+
+    assert captured["kwargs"]["max_output_tokens"] == 1100
+    assert result.metadata["resolved_llm_max_output_tokens"] == 1100
+    assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+
+
+def test_score_projects_with_llm_reads_structured_output_when_output_text_missing(monkeypatch):
+    class DummyResponses:
+        def create(self, **_kwargs):
+            return SimpleNamespace(
+                output=[
+                    SimpleNamespace(
+                        content=[
+                            SimpleNamespace(text='{"resumecr7":3}'),
+                        ]
+                    )
+                ],
+                usage=SimpleNamespace(input_tokens=12, output_tokens=8, total_tokens=20),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(project_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(project_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    result = score_projects_with_llm(
+        context=ProjectJobContext(title="Backend Engineer"),
+        candidates=[_candidate("resumecr7", "ResumeCR7")],
+    )
+
+    assert result.scores == {"resumecr7": 3}
+    assert result.metadata["total_tokens"] == 20
 
 
 def test_score_projects_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):

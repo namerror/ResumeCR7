@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # LLM-related settings, split by subsystem so selection methods can be tuned independently.
     SKILL_LLM_MODEL: str = "gpt-5-nano"
-    SKILL_LLM_MAX_OUTPUT_TOKENS: int = 1200
+    SKILL_LLM_MAX_OUTPUT_TOKENS: int | None = None
     PROJ_LLM_MODEL: str = "gpt-5-nano"
     JOB_FOCUS_LLM_MODEL: str = "gpt-5-mini"
     JOB_FOCUS_LLM_MAX_OUTPUT_TOKENS: int = 1200

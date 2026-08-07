@@ -202,14 +202,13 @@ def build_response_create_kwargs(
     instructions: str,
     prompt_payload: str,
     schema: dict[str, Any],
-    max_output_tokens: int,
+    max_output_tokens: int | None,
 ) -> dict[str, Any]:
     """Build Responses API kwargs with model-specific parameter compatibility."""
     kwargs: dict[str, Any] = {
         "model": model,
         "instructions": instructions,
         "input": prompt_payload,
-        "max_output_tokens": max_output_tokens,
         "tools": [],
         "text": {
             "format": {
@@ -220,6 +219,8 @@ def build_response_create_kwargs(
             }
         },
     }
+    if max_output_tokens is not None:
+        kwargs["max_output_tokens"] = max_output_tokens
     if supports_temperature(model):
         kwargs["temperature"] = 0
     return kwargs
@@ -262,15 +263,16 @@ def score_skills_with_llm(
         raise LLMClientError("OPENAI_API_KEY is required for LLM scoring")
 
     effective_model = model if model is not None else settings.SKILL_LLM_MODEL
-    effective_max_output_tokens = (
-        max_output_tokens
-        if max_output_tokens is not None
-        else _estimated_default_max_output_tokens(
+    if max_output_tokens is not None:
+        effective_max_output_tokens = max_output_tokens
+    elif settings.SKILL_LLM_MAX_OUTPUT_TOKENS is not None:
+        effective_max_output_tokens = _estimated_default_max_output_tokens(
             category_inputs=category_inputs,
             schema=schema,
             configured_default=settings.SKILL_LLM_MAX_OUTPUT_TOKENS,
         )
-    )
+    else:
+        effective_max_output_tokens = None
 
     start = time.perf_counter()
     attempts: list[dict[str, Any]] = []
@@ -290,11 +292,15 @@ def score_skills_with_llm(
         )
         raise LLMClientError(f"LLM request failed: {exc}") from exc
 
-    retry_max_output_tokens = max(effective_max_output_tokens * 2, 3000)
-    max_output_tokens_by_attempt = [
-        effective_max_output_tokens,
-        retry_max_output_tokens,
-    ]
+    max_output_tokens_by_attempt: list[int | None]
+    if effective_max_output_tokens is None:
+        max_output_tokens_by_attempt = [None]
+    else:
+        retry_max_output_tokens = max(effective_max_output_tokens * 2, 3000)
+        max_output_tokens_by_attempt = [
+            effective_max_output_tokens,
+            retry_max_output_tokens,
+        ]
 
     for attempt_index, attempt_max_output_tokens in enumerate(
         max_output_tokens_by_attempt,

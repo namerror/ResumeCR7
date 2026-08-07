@@ -59,6 +59,36 @@ def test_score_skills_with_llm_sends_responses_schema(monkeypatch):
     assert result.metadata["model"] == "test-model"
 
 
+def test_score_skills_with_llm_omits_default_max_output_tokens(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text='{"technology":{"React":3},"programming":{},"concepts":{}}',
+                usage=None,
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(llm_client.settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(llm_client.settings, "SKILL_LLM_MAX_OUTPUT_TOKENS", None)
+
+    score_skills_with_llm(
+        job_role="Frontend Engineer",
+        job_text=None,
+        technology=["React"],
+        programming=[],
+        concepts=[],
+    )
+
+    assert "max_output_tokens" not in captured["kwargs"]
+
+
 def test_score_skills_with_llm_omits_temperature_for_gpt_5_mini(monkeypatch):
     captured = {}
 
