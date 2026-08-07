@@ -19,8 +19,8 @@ import {
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FocusEvent, ReactNode } from "react";
 
 import type { EvidenceApi } from "./api";
 import { ApiError, evidenceApi } from "./api";
@@ -37,6 +37,7 @@ import {
   hasDraftChanges,
   isTempId,
 } from "./draft";
+import { sortSkillList } from "./skills";
 import type {
   CollectionRecord,
   BulletCountRangeConfig,
@@ -945,10 +946,58 @@ function SkillsEditor({
   skills: ProjectSkills;
   onChange: (skills: ProjectSkills) => void;
 }) {
+  const [editingCategory, setEditingCategory] = useState<SkillCategory | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{
+    category: SkillCategory;
+    sequence: number;
+  } | null>(null);
+
+  function updateCategory(category: SkillCategory, values: string[]) {
+    onChange({ ...skills, [category]: values });
+  }
+
+  function startEditingCategory(category: SkillCategory) {
+    if (editingCategory !== category) {
+      updateCategory(category, sortSkillList(skills[category]));
+    }
+    setEditingCategory(category);
+  }
+
+  function addSkill(category: SkillCategory) {
+    updateCategory(category, ["", ...sortSkillList(skills[category])]);
+    setEditingCategory(category);
+    setFocusRequest((current) => ({
+      category,
+      sequence: (current?.sequence ?? 0) + 1,
+    }));
+  }
+
+  function finishEditingCategory(category: SkillCategory, values: string[]) {
+    updateCategory(category, sortSkillList(values));
+    setEditingCategory((current) => (current === category ? null : current));
+  }
+
   return (
     <div className="editor-surface">
       <SectionHeader title="Skills" eyebrow="Inventory" />
-      <SkillBucketsEditor skills={skills} onChange={onChange} />
+      <div className="bucket-grid">
+        {skillCategories.map((category) => (
+          <SkillInventoryCategoryEditor
+            key={category}
+            focusFirstSequence={
+              focusRequest?.category === category ? focusRequest.sequence : undefined
+            }
+            label={categoryLabels[category]}
+            values={
+              editingCategory === category ? skills[category] : sortSkillList(skills[category])
+            }
+            onAdd={() => addSkill(category)}
+            onBlurAway={(values) => finishEditingCategory(category, values)}
+            onChange={(values) => updateCategory(category, values)}
+            onFocus={() => startEditingCategory(category)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -1540,6 +1589,87 @@ function SkillBucketsEditor({
           values={skills[category]}
           onChange={(values) => onChange({ ...skills, [category]: values })}
         />
+      ))}
+    </div>
+  );
+}
+
+function SkillInventoryCategoryEditor({
+  focusFirstSequence,
+  label,
+  onAdd,
+  onBlurAway,
+  onChange,
+  onFocus,
+  values,
+}: {
+  focusFirstSequence?: number;
+  label: string;
+  onAdd: () => void;
+  onBlurAway: (values: string[]) => void;
+  onChange: (values: string[]) => void;
+  onFocus: () => void;
+  values: string[];
+}) {
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (focusFirstSequence !== undefined) {
+      firstInputRef.current?.focus();
+    }
+  }, [focusFirstSequence]);
+
+  function updateValue(index: number, value: string) {
+    const next = [...values];
+    next[index] = value;
+    onChange(next);
+  }
+
+  function removeValue(index: number) {
+    onChange(values.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    onBlurAway(values);
+  }
+
+  return (
+    <div className="list-editor" onBlur={handleBlur} onFocus={onFocus}>
+      <div className="list-editor-header">
+        <span>{label}</span>
+        <button
+          aria-label={`Add ${label}`}
+          className="icon-button"
+          title={`Add ${label}`}
+          type="button"
+          onClick={onAdd}
+        >
+          <Plus aria-hidden="true" size={16} />
+        </button>
+      </div>
+      {values.length === 0 ? <p className="empty-note">None.</p> : null}
+      {values.map((value, index) => (
+        <div className="list-row" key={index}>
+          <input
+            ref={index === 0 ? firstInputRef : undefined}
+            aria-label={`${label} ${index + 1}`}
+            value={value}
+            onChange={(event) => updateValue(index, event.target.value)}
+          />
+          <button
+            aria-label={`Remove ${label} ${index + 1}`}
+            className="icon-button danger"
+            title={`Remove ${label} ${index + 1}`}
+            type="button"
+            onClick={() => removeValue(index)}
+          >
+            <Trash2 aria-hidden="true" size={16} />
+          </button>
+        </div>
       ))}
     </div>
   );

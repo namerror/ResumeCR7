@@ -1,5 +1,6 @@
 import type { EvidenceApi } from "./api";
 import { deepEqual } from "./draft";
+import { sortProjectSkills } from "./skills";
 import type {
   EducationRecord,
   EducationRecordInput,
@@ -141,7 +142,7 @@ export function toUserInput(record: ResumeEvidenceRegistry["user"]): UserInfoInp
 
 export function toSkillsInput(record: ResumeEvidenceRegistry["skills"]): SkillsInput {
   return {
-    skills: cloneSkills(record.skills),
+    skills: sortProjectSkills(record.skills),
   };
 }
 

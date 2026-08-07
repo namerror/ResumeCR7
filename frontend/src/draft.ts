@@ -5,6 +5,7 @@ import type {
   ProjectSkills,
   ResumeEvidenceRegistry,
 } from "./types";
+import { sortProjectSkills } from "./skills";
 
 export const tempIdPrefix = "tmp-";
 
@@ -83,9 +84,15 @@ export function hasDraftChanges(
   if (!baseline || !draft) {
     return false;
   }
-  return !deepEqual(baseline, draft);
+  return !deepEqual(toComparableEvidence(baseline), toComparableEvidence(draft));
 }
 
 export function deepEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function toComparableEvidence(evidence: ResumeEvidenceRegistry): ResumeEvidenceRegistry {
+  const comparable = cloneEvidence(evidence);
+  comparable.skills.skills = sortProjectSkills(comparable.skills.skills);
+  return comparable;
 }

@@ -30,6 +30,111 @@ describe("App", () => {
     ]);
   });
 
+  it("orders main skills alphabetically in each category", async () => {
+    const evidence = sampleEvidence();
+    evidence.skills.skills.technology = ["Vite", "Docker", "API Gateway"];
+    evidence.skills.skills.programming = ["TypeScript", "Python", "Go"];
+    evidence.skills.skills.concepts = ["Schema validation", "Caching", "API design"];
+    const client = createMockClient(evidence);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+
+    expect(skillInputValue("Technology 1")).toBe("API Gateway");
+    expect(skillInputValue("Technology 2")).toBe("Docker");
+    expect(skillInputValue("Technology 3")).toBe("Vite");
+    expect(skillInputValue("Programming 1")).toBe("Go");
+    expect(skillInputValue("Programming 2")).toBe("Python");
+    expect(skillInputValue("Programming 3")).toBe("TypeScript");
+    expect(skillInputValue("Concepts 1")).toBe("API design");
+    expect(skillInputValue("Concepts 2")).toBe("Caching");
+    expect(skillInputValue("Concepts 3")).toBe("Schema validation");
+  });
+
+  it("adds new main skill inputs at the top of the category", async () => {
+    const evidence = sampleEvidence();
+    evidence.skills.skills.technology = ["Vite", "Docker"];
+    const client = createMockClient(evidence);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Technology" }));
+
+    expect(skillInputValue("Technology 1")).toBe("");
+    expect(skillInputValue("Technology 2")).toBe("Docker");
+    expect(skillInputValue("Technology 3")).toBe("Vite");
+    expect(document.activeElement).toBe(screen.getByLabelText("Technology 1"));
+  });
+
+  it("places a new main skill alphabetically after focus leaves the category", async () => {
+    const evidence = sampleEvidence();
+    evidence.skills.skills.technology = ["Docker", "Vite"];
+    const client = createMockClient(evidence);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Technology" }));
+    const newSkill = screen.getByLabelText("Technology 1");
+    fireEvent.change(newSkill, { target: { value: "Terraform" } });
+    fireEvent.blur(newSkill);
+
+    expect(skillInputValue("Technology 1")).toBe("Docker");
+    expect(skillInputValue("Technology 2")).toBe("Terraform");
+    expect(skillInputValue("Technology 3")).toBe("Vite");
+  });
+
+  it("applies main skill edits with alphabetized category payloads", async () => {
+    const evidence = sampleEvidence();
+    evidence.skills.skills.technology = ["Vite", "Docker"];
+    const reloaded = cloneEvidence(evidence);
+    reloaded.skills.skills.technology = ["Ansible", "Docker", "Vite"];
+    const client = createMockClient(evidence, reloaded);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Technology" }));
+    const newSkill = screen.getByLabelText("Technology 1");
+    fireEvent.change(newSkill, { target: { value: "Ansible" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
+
+    await waitFor(() => {
+      expect(client.updateSkills).toHaveBeenCalledWith({
+        skills: {
+          technology: ["Ansible", "Docker", "Vite"],
+          programming: ["Python"],
+          concepts: ["Schema validation"],
+        },
+      });
+    });
+  });
+
+  it("blocks repeated main skill names across categories ignoring case", async () => {
+    const evidence = sampleEvidence();
+    evidence.skills.skills.technology = ["NodeJS"];
+    evidence.skills.skills.programming = [];
+    const client = createMockClient(evidence);
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Programming" }));
+    const newSkill = screen.getByLabelText("Programming 1");
+    fireEvent.change(newSkill, { target: { value: "nodejs" } });
+    fireEvent.blur(newSkill);
+
+    expect(await screen.findByText("Skills has duplicate skill name: NodeJS.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /apply/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /apply/i }));
+    expect(client.updateSkills).not.toHaveBeenCalled();
+  });
+
   it("stages user edits and applies them through the user endpoint", async () => {
     const evidence = sampleEvidence();
     const reloaded = cloneEvidence(evidence);
@@ -393,6 +498,10 @@ describe("App", () => {
     expect(client.updateGenerationConfig).not.toHaveBeenCalled();
   });
 });
+
+function skillInputValue(label: string): string {
+  return (screen.getByLabelText(label) as HTMLInputElement).value;
+}
 
 function createMockClient(
   initial = sampleEvidence(),

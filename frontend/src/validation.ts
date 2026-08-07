@@ -1,4 +1,5 @@
 import type { JobTarget, ResumeEvidenceRegistry, ResumeGenerationConfig } from "./types";
+import { findDuplicateSkillNames } from "./skills";
 
 export function validateDraftEvidence(draft: ResumeEvidenceRegistry): string[] {
   const errors: string[] = [];
@@ -14,6 +15,7 @@ export function validateDraftEvidence(draft: ResumeEvidenceRegistry): string[] {
   validateList(errors, "Skills technology", draft.skills.skills.technology);
   validateList(errors, "Skills programming", draft.skills.skills.programming);
   validateList(errors, "Skills concepts", draft.skills.skills.concepts);
+  validateUniqueSkills(errors, draft.skills.skills);
 
   for (const project of draft.projects.projects) {
     const label = project.name.trim() || "Untitled project";
@@ -152,6 +154,21 @@ function validateList(
   if (values.some((value) => !value.trim())) {
     errors.push(`${label} has a blank entry.`);
   }
+}
+
+function validateUniqueSkills(
+  errors: string[],
+  skills: ResumeEvidenceRegistry["skills"]["skills"],
+): void {
+  const duplicates = findDuplicateSkillNames(skills);
+  if (duplicates.length === 0) {
+    return;
+  }
+  if (duplicates.length === 1) {
+    errors.push(`Skills has duplicate skill name: ${duplicates[0]}.`);
+    return;
+  }
+  errors.push(`Skills has duplicate skill names: ${duplicates.join(", ")}.`);
 }
 
 function validateOptionalLinks(errors: string[], label: string, values: Array<string | null>): void {
