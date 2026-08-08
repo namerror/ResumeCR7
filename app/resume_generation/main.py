@@ -51,6 +51,37 @@ DEFAULT_RESUME_RESULT_ARTIFACT_PATH = settings.resume_result_artifact_path
 DEFAULT_RESUME_RUN_MANIFEST_ARTIFACT_PATH = settings.resume_run_manifest_artifact_path
 logger = logging.getLogger("resume_generation")
 _RESUME_DATE_PATTERN = re.compile(r"^\s*(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?\s*$")
+_RESUME_MONTH_DATE_PATTERN = re.compile(
+    r"^\s*([A-Za-z]{3,9})\.?\s+(\d{4})\s*$",
+    re.IGNORECASE,
+)
+_RESUME_CURRENT_DATE_VALUES = {"current", "ongoing", "present"}
+_RESUME_MONTHS = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
 
 
 def resolve_resume_result_artifact_path(path: Path | str | None = None) -> Path:
@@ -147,11 +178,13 @@ def _resume_date_asc_key(
     *,
     missing_parts_latest: bool,
 ) -> tuple[int, int, int, str]:
-    year, month, day, fallback = _resume_date_parts(
+    parsed = _resume_date_parts(
         value,
         missing_parts_latest=missing_parts_latest,
     )
-    return (year, month, day, fallback)
+    if parsed is None:
+        return (9999, 12, 31, value.strip().lower())
+    return (*parsed, "")
 
 
 def _resume_date_desc_key(
@@ -163,31 +196,54 @@ def _resume_date_desc_key(
     if value is None:
         sentinel = 9999 if none_is_latest else -9999
         return (-sentinel, -12, -31, "")
-    year, month, day, fallback = _resume_date_parts(
+
+    if none_is_latest and _is_resume_current_date(value):
+        return (-9999, -12, -31, "")
+
+    parsed = _resume_date_parts(
         value,
         missing_parts_latest=missing_parts_latest,
     )
-    return (-year, -month, -day, fallback)
+    if parsed is None:
+        return (0, 0, 0, value.strip().lower())
+    year, month, day = parsed
+    return (-year, -month, -day, "")
 
 
 def _resume_date_parts(
     value: str,
     *,
     missing_parts_latest: bool,
-) -> tuple[int, int, int, str]:
+) -> tuple[int, int, int] | None:
     match = _RESUME_DATE_PATTERN.match(value)
-    if match is None:
-        return (0, 0, 0, value.strip().lower())
+    if match is not None:
+        month_default = 12 if missing_parts_latest else 1
+        day_default = 31 if missing_parts_latest else 1
+        year, month, day = match.groups()
+        return (
+            int(year),
+            int(month) if month is not None else month_default,
+            int(day) if day is not None else day_default,
+        )
 
-    month_default = 12 if missing_parts_latest else 1
-    day_default = 31 if missing_parts_latest else 1
-    year, month, day = match.groups()
+    month_match = _RESUME_MONTH_DATE_PATTERN.match(value)
+    if month_match is None:
+        return None
+
+    month_name, year = month_match.groups()
+    month = _RESUME_MONTHS.get(month_name.strip(".").lower())
+    if month is None:
+        return None
+
     return (
         int(year),
-        int(month) if month is not None else month_default,
-        int(day) if day is not None else day_default,
-        "",
+        month,
+        31 if missing_parts_latest else 1,
     )
+
+
+def _is_resume_current_date(value: str) -> bool:
+    return value.strip().lower().strip(".") in _RESUME_CURRENT_DATE_VALUES
 
 
 def write_resume_result_artifact(

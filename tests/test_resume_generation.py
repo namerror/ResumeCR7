@@ -385,6 +385,89 @@ def test_select_resume_experience_orders_latest_experiences_first(
     assert [item.id for item in result.experience] == expected_ids
 
 
+def test_select_resume_experience_orders_month_name_dates_chronologically(tmp_path):
+    def experience_record(
+        *,
+        record_id: str,
+        start: str,
+        end: str | None,
+    ) -> dict:
+        return {
+            "id": record_id,
+            "name": f"{record_id} Company",
+            "role": "Engineer",
+            "summary": "Built platform tooling.",
+            "highlights": ["Improved deployment workflows."],
+            "active": True,
+            "skills": {
+                "technology": ["Kubernetes"],
+                "programming": ["Python"],
+                "concepts": ["CI/CD"],
+            },
+            "location": "Remote",
+            "start": start,
+            "end": end,
+            "links": None,
+        }
+
+    experience_path = _write_yaml(
+        tmp_path / "experience.yaml",
+        {
+            "schema_version": 1,
+            "experience": [
+                experience_record(
+                    record_id="august-2025-role",
+                    start="June 2025",
+                    end="August 2025",
+                ),
+                experience_record(
+                    record_id="current-later-start",
+                    start="May 2026",
+                    end="Present",
+                ),
+                experience_record(
+                    record_id="current-earlier-start",
+                    start="Feb 2026",
+                    end=None,
+                ),
+                experience_record(
+                    record_id="same-end-later-start",
+                    start="July 2026",
+                    end="August 2026",
+                ),
+                experience_record(
+                    record_id="same-end-earlier-start",
+                    start="June 2026",
+                    end="August 2026",
+                ),
+                experience_record(
+                    record_id="sept-2025-role",
+                    start="June 2025",
+                    end="Sept 2025",
+                ),
+                experience_record(
+                    record_id="sep-dot-2025-role",
+                    start="July 2025",
+                    end="Sep. 2025",
+                ),
+            ],
+        },
+    )
+    experience_file = load_evidence_yaml(experience_path, "experience")
+
+    result = _select_resume_experience(experience_file, top_n=None)
+
+    assert [item.id for item in result.experience] == [
+        "current-earlier-start",
+        "current-later-start",
+        "same-end-earlier-start",
+        "same-end-later-start",
+        "sept-2025-role",
+        "sep-dot-2025-role",
+        "august-2025-role",
+    ]
+
+
 def _sample_intermediate_resume_result() -> IntermediateResumeResult:
     return IntermediateResumeResult.model_validate(
         {
@@ -3211,6 +3294,177 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
     ]
     assert assembly_calls[0]["experience_bullet_points"][0].bullet_points == [
         "Generated bullet for backend-engineer."
+    ]
+
+
+def test_resume_generation_pipeline_preserves_selected_experience_order(
+    monkeypatch,
+    tmp_path,
+):
+    config_path = _write_yaml(
+        tmp_path / "config.yaml",
+        _config_payload(
+            cache={"enabled": False},
+            experience_selection={"top_n": 4},
+        ),
+    )
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+
+    def experience_record(
+        *,
+        record_id: str,
+        name: str,
+        role: str,
+        start: str,
+        end: str | None,
+    ) -> dict:
+        return {
+            "id": record_id,
+            "name": name,
+            "role": role,
+            "summary": "Built platform tooling.",
+            "highlights": ["Improved deployment workflows."],
+            "active": True,
+            "skills": {
+                "technology": ["Kubernetes"],
+                "programming": ["Python"],
+                "concepts": ["CI/CD"],
+            },
+            "location": "Remote",
+            "start": start,
+            "end": end,
+            "links": None,
+        }
+
+    experience_path = _write_yaml(
+        tmp_path / "experience.yaml",
+        {
+            "schema_version": 1,
+            "experience": [
+                experience_record(
+                    record_id="manning",
+                    name="Manning College",
+                    role="Undergraduate Research Volunteer",
+                    start="June 2025",
+                    end="August 2025",
+                ),
+                experience_record(
+                    record_id="daros",
+                    name="DARoS Lab",
+                    role="Robotics Researcher",
+                    start="May 2026",
+                    end=None,
+                ),
+                experience_record(
+                    record_id="secunet",
+                    name="Secunet Security Networks",
+                    role="Intern - Software Engineer",
+                    start="June 2026",
+                    end="August 2026",
+                ),
+                experience_record(
+                    record_id="krastanov",
+                    name="Krastanov Lab",
+                    role="Research Software Engineer",
+                    start="Feb 2026",
+                    end=None,
+                ),
+            ],
+        },
+    )
+    loaded_evidence = _loaded_evidence(
+        projects_path,
+        skills_path,
+        experience_path=experience_path,
+    )
+    calls: list[tuple[str, str | None]] = []
+
+    class FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def post(self, endpoint: str, json: dict):
+            evidence = json.get("project") or json.get("experience")
+            calls.append((endpoint, evidence.get("id") if evidence else None))
+            if endpoint == "/select-skills":
+                return httpx.Response(
+                    200,
+                    json={
+                        "technology": ["FastAPI"],
+                        "programming": ["Python"],
+                        "concepts": ["API"],
+                    },
+                )
+            if endpoint == "/select-projects":
+                return httpx.Response(
+                    200,
+                    json={
+                        "selected_project_ids": ["active-project"],
+                        "ranked_projects": [
+                            {
+                                "project_id": "active-project",
+                                "score": 1.0,
+                                "method": "llm",
+                            }
+                        ],
+                    },
+                )
+            if endpoint == "/derive-job-focus":
+                return _job_focus_response()
+            if endpoint == "/generate-bulletpoints":
+                return httpx.Response(
+                    200,
+                    json={
+                        "bullet_points": [f"Generated bullet for {evidence['id']}."],
+                    },
+                )
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    monkeypatch.setattr("resume_generation.selection.httpx.Client", FakeClient)
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "resume_generation.main.load_registered_evidence",
+        lambda paths=None: loaded_evidence,
+    )
+
+    result = run_resume_generation_pipeline(
+        config_path=config_path,
+        job_target_path=job_path,
+        evidence_paths={
+            "projects": projects_path,
+            "skills": skills_path,
+            "experience": experience_path,
+        },
+        resume_result_artifact_path=tmp_path / "resume_result.json",
+        resume_run_manifest_artifact_path=tmp_path / "resume_run_manifest.json",
+    )
+
+    assert [item.name for item in result.experience] == [
+        "Krastanov Lab",
+        "DARoS Lab",
+        "Secunet Security Networks",
+        "Manning College",
+    ]
+    assert [item.bullet_points for item in result.experience] == [
+        ["Generated bullet for krastanov."],
+        ["Generated bullet for daros."],
+        ["Generated bullet for secunet."],
+        ["Generated bullet for manning."],
+    ]
+    assert calls[-4:] == [
+        ("/generate-bulletpoints", "krastanov"),
+        ("/generate-bulletpoints", "daros"),
+        ("/generate-bulletpoints", "secunet"),
+        ("/generate-bulletpoints", "manning"),
     ]
 
 
