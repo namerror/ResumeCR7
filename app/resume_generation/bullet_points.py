@@ -385,6 +385,7 @@ async def generate_resume_section_bullet_points_async(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
+    semaphore: asyncio.Semaphore | None = None,
 ) -> ResumeSectionBulletPointResults:
     payload = _resume_section_bullet_payload(
         selected_projects=selected_projects,
@@ -399,23 +400,43 @@ async def generate_resume_section_bullet_points_async(
             experience_bullet_points=[],
         )
     async with open_async_stage_client(config, httpx.AsyncClient) as client:
-        response = await _cached_post_json_async(
-            cache=cache,
-            stage="resume_section_bullet_points",
-            client=client,
-            endpoint="/generate-resume-section-bulletpoints",
-            payload=payload,
-            cache_payload=_resume_section_bullet_cache_payload(payload),
-            fetch_payload=_resume_section_bullet_fetch_payload(payload),
-            should_use_cached=lambda data, request_payload=payload: (
-                _section_bullet_counts_match_request(
-                    data,
-                    payload=request_payload,
+        if semaphore is None:
+            response = await _cached_post_json_async(
+                cache=cache,
+                stage="resume_section_bullet_points",
+                client=client,
+                endpoint="/generate-resume-section-bulletpoints",
+                payload=payload,
+                cache_payload=_resume_section_bullet_cache_payload(payload),
+                fetch_payload=_resume_section_bullet_fetch_payload(payload),
+                should_use_cached=lambda data, request_payload=payload: (
+                    _section_bullet_counts_match_request(
+                        data,
+                        payload=request_payload,
+                    )
+                ),
+                token_usage_monitor=token_usage_monitor,
+                stage_response_records=stage_response_records,
+            )
+        else:
+            async with semaphore:
+                response = await _cached_post_json_async(
+                    cache=cache,
+                    stage="resume_section_bullet_points",
+                    client=client,
+                    endpoint="/generate-resume-section-bulletpoints",
+                    payload=payload,
+                    cache_payload=_resume_section_bullet_cache_payload(payload),
+                    fetch_payload=_resume_section_bullet_fetch_payload(payload),
+                    should_use_cached=lambda data, request_payload=payload: (
+                        _section_bullet_counts_match_request(
+                            data,
+                            payload=request_payload,
+                        )
+                    ),
+                    token_usage_monitor=token_usage_monitor,
+                    stage_response_records=stage_response_records,
                 )
-            ),
-            token_usage_monitor=token_usage_monitor,
-            stage_response_records=stage_response_records,
-        )
         if cache is not None:
             response = _shape_resume_section_bullet_response(response, payload=payload)
         return _section_results_from_response(response)
@@ -487,6 +508,7 @@ async def generate_project_bullet_points_async(
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    llm_semaphore: asyncio.Semaphore | None = None,
 ) -> list[ProjectBulletPointResult]:
     bullet_config = _exclude_none(config.project_bullet_point_generation)
     projects = list(selected_projects)
@@ -501,45 +523,54 @@ async def generate_project_bullet_points_async(
         project: ProjectRecord,
     ) -> _ProjectBulletTaskResult:
         async with request_semaphore:
-            context_payload: dict[str, Any] = {"title": job_target.title}
-            if job_focus is not None:
-                context_payload["job_focus"] = job_focus.model_dump()
-            else:
-                context_payload["description"] = job_target.description
-            payload = {
-                "context": context_payload,
-                "project": project.model_dump(),
-                **bullet_config,
-            }
-            local_stage_records: list[dict[str, Any]] = []
-            response = await _cached_post_json_async(
-                cache=cache,
-                stage="project_bullet_points",
-                client=client,
-                endpoint="/generate-bulletpoints",
-                payload=payload,
-                cache_payload=_bullet_cache_payload(
-                    payload,
-                    evidence_type="project",
-                ),
-                fetch_payload=_bullet_fetch_payload(payload),
-                namespace=project.id,
-                should_use_cached=lambda data, request_payload=payload: (
-                    _bullet_count_matches_request(data, payload=request_payload)
-                ),
-                token_usage_monitor=None,
-                stage_response_records=local_stage_records,
-            )
-            if cache is not None:
-                response = _shape_bullet_response(response, payload=payload)
-            return _ProjectBulletTaskResult(
-                result=ProjectBulletPointResult(
-                    project_id=project.id,
-                    bullet_points=response["bullet_points"],
-                    details=response.get("details"),
-                ),
-                stage_response_records=local_stage_records,
-            )
+            if llm_semaphore is not None and llm_semaphore is not request_semaphore:
+                async with llm_semaphore:
+                    return await _fetch_project_without_limit(client, project)
+            return await _fetch_project_without_limit(client, project)
+
+    async def _fetch_project_without_limit(
+        client: httpx.AsyncClient,
+        project: ProjectRecord,
+    ) -> _ProjectBulletTaskResult:
+        context_payload: dict[str, Any] = {"title": job_target.title}
+        if job_focus is not None:
+            context_payload["job_focus"] = job_focus.model_dump()
+        else:
+            context_payload["description"] = job_target.description
+        payload = {
+            "context": context_payload,
+            "project": project.model_dump(),
+            **bullet_config,
+        }
+        local_stage_records: list[dict[str, Any]] = []
+        response = await _cached_post_json_async(
+            cache=cache,
+            stage="project_bullet_points",
+            client=client,
+            endpoint="/generate-bulletpoints",
+            payload=payload,
+            cache_payload=_bullet_cache_payload(
+                payload,
+                evidence_type="project",
+            ),
+            fetch_payload=_bullet_fetch_payload(payload),
+            namespace=project.id,
+            should_use_cached=lambda data, request_payload=payload: (
+                _bullet_count_matches_request(data, payload=request_payload)
+            ),
+            token_usage_monitor=None,
+            stage_response_records=local_stage_records,
+        )
+        if cache is not None:
+            response = _shape_bullet_response(response, payload=payload)
+        return _ProjectBulletTaskResult(
+            result=ProjectBulletPointResult(
+                project_id=project.id,
+                bullet_points=response["bullet_points"],
+                details=response.get("details"),
+            ),
+            stage_response_records=local_stage_records,
+        )
 
     async with open_async_stage_client(config, httpx.AsyncClient) as client:
         task_results = await _gather_bullet_tasks_cancel_on_error(
@@ -626,6 +657,7 @@ async def generate_experience_bullet_points_async(
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    llm_semaphore: asyncio.Semaphore | None = None,
 ) -> list[ExperienceBulletPointResult]:
     bullet_config = _exclude_none(config.experience_bullet_point_generation)
     active_experience = [item for item in experience if item.active]
@@ -640,45 +672,54 @@ async def generate_experience_bullet_points_async(
         item: ExperienceRecord,
     ) -> _ExperienceBulletTaskResult:
         async with request_semaphore:
-            context_payload: dict[str, Any] = {"title": job_target.title}
-            if job_focus is not None:
-                context_payload["job_focus"] = job_focus.model_dump()
-            else:
-                context_payload["description"] = job_target.description
-            payload = {
-                "context": context_payload,
-                "experience": item.model_dump(),
-                **bullet_config,
-            }
-            local_stage_records: list[dict[str, Any]] = []
-            response = await _cached_post_json_async(
-                cache=cache,
-                stage="experience_bullet_points",
-                client=client,
-                endpoint="/generate-bulletpoints",
-                payload=payload,
-                cache_payload=_bullet_cache_payload(
-                    payload,
-                    evidence_type="experience",
-                ),
-                fetch_payload=_bullet_fetch_payload(payload),
-                namespace=item.id,
-                should_use_cached=lambda data, request_payload=payload: (
-                    _bullet_count_matches_request(data, payload=request_payload)
-                ),
-                token_usage_monitor=None,
-                stage_response_records=local_stage_records,
-            )
-            if cache is not None:
-                response = _shape_bullet_response(response, payload=payload)
-            return _ExperienceBulletTaskResult(
-                result=ExperienceBulletPointResult(
-                    experience_id=item.id,
-                    bullet_points=response["bullet_points"],
-                    details=response.get("details"),
-                ),
-                stage_response_records=local_stage_records,
-            )
+            if llm_semaphore is not None and llm_semaphore is not request_semaphore:
+                async with llm_semaphore:
+                    return await _fetch_experience_without_limit(client, item)
+            return await _fetch_experience_without_limit(client, item)
+
+    async def _fetch_experience_without_limit(
+        client: httpx.AsyncClient,
+        item: ExperienceRecord,
+    ) -> _ExperienceBulletTaskResult:
+        context_payload: dict[str, Any] = {"title": job_target.title}
+        if job_focus is not None:
+            context_payload["job_focus"] = job_focus.model_dump()
+        else:
+            context_payload["description"] = job_target.description
+        payload = {
+            "context": context_payload,
+            "experience": item.model_dump(),
+            **bullet_config,
+        }
+        local_stage_records: list[dict[str, Any]] = []
+        response = await _cached_post_json_async(
+            cache=cache,
+            stage="experience_bullet_points",
+            client=client,
+            endpoint="/generate-bulletpoints",
+            payload=payload,
+            cache_payload=_bullet_cache_payload(
+                payload,
+                evidence_type="experience",
+            ),
+            fetch_payload=_bullet_fetch_payload(payload),
+            namespace=item.id,
+            should_use_cached=lambda data, request_payload=payload: (
+                _bullet_count_matches_request(data, payload=request_payload)
+            ),
+            token_usage_monitor=None,
+            stage_response_records=local_stage_records,
+        )
+        if cache is not None:
+            response = _shape_bullet_response(response, payload=payload)
+        return _ExperienceBulletTaskResult(
+            result=ExperienceBulletPointResult(
+                experience_id=item.id,
+                bullet_points=response["bullet_points"],
+                details=response.get("details"),
+            ),
+            stage_response_records=local_stage_records,
+        )
 
     async with open_async_stage_client(config, httpx.AsyncClient) as client:
         task_results = await _gather_bullet_tasks_cancel_on_error(

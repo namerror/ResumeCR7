@@ -306,15 +306,16 @@ class ResumeGenerationCacheConfig(StrictSchemaModel):
 
 
 class ResumeGenerationConcurrencyConfig(StrictSchemaModel):
+    llm_requests: int = 3
     bullet_point_requests: int = 3
 
-    @field_validator("bullet_point_requests")
+    @field_validator("llm_requests", "bullet_point_requests")
     @classmethod
-    def validate_bullet_point_requests(cls, value: int) -> int:
+    def validate_request_count(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("concurrency.bullet_point_requests must be greater than or equal to 1")
+            raise ValueError("concurrency request limits must be greater than or equal to 1")
         if value > 10:
-            raise ValueError("concurrency.bullet_point_requests must be less than or equal to 10")
+            raise ValueError("concurrency request limits must be less than or equal to 10")
         return value
 
 

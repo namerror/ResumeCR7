@@ -34,7 +34,7 @@ from app.resume_generation.bullet_points import (
     generate_resume_section_bullet_points_async,
 )
 from app.resume_generation.cache import ResumeGenerationStageCache
-from app.resume_generation.job_focus import derive_job_focus
+from app.resume_generation.job_focus import derive_job_focus, derive_job_focus_async
 from app.resume_generation.latex import (
     copy_resume_latex_to_user_output,
     write_resume_latex_artifact,
@@ -46,7 +46,12 @@ from app.resume_generation.models import (
     ResumeSelectionContext,
 )
 from app.resume_generation.pdf import copy_resume_pdf_to_user_output, render_latex_pdf
-from app.resume_generation.selection import generate_selection_context
+from app.resume_generation.selection import (
+    _selection_context_sources,
+    generate_project_selection_async,
+    generate_selection_context,
+    generate_skill_selection_async,
+)
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
 DEFAULT_RESUME_RESULT_ARTIFACT_PATH = settings.resume_result_artifact_path
@@ -128,6 +133,12 @@ def _observe_stage_response_records(
 
 async def _gather_resume_generation_tasks(*awaitables: Any) -> list[Any]:
     tasks = [asyncio.create_task(awaitable) for awaitable in awaitables]
+    return await _wait_resume_generation_tasks_cancel_on_error(tasks)
+
+
+async def _wait_resume_generation_tasks_cancel_on_error(
+    tasks: list[asyncio.Task[Any]],
+) -> list[Any]:
     try:
         done, pending = await asyncio.wait(
             tasks,
@@ -646,14 +657,177 @@ async def run_resume_generation_pipeline_async(
         "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "selection"},
     )
-    context = generate_selection_context(
+    logger.info(
+        "resume_generation_stage_start",
+        extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
+    )
+    (
+        context_config_path,
+        context_job_target_path,
+        context_evidence_paths,
+        projects_file,
+        skills_file,
+    ) = _selection_context_sources(
         loaded_evidence=loaded_evidence,
-        config=config,
-        job_target=job_target,
         config_path=resolved_config_path,
         job_target_path=resolved_job_target_path,
         evidence_paths=evidence_paths,
-        cache=cache,
+    )
+    llm_semaphore = asyncio.Semaphore(config.concurrency.llm_requests)
+    skill_stage_records: list[dict[str, Any]] = []
+    project_stage_records: list[dict[str, Any]] = []
+    job_focus_stage_records: list[dict[str, Any]] = []
+    managed_tasks: list[asyncio.Task[Any]] = []
+
+    skill_task = asyncio.create_task(
+        generate_skill_selection_async(
+            config=config,
+            job_target=job_target,
+            skills_file=skills_file,
+            cache=cache,
+            stage_response_records=skill_stage_records,
+            semaphore=llm_semaphore,
+        )
+    )
+    project_task = asyncio.create_task(
+        generate_project_selection_async(
+            config=config,
+            job_target=job_target,
+            projects_file=projects_file,
+            cache=cache,
+            stage_response_records=project_stage_records,
+            semaphore=llm_semaphore,
+        )
+    )
+    job_focus_task = asyncio.create_task(
+        derive_job_focus_async(
+            config=config,
+            job_target=job_target,
+            cache=cache,
+            stage_response_records=job_focus_stage_records,
+            semaphore=llm_semaphore,
+        )
+    )
+    managed_tasks.extend([skill_task, project_task, job_focus_task])
+
+    try:
+        selected_experience = _select_resume_experience(
+            _experience,
+            top_n=config.experience_selection.top_n,
+        )
+        project_result, job_focus = await _wait_resume_generation_tasks_cancel_on_error(
+            [project_task, job_focus_task]
+        )
+        project_selection, selected_projects = project_result
+
+        if config.bullet_point_generation_strategy == "section_batch":
+            logger.info(
+                "resume_generation_stage_start",
+                extra={
+                    "event": "resume_generation_stage_start",
+                    "stage": "resume_section_bullet_points",
+                    "project_count": len(selected_projects),
+                    "experience_count": len(selected_experience.experience),
+                },
+            )
+            section_bullet_stage_records: list[dict[str, Any]] = []
+            section_bullet_task = asyncio.create_task(
+                generate_resume_section_bullet_points_async(
+                    selected_projects=selected_projects,
+                    experience=selected_experience.experience,
+                    config=config,
+                    job_target=job_target,
+                    job_focus=job_focus,
+                    cache=cache,
+                    token_usage_monitor=None,
+                    stage_response_records=section_bullet_stage_records,
+                    semaphore=llm_semaphore,
+                )
+            )
+            managed_tasks.append(section_bullet_task)
+            selected_skills, section_bullet_points = (
+                await _wait_resume_generation_tasks_cancel_on_error(
+                    [skill_task, section_bullet_task]
+                )
+            )
+            bullet_points = section_bullet_points.project_bullet_points
+            experience_bullet_points = section_bullet_points.experience_bullet_points
+            project_bullet_stage_records: list[dict[str, Any]] = []
+            experience_bullet_stage_records: list[dict[str, Any]] = []
+        else:
+            logger.info(
+                "resume_generation_stage_start",
+                extra={
+                    "event": "resume_generation_stage_start",
+                    "stage": "project_bullet_points",
+                    "project_count": len(selected_projects),
+                },
+            )
+            logger.info(
+                "resume_generation_stage_start",
+                extra={
+                    "event": "resume_generation_stage_start",
+                    "stage": "experience_bullet_points",
+                    "experience_count": len(selected_experience.experience),
+                },
+            )
+            bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
+            project_bullet_stage_records = []
+            experience_bullet_stage_records = []
+            project_bullet_task = asyncio.create_task(
+                generate_project_bullet_points_async(
+                    selected_projects=selected_projects,
+                    config=config,
+                    job_target=job_target,
+                    job_focus=job_focus,
+                    cache=cache,
+                    stage_response_records=project_bullet_stage_records,
+                    semaphore=bullet_semaphore,
+                    llm_semaphore=llm_semaphore,
+                )
+            )
+            experience_bullet_task = asyncio.create_task(
+                generate_experience_bullet_points_async(
+                    experience=selected_experience.experience,
+                    config=config,
+                    job_target=job_target,
+                    job_focus=job_focus,
+                    cache=cache,
+                    stage_response_records=experience_bullet_stage_records,
+                    semaphore=bullet_semaphore,
+                    llm_semaphore=llm_semaphore,
+                )
+            )
+            managed_tasks.extend([project_bullet_task, experience_bullet_task])
+            selected_skills, bullet_points, experience_bullet_points = (
+                await _wait_resume_generation_tasks_cancel_on_error(
+                    [skill_task, project_bullet_task, experience_bullet_task]
+                )
+            )
+            section_bullet_stage_records = []
+    except BaseException:
+        for task in managed_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*managed_tasks, return_exceptions=True)
+        raise
+
+    context = ResumeSelectionContext(
+        job_target=job_target,
+        selected_skills=selected_skills,
+        project_selection=project_selection,
+        selected_projects=selected_projects,
+        config_path=context_config_path,
+        job_target_path=context_job_target_path,
+        evidence_paths=context_evidence_paths,
+    )
+    _observe_stage_response_records(
+        records=skill_stage_records,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    _observe_stage_response_records(
+        records=project_stage_records,
         token_usage_monitor=token_usage_monitor,
         stage_response_records=stage_response_records,
     )
@@ -670,20 +844,8 @@ async def run_resume_generation_pipeline_async(
             ),
         },
     )
-
-    selected_experience = _select_resume_experience(
-        _experience,
-        top_n=config.experience_selection.top_n,
-    )
-
-    logger.info(
-        "resume_generation_stage_start",
-        extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
-    )
-    job_focus = derive_job_focus(
-        config=config,
-        job_target=job_target,
-        cache=cache,
+    _observe_stage_response_records(
+        records=job_focus_stage_records,
         token_usage_monitor=token_usage_monitor,
         stage_response_records=stage_response_records,
     )
@@ -699,27 +861,11 @@ async def run_resume_generation_pipeline_async(
     )
 
     if config.bullet_point_generation_strategy == "section_batch":
-        logger.info(
-            "resume_generation_stage_start",
-            extra={
-                "event": "resume_generation_stage_start",
-                "stage": "resume_section_bullet_points",
-                "project_count": len(context.selected_projects),
-                "experience_count": len(selected_experience.experience),
-            },
-        )
-        section_bullet_points = await generate_resume_section_bullet_points_async(
-            selected_projects=context.selected_projects,
-            experience=selected_experience.experience,
-            config=config,
-            job_target=job_target,
-            job_focus=job_focus,
-            cache=cache,
+        _observe_stage_response_records(
+            records=section_bullet_stage_records,
             token_usage_monitor=token_usage_monitor,
             stage_response_records=stage_response_records,
         )
-        bullet_points = section_bullet_points.project_bullet_points
-        experience_bullet_points = section_bullet_points.experience_bullet_points
         logger.info(
             "resume_generation_stage_complete",
             extra={
@@ -733,45 +879,6 @@ async def run_resume_generation_pipeline_async(
             },
         )
     else:
-        logger.info(
-            "resume_generation_stage_start",
-            extra={
-                "event": "resume_generation_stage_start",
-                "stage": "project_bullet_points",
-                "project_count": len(context.selected_projects),
-            },
-        )
-        logger.info(
-            "resume_generation_stage_start",
-            extra={
-                "event": "resume_generation_stage_start",
-                "stage": "experience_bullet_points",
-                "experience_count": len(selected_experience.experience),
-            },
-        )
-        bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
-        project_bullet_stage_records: list[dict[str, Any]] = []
-        experience_bullet_stage_records: list[dict[str, Any]] = []
-        bullet_points, experience_bullet_points = await _gather_resume_generation_tasks(
-            generate_project_bullet_points_async(
-                selected_projects=context.selected_projects,
-                config=config,
-                job_target=job_target,
-                job_focus=job_focus,
-                cache=cache,
-                stage_response_records=project_bullet_stage_records,
-                semaphore=bullet_semaphore,
-            ),
-            generate_experience_bullet_points_async(
-                experience=selected_experience.experience,
-                config=config,
-                job_target=job_target,
-                job_focus=job_focus,
-                cache=cache,
-                stage_response_records=experience_bullet_stage_records,
-                semaphore=bullet_semaphore,
-            ),
-        )
         _observe_stage_response_records(
             records=project_bullet_stage_records,
             token_usage_monitor=token_usage_monitor,

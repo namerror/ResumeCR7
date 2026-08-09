@@ -67,6 +67,7 @@ import resume_generation.selection as resume_selection
 import resume_generation.pdf as resume_pdf
 from resume_generation.main import (
     _select_resume_experience,
+    run_resume_generation_pipeline_async,
     run_resume_generation_pipeline,
     write_resume_latex_from_config,
     write_resume_pdf_from_config,
@@ -641,6 +642,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     )
     assert config.experience_bullet_point_generation.bullet_count_range is not None
     assert config.experience_bullet_point_generation.bullet_count_range.min == 1
+    assert config.concurrency.llm_requests == 3
     assert config.concurrency.bullet_point_requests == 3
     assert config.cache.enabled is True
     assert config.cache.force_refresh is False
@@ -974,7 +976,17 @@ def test_load_generation_config_rejects_invalid_bullet_concurrency(tmp_path):
         _config_payload(concurrency={"bullet_point_requests": 0}),
     )
 
-    with pytest.raises(ValidationError, match="concurrency.bullet_point_requests"):
+    with pytest.raises(ValidationError, match="concurrency request limits"):
+        load_generation_config(path)
+
+
+def test_load_generation_config_rejects_invalid_llm_concurrency(tmp_path):
+    path = _write_yaml(
+        tmp_path / "config.yaml",
+        _config_payload(concurrency={"llm_requests": 0}),
+    )
+
+    with pytest.raises(ValidationError, match="concurrency request limits"):
         load_generation_config(path)
 
 
@@ -3523,6 +3535,284 @@ def test_run_resume_generation_pipeline_defaults_to_section_batch(
     assert manifest_payload["token_usage"]["raw_stages"][
         "resume_section_bullet_points"
     ]["total_tokens"] == 13
+
+
+def test_run_resume_generation_pipeline_async_starts_section_bullets_before_skill_selection_finishes(
+    monkeypatch,
+    tmp_path,
+):
+    config_payload = _config_payload(
+        bullet_point_generation_strategy="section_batch",
+        cache={"enabled": False},
+        concurrency={"llm_requests": 3, "bullet_point_requests": 3},
+    )
+    config_path = _write_yaml(tmp_path / "config.yaml", config_payload)
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+    loaded_evidence = _loaded_evidence(projects_path, skills_path)
+    starts: dict[str, float] = {}
+    ends: dict[str, float] = {}
+
+    class FakeAsyncClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, endpoint: str, json: dict):
+            starts[endpoint] = asyncio.get_running_loop().time()
+            delay = 0.12 if endpoint == "/select-skills" else 0.02
+            await asyncio.sleep(delay)
+            ends[endpoint] = asyncio.get_running_loop().time()
+            if endpoint == "/select-skills":
+                return httpx.Response(
+                    200,
+                    json={
+                        "technology": ["FastAPI"],
+                        "programming": ["Python"],
+                        "concepts": ["API"],
+                        "details": {"_llm": {"total_tokens": 3}},
+                    },
+                )
+            if endpoint == "/select-projects":
+                return httpx.Response(
+                    200,
+                    json={
+                        "selected_project_ids": ["active-project"],
+                        "ranked_projects": [
+                            {
+                                "project_id": "active-project",
+                                "score": 1.0,
+                                "method": "llm",
+                            }
+                        ],
+                        "details": {"_project_llm": {"total_tokens": 5}},
+                    },
+                )
+            if endpoint == "/derive-job-focus":
+                return _job_focus_response(total_tokens=7)
+            if endpoint == "/generate-resume-section-bulletpoints":
+                return httpx.Response(
+                    200,
+                    json={
+                        "project_bullet_points": [
+                            {
+                                "project_id": "active-project",
+                                "bullet_points": ["Generated project batch bullet."],
+                            }
+                        ],
+                        "experience_bullet_points": [
+                            {
+                                "experience_id": "backend-engineer",
+                                "bullet_points": ["Generated experience batch bullet."],
+                            }
+                        ],
+                        "details": {"_bulletpoints_llm": {"total_tokens": 11}},
+                    },
+                )
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    monkeypatch.setattr("resume_generation.selection.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("resume_generation.job_focus.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(
+        "resume_generation.main.load_registered_evidence",
+        lambda paths=None: loaded_evidence,
+    )
+    manifest_path = tmp_path / "artifacts" / "resume_run_manifest.json"
+
+    result = asyncio.run(
+        run_resume_generation_pipeline_async(
+            config_path=config_path,
+            job_target_path=job_path,
+            evidence_paths={"projects": projects_path, "skills": skills_path},
+            resume_result_artifact_path=tmp_path / "artifacts" / "resume_result.json",
+            resume_run_manifest_artifact_path=manifest_path,
+        )
+    )
+
+    assert result.projects[0].bullet_points == ["Generated project batch bullet."]
+    assert starts["/generate-resume-section-bulletpoints"] >= ends["/select-projects"]
+    assert starts["/generate-resume-section-bulletpoints"] >= ends["/derive-job-focus"]
+    assert starts["/generate-resume-section-bulletpoints"] < ends["/select-skills"]
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert [record["stage"] for record in manifest_payload["stage_responses"]] == [
+        "skill_selection",
+        "project_selection",
+        "job_focus_generation",
+        "resume_section_bullet_points",
+    ]
+
+
+def test_run_resume_generation_pipeline_async_enforces_global_llm_concurrency(
+    monkeypatch,
+    tmp_path,
+):
+    config_path = _write_yaml(
+        tmp_path / "config.yaml",
+        _config_payload(
+            cache={"enabled": False},
+            concurrency={"llm_requests": 2, "bullet_point_requests": 10},
+        ),
+    )
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_payload = _projects_payload()
+    projects_payload["projects"].append(
+        {
+            "id": "second-active-project",
+            "name": "Second Active Project",
+            "summary": "Another FastAPI backend service.",
+            "highlights": ["Built another service."],
+            "active": True,
+            "skills": {
+                "technology": ["FastAPI"],
+                "programming": ["Python"],
+                "concepts": ["API"],
+            },
+            "links": None,
+        }
+    )
+    experience_payload = _experience_payload()
+    experience_payload["experience"].append(
+        {
+            "id": "platform-engineer",
+            "name": "Platform Company",
+            "role": "Platform Engineer",
+            "summary": "Built deployment tooling.",
+            "highlights": ["Improved deployment workflows."],
+            "active": True,
+            "skills": {
+                "technology": ["Docker"],
+                "programming": ["Python"],
+                "concepts": ["CI/CD"],
+            },
+            "location": "Remote",
+            "start": "2023",
+            "end": "2024",
+            "links": None,
+        }
+    )
+    projects_path = _write_yaml(tmp_path / "projects.yaml", projects_payload)
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+    experience_path = _write_yaml(tmp_path / "experience.yaml", experience_payload)
+    loaded_evidence = _loaded_evidence(
+        projects_path,
+        skills_path,
+        experience_path=experience_path,
+    )
+    current_in_flight = 0
+    max_in_flight = 0
+    bullet_in_flight = 0
+    max_bullet_in_flight = 0
+
+    class FakeAsyncClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, endpoint: str, json: dict):
+            nonlocal current_in_flight, max_in_flight
+            nonlocal bullet_in_flight, max_bullet_in_flight
+            current_in_flight += 1
+            max_in_flight = max(max_in_flight, current_in_flight)
+            if endpoint == "/generate-bulletpoints":
+                bullet_in_flight += 1
+                max_bullet_in_flight = max(max_bullet_in_flight, bullet_in_flight)
+            await asyncio.sleep(0.03)
+            if endpoint == "/generate-bulletpoints":
+                bullet_in_flight -= 1
+            current_in_flight -= 1
+
+            if endpoint == "/select-skills":
+                return httpx.Response(
+                    200,
+                    json={
+                        "technology": ["FastAPI"],
+                        "programming": ["Python"],
+                        "concepts": ["API"],
+                    },
+                )
+            if endpoint == "/select-projects":
+                return httpx.Response(
+                    200,
+                    json={
+                        "selected_project_ids": [
+                            "active-project",
+                            "second-active-project",
+                        ],
+                        "ranked_projects": [
+                            {
+                                "project_id": "active-project",
+                                "score": 1.0,
+                                "method": "llm",
+                            },
+                            {
+                                "project_id": "second-active-project",
+                                "score": 0.9,
+                                "method": "llm",
+                            },
+                        ],
+                    },
+                )
+            if endpoint == "/derive-job-focus":
+                return _job_focus_response()
+            if endpoint == "/generate-bulletpoints":
+                evidence = json.get("project") or json.get("experience")
+                return httpx.Response(
+                    200,
+                    json={
+                        "bullet_points": [f"Generated bullet for {evidence['id']}."],
+                        "details": {"_bulletpoints_llm": {"total_tokens": 2}},
+                    },
+                )
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    monkeypatch.setattr("resume_generation.selection.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("resume_generation.job_focus.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(
+        "resume_generation.main.load_registered_evidence",
+        lambda paths=None: loaded_evidence,
+    )
+
+    result = asyncio.run(
+        run_resume_generation_pipeline_async(
+            config_path=config_path,
+            job_target_path=job_path,
+            evidence_paths={
+                "projects": projects_path,
+                "skills": skills_path,
+                "experience": experience_path,
+            },
+            resume_result_artifact_path=tmp_path / "artifacts" / "resume_result.json",
+            resume_run_manifest_artifact_path=(
+                tmp_path / "artifacts" / "resume_run_manifest.json"
+            ),
+        )
+    )
+
+    assert max_in_flight == 2
+    assert max_bullet_in_flight == 2
+    assert [project.name for project in result.projects] == [
+        "Active Project",
+        "Second Active Project",
+    ]
+    assert {item.name for item in result.experience} == {
+        "Example Company",
+        "Platform Company",
+    }
 
 
 def test_resume_generation_pipeline_preserves_selected_experience_order(

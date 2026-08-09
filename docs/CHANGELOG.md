@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable concurrent bullet-point LLM requests for faster resume generation.
 - Configurable Qwen LLM provider support with Config UI controls for selecting
   OpenAI or Qwen and managing both provider API keys.
+- Improvement on generation speed by fully parallelizing LLM requests for skill selection, project selection etc.
+
+### Fixed
+- Fixed skill selection and project selection failure due to max output token limit exceeded for LLM requests.
+- Recognize multiple month date formats to avoid incorrect ranking of experience entries.
 
 ## [0.1.3] - 2026-08-07
 

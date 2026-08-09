@@ -57,7 +57,7 @@ from app.resume_generation.bullet_points import (
     generate_resume_section_bullet_points,
     generate_resume_section_bullet_points_async,
 )
-from app.resume_generation.job_focus import derive_job_focus
+from app.resume_generation.job_focus import derive_job_focus, derive_job_focus_async
 from app.resume_generation.cache import ResumeGenerationStageCache, ResumeGenerationStageCacheResult
 from app.resume_generation.latex import (
     DEFAULT_RESUME_TEX_ARTIFACT_PATH,
@@ -84,6 +84,7 @@ from app.resume_generation.selection import (
     ResumeGenerationError,
     build_skill_selection_payload,
     generate_selection_context,
+    generate_selection_context_async,
 )
 
 _LAZY_EXPORT_MODULES = {
@@ -161,6 +162,7 @@ __all__ = [
     "copy_resume_pdf_to_user_output",
     "default_generation_config_payload",
     "derive_job_focus",
+    "derive_job_focus_async",
     "ensure_generation_config_defaults",
     "generate_experience_bullet_points",
     "generate_experience_bullet_points_async",
@@ -169,6 +171,7 @@ __all__ = [
     "generate_resume_section_bullet_points",
     "generate_resume_section_bullet_points_async",
     "generate_selection_context",
+    "generate_selection_context_async",
     "latex_escape",
     "load_generation_config",
     "load_generation_config_payload",

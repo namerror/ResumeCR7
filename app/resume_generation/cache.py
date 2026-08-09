@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from json import JSONDecodeError
@@ -203,16 +204,28 @@ class ResumeGenerationStageCache:
         data: dict[str, Any],
     ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path: Path | None = None
         payload = {
             "version": _CACHE_VERSION,
             "stage": stage,
             "cache_key": cache_key,
             "data": data,
         }
-        with tmp_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, sort_keys=True)
-        os.replace(tmp_path, path)
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                tmp_path = Path(handle.name)
+                json.dump(payload, handle, sort_keys=True)
+            os.replace(tmp_path, path)
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                tmp_path.unlink()
 
     def _safe_segment(self, value: str) -> str:
         normalized = _SAFE_SEGMENT_PATTERN.sub("_", value.strip()).strip("._")

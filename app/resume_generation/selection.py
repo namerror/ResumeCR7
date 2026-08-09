@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -26,7 +27,7 @@ from app.job_focus_generation.service import (
 )
 from app.project_selection.models import ProjectSelectRequest
 from app.project_selection.service import select_projects_service
-from app.resume_evidence import ProjectsFile, SkillsFile, default_evidence_paths
+from app.resume_evidence import ProjectRecord, ProjectsFile, SkillsFile, default_evidence_paths
 from app.resume_generation.config import (
     resolve_generation_config_path,
     resolve_job_target_path,
@@ -120,11 +121,20 @@ class LocalAsyncStageClient:
     async def post(self, endpoint: str, json: dict[str, Any]) -> _LocalStageResponse:
         try:
             if endpoint == "/select-skills":
-                response = select_skills_service(SkillSelectRequest.model_validate(json))
+                response = await asyncio.to_thread(
+                    select_skills_service,
+                    SkillSelectRequest.model_validate(json),
+                )
             elif endpoint == "/select-projects":
-                response = select_projects_service(ProjectSelectRequest.model_validate(json))
+                response = await asyncio.to_thread(
+                    select_projects_service,
+                    ProjectSelectRequest.model_validate(json),
+                )
             elif endpoint == "/derive-job-focus":
-                response = derive_job_focus_service(JobFocusRequest.model_validate(json))
+                response = await asyncio.to_thread(
+                    derive_job_focus_service,
+                    JobFocusRequest.model_validate(json),
+                )
             elif endpoint == "/generate-bulletpoints":
                 response = await generate_bulletpoints_service_async(
                     BulletGenerationRequest.model_validate(json)
@@ -728,6 +738,229 @@ def generate_selection_context(
     return ResumeSelectionContext(
         job_target=job_target,
         selected_skills=SkillSelectionResult.model_validate(skill_response),
+        project_selection=project_selection,
+        selected_projects=selected_projects,
+        config_path=resolved_config_path,
+        job_target_path=resolved_job_target_path,
+        evidence_paths=merged_evidence_paths,
+    )
+
+
+def _selection_context_sources(
+    *,
+    loaded_evidence: Mapping[str, BaseModel],
+    config_path: Path | str | None = None,
+    job_target_path: Path | str | None = None,
+    evidence_paths: Mapping[str, Path | str] | None = None,
+) -> tuple[Path, Path, dict[str, Path], ProjectsFile, SkillsFile]:
+    resolved_config_path = resolve_generation_config_path(config_path)
+    resolved_job_target_path = resolve_job_target_path(job_target_path)
+    merged_evidence_paths = default_evidence_paths()
+    if evidence_paths is not None:
+        merged_evidence_paths.update(
+            {schema_name: Path(path) for schema_name, path in evidence_paths.items()}
+        )
+
+    projects_file = loaded_evidence.get("projects")
+    skills_file = loaded_evidence.get("skills")
+    if not isinstance(projects_file, ProjectsFile):
+        raise ResumeGenerationError("Loaded evidence did not include a valid projects file")
+    if not isinstance(skills_file, SkillsFile):
+        raise ResumeGenerationError("Loaded evidence did not include a valid skills file")
+
+    return (
+        resolved_config_path,
+        resolved_job_target_path,
+        merged_evidence_paths,
+        projects_file,
+        skills_file,
+    )
+
+
+async def generate_skill_selection_async(
+    *,
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    skills_file: SkillsFile,
+    cache: ResumeGenerationStageCache | None = None,
+    stage_response_records: list[dict[str, Any]] | None = None,
+    semaphore: asyncio.Semaphore | None = None,
+) -> SkillSelectionResult:
+    skill_payload = build_skill_selection_payload(
+        job_target=job_target,
+        skills_file=skills_file,
+        config=config,
+    )
+    skill_cache_payload = _selection_cache_payload(skill_payload)
+    skill_fetch_payload = _canonical_selection_fetch_payload(
+        skill_payload,
+        full_top_n=_skill_selection_full_top_n(skill_payload),
+    )
+
+    async with open_async_stage_client(config, httpx.AsyncClient) as client:
+        if semaphore is None:
+            skill_response = await _cached_post_json_async(
+                cache=cache,
+                stage="skill_selection",
+                client=client,
+                endpoint="/select-skills",
+                payload=skill_payload,
+                cache_payload=skill_cache_payload,
+                fetch_payload=skill_fetch_payload,
+                should_use_cached=lambda data: _should_use_cached_stage_response(
+                    stage="skill_selection",
+                    response_data=data,
+                ),
+                token_usage_monitor=None,
+                stage_response_records=stage_response_records,
+            )
+        else:
+            async with semaphore:
+                skill_response = await _cached_post_json_async(
+                    cache=cache,
+                    stage="skill_selection",
+                    client=client,
+                    endpoint="/select-skills",
+                    payload=skill_payload,
+                    cache_payload=skill_cache_payload,
+                    fetch_payload=skill_fetch_payload,
+                    should_use_cached=lambda data: _should_use_cached_stage_response(
+                        stage="skill_selection",
+                        response_data=data,
+                    ),
+                    token_usage_monitor=None,
+                    stage_response_records=stage_response_records,
+                )
+
+    if cache is not None:
+        skill_response = _shape_skill_selection_response(
+            skill_response,
+            payload=skill_payload,
+        )
+    return SkillSelectionResult.model_validate(skill_response)
+
+
+async def generate_project_selection_async(
+    *,
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    projects_file: ProjectsFile,
+    cache: ResumeGenerationStageCache | None = None,
+    stage_response_records: list[dict[str, Any]] | None = None,
+    semaphore: asyncio.Semaphore | None = None,
+) -> tuple[ProjectSelectionResult, list[ProjectRecord]]:
+    project_payload = _project_selection_payload(
+        job_target=job_target,
+        projects_file=projects_file,
+        config=config,
+    )
+    project_cache_payload = _selection_cache_payload(project_payload)
+    project_fetch_payload = _canonical_selection_fetch_payload(
+        project_payload,
+        full_top_n=_project_selection_full_top_n(project_payload),
+    )
+
+    async with open_async_stage_client(config, httpx.AsyncClient) as client:
+        if semaphore is None:
+            project_response = await _cached_post_json_async(
+                cache=cache,
+                stage="project_selection",
+                client=client,
+                endpoint="/select-projects",
+                payload=project_payload,
+                cache_payload=project_cache_payload,
+                fetch_payload=project_fetch_payload,
+                should_use_cached=lambda data: _should_use_cached_stage_response(
+                    stage="project_selection",
+                    response_data=data,
+                ),
+                token_usage_monitor=None,
+                stage_response_records=stage_response_records,
+            )
+        else:
+            async with semaphore:
+                project_response = await _cached_post_json_async(
+                    cache=cache,
+                    stage="project_selection",
+                    client=client,
+                    endpoint="/select-projects",
+                    payload=project_payload,
+                    cache_payload=project_cache_payload,
+                    fetch_payload=project_fetch_payload,
+                    should_use_cached=lambda data: _should_use_cached_stage_response(
+                        stage="project_selection",
+                        response_data=data,
+                    ),
+                    token_usage_monitor=None,
+                    stage_response_records=stage_response_records,
+                )
+
+    if cache is not None:
+        project_response = _shape_project_selection_response(
+            project_response,
+            payload=project_payload,
+        )
+    project_selection = ProjectSelectionResult.model_validate(project_response)
+    projects_by_id = projects_file.projects_by_id()
+    selected_projects = [
+        projects_by_id[project_id]
+        for project_id in project_selection.selected_project_ids
+        if project_id in projects_by_id
+    ]
+    return project_selection, selected_projects
+
+
+async def generate_selection_context_async(
+    *,
+    loaded_evidence: Mapping[str, BaseModel],
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    config_path: Path | str | None = None,
+    job_target_path: Path | str | None = None,
+    evidence_paths: Mapping[str, Path | str] | None = None,
+    cache: ResumeGenerationStageCache | None = None,
+    stage_response_records: list[dict[str, Any]] | None = None,
+    semaphore: asyncio.Semaphore | None = None,
+) -> ResumeSelectionContext:
+    (
+        resolved_config_path,
+        resolved_job_target_path,
+        merged_evidence_paths,
+        projects_file,
+        skills_file,
+    ) = _selection_context_sources(
+        loaded_evidence=loaded_evidence,
+        config_path=config_path,
+        job_target_path=job_target_path,
+        evidence_paths=evidence_paths,
+    )
+    skill_records: list[dict[str, Any]] = []
+    project_records: list[dict[str, Any]] = []
+    selected_skills, project_result = await asyncio.gather(
+        generate_skill_selection_async(
+            config=config,
+            job_target=job_target,
+            skills_file=skills_file,
+            cache=cache,
+            stage_response_records=skill_records,
+            semaphore=semaphore,
+        ),
+        generate_project_selection_async(
+            config=config,
+            job_target=job_target,
+            projects_file=projects_file,
+            cache=cache,
+            stage_response_records=project_records,
+            semaphore=semaphore,
+        ),
+    )
+    if stage_response_records is not None:
+        stage_response_records.extend(skill_records)
+        stage_response_records.extend(project_records)
+    project_selection, selected_projects = project_result
+    return ResumeSelectionContext(
+        job_target=job_target,
+        selected_skills=selected_skills,
         project_selection=project_selection,
         selected_projects=selected_projects,
         config_path=resolved_config_path,
