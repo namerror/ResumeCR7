@@ -159,6 +159,7 @@ describe("evidence api client", () => {
     const configPayload = {
       schema_version: 1 as const,
       config_path: "user/resume_generation/config.yaml",
+      llm_provider: "openai" as const,
       skill_selection: { top_n: 20 },
       project_selection: { top_n: null },
       experience_selection: { top_n: null },
@@ -167,6 +168,10 @@ describe("evidence api client", () => {
       openai_api_key_configured: false,
       openai_api_key_saved: false,
       openai_api_key_source: "none" as const,
+      qwen_api_key_configured: false,
+      qwen_api_key_saved: false,
+      qwen_api_key_source: "none" as const,
+      qwen_base_url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
       github_token_configured: false,
       github_token_saved: false,
       github_token_source: "none" as const,
@@ -207,8 +212,13 @@ describe("evidence api client", () => {
 
     await api.getGenerationConfig();
     await api.updateGenerationConfig({
+      llm_provider: "qwen",
       skill_selection: { top_n: 12 },
       openai: { api_key: "sk-test" },
+      qwen: {
+        api_key: "qwen-test",
+        base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      },
       github: { token: "github_pat_test" },
     });
 
@@ -223,8 +233,13 @@ describe("evidence api client", () => {
       expect.objectContaining({
         method: "PATCH",
         body: JSON.stringify({
+          llm_provider: "qwen",
           skill_selection: { top_n: 12 },
           openai: { api_key: "sk-test" },
+          qwen: {
+            api_key: "qwen-test",
+            base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          },
           github: { token: "github_pat_test" },
         }),
       }),

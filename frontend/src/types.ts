@@ -168,6 +168,7 @@ export interface BulletCountRangeConfig {
 }
 
 export type OpenAIApiKeySource = "environment" | "config" | "none";
+export type LLMProvider = "openai" | "qwen";
 export type GitHubTokenSource = "environment" | "config" | "none";
 
 export interface ConfigDisplayDefaults {
@@ -199,6 +200,7 @@ export interface ConfigResumeOutputValues {
 export interface ResumeGenerationConfig {
   schema_version: 1;
   config_path: string;
+  llm_provider: LLMProvider;
   skill_selection: ConfigTopNValues;
   project_selection: ConfigTopNValues;
   experience_selection: ConfigTopNValues;
@@ -208,6 +210,10 @@ export interface ResumeGenerationConfig {
   openai_api_key_configured: boolean;
   openai_api_key_saved: boolean;
   openai_api_key_source: OpenAIApiKeySource;
+  qwen_api_key_configured: boolean;
+  qwen_api_key_saved: boolean;
+  qwen_api_key_source: OpenAIApiKeySource;
+  qwen_base_url: string;
   github_token_configured: boolean;
   github_token_saved: boolean;
   github_token_source: GitHubTokenSource;
@@ -216,6 +222,7 @@ export interface ResumeGenerationConfig {
 }
 
 export interface ResumeGenerationConfigPatch {
+  llm_provider?: LLMProvider;
   skill_selection?: Partial<ConfigTopNValues>;
   project_selection?: Partial<ConfigTopNValues>;
   experience_selection?: Partial<ConfigTopNValues>;
@@ -227,6 +234,11 @@ export interface ResumeGenerationConfigPatch {
   openai?: {
     api_key?: string | null;
     clear_api_key?: boolean;
+  };
+  qwen?: {
+    api_key?: string | null;
+    clear_api_key?: boolean;
+    base_url?: string | null;
   };
   github?: {
     token?: string | null;

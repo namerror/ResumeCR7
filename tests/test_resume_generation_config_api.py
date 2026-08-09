@@ -27,6 +27,13 @@ def generation_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     monkeypatch.setattr(settings, "RESUME_GENERATION_ROOT", root)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
+    monkeypatch.setattr(settings, "QWEN_API_KEY", "")
+    monkeypatch.setattr(settings, "DASHSCOPE_API_KEY", "")
+    monkeypatch.setattr(
+        settings,
+        "QWEN_BASE_URL",
+        "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+    )
     monkeypatch.setattr(settings, "RESUMECR7_GITHUB_TOKEN", "")
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "")
     return root
@@ -39,7 +46,10 @@ def _write_config(path: Path, payload: dict) -> None:
 def test_resume_generation_config_get_redacts_openai_key(generation_root):
     payload = default_generation_config_payload()
     payload["openai"]["api_key"] = "sk-secret"
+    payload["qwen"]["api_key"] = "qwen-secret"
+    payload["qwen"]["base_url"] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     payload["github"]["token"] = "github-secret"
+    payload["llm_provider"] = "qwen"
     payload["project_selection"]["top_n"] = None
     _write_config(generation_root / "config.yaml", payload)
 
@@ -50,6 +60,7 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["skill_selection"]["top_n"] == 20
     assert data["project_selection"]["top_n"] is None
     assert data["experience_selection"]["top_n"] is None
+    assert data["llm_provider"] == "qwen"
     assert data["display_defaults"]["project_selection_top_n"] == "unlimited (default)"
     assert data["display_defaults"]["experience_selection_top_n"] == "unlimited (default)"
     assert data["resume_output"] == {
@@ -62,10 +73,15 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["openai_api_key_configured"] is True
     assert data["openai_api_key_saved"] is True
     assert data["openai_api_key_source"] == "config"
+    assert data["qwen_api_key_configured"] is True
+    assert data["qwen_api_key_saved"] is True
+    assert data["qwen_api_key_source"] == "config"
+    assert data["qwen_base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert data["github_token_configured"] is True
     assert data["github_token_saved"] is True
     assert data["github_token_source"] == "config"
     assert "sk-secret" not in response.text
+    assert "qwen-secret" not in response.text
     assert "github-secret" not in response.text
 
 
@@ -96,6 +112,10 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
             },
             "resume_output": {"output_dir": str(output_dir)},
             "bullet_count_range": {"min": 2, "max": 4},
+            "llm_provider": "qwen",
+            "qwen": {
+                "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            },
         },
     )
 
@@ -103,6 +123,8 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     data = response.json()
     assert data["skill_selection"]["top_n"] == 12
     assert data["experience_selection"]["top_n"] == 2
+    assert data["llm_provider"] == "qwen"
+    assert data["qwen_base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert data["resume_output"]["output_dir"] == str(output_dir)
     assert data["resume_output"]["tex_path"] == str(output_dir / "resume.tex")
     assert data["resume_output"]["pdf_path"] == str(output_dir / "resume.pdf")
@@ -121,6 +143,8 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     }
     assert saved["link_scanning"]["max_tokens_per_highlight"] == 300
     assert saved["resume_output"]["output_dir"] == str(output_dir)
+    assert saved["llm_provider"] == "qwen"
+    assert saved["qwen"]["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 def test_resume_generation_config_patch_rejects_artifact_output_dir(generation_root):
@@ -165,6 +189,36 @@ def test_resume_generation_config_patch_replaces_and_clears_openai_key(generatio
     assert clear_response.status_code == 200
     saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
     assert saved["openai"]["api_key"] is None
+
+
+def test_resume_generation_config_patch_replaces_and_clears_qwen_key(generation_root):
+    payload = default_generation_config_payload()
+    _write_config(generation_root / "config.yaml", payload)
+
+    replace_response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        json={"qwen": {"api_key": "qwen-new"}},
+    )
+
+    assert replace_response.status_code == 200
+    assert "qwen-new" not in replace_response.text
+    data = replace_response.json()
+    assert data["qwen_api_key_configured"] is True
+    assert data["qwen_api_key_saved"] is True
+    assert data["qwen_api_key_source"] == "config"
+    saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
+    assert saved["qwen"]["api_key"] == "qwen-new"
+
+    clear_response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        json={"qwen": {"clear_api_key": True}},
+    )
+
+    assert clear_response.status_code == 200
+    saved = yaml.safe_load((generation_root / "config.yaml").read_text(encoding="utf-8"))
+    assert saved["qwen"]["api_key"] is None
 
 
 def test_resume_generation_config_patch_replaces_and_clears_github_token(generation_root):
@@ -223,6 +277,21 @@ def test_resume_generation_config_rejects_github_token_update_over_remote_http(
         "/resume-generation/config",
         base_url="http://resumecr7.example",
         json={"github": {"token": "github_pat_new"}},
+    )
+
+    assert response.status_code == 403
+    assert "HTTPS or a local loopback request" in response.text
+
+
+def test_resume_generation_config_rejects_qwen_key_update_over_remote_http(generation_root):
+    payload = default_generation_config_payload()
+    _write_config(generation_root / "config.yaml", payload)
+
+    response = api_request(
+        "PATCH",
+        "/resume-generation/config",
+        base_url="http://resumecr7.example",
+        json={"qwen": {"api_key": "qwen-new"}},
     )
 
     assert response.status_code == 403

@@ -16,7 +16,7 @@ class StrictSchemaModel(BaseModel):
 
 class GenerationAppConfig(StrictSchemaModel):
     base_url: str = "http://127.0.0.1:8000"
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 600.0
 
     @field_validator("base_url")
     @classmethod
@@ -407,6 +407,27 @@ class OpenAIConfig(StrictSchemaModel):
         return normalized or None
 
 
+class QwenConfig(StrictSchemaModel):
+    api_key: str | None = None
+    base_url: str = Field(default_factory=lambda: settings.QWEN_BASE_URL)
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            raise ValueError("qwen.base_url must not be empty")
+        return normalized
+
+
 class GitHubConfig(StrictSchemaModel):
     token: str | None = None
 
@@ -421,7 +442,11 @@ class GitHubConfig(StrictSchemaModel):
 
 class ResumeGenerationConfig(StrictSchemaModel):
     schema_version: Literal[1]
+    llm_provider: Literal["openai", "qwen"] = Field(
+        default_factory=lambda: settings.LLM_PROVIDER
+    )
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    qwen: QwenConfig = Field(default_factory=QwenConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     app: GenerationAppConfig = Field(default_factory=GenerationAppConfig)
     skill_selection: SkillSelectionConfig = Field(default_factory=SkillSelectionConfig)
@@ -455,6 +480,13 @@ class ResumeGenerationConfig(StrictSchemaModel):
                 "experience_bullet_point_generation"
             )
         return data
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def normalize_llm_provider(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class JobTarget(StrictSchemaModel):

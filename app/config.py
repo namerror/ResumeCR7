@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -10,8 +11,10 @@ from app.data_paths import resolve_default_data_dir
 
 SkillSelectionMethod = Literal["baseline", "embeddings", "llm"]
 ProjectSelectionMethod = Literal["baseline", "llm"]
+LLMProvider = Literal["openai", "qwen"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+QWEN_DEFAULT_BASE_URL = "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
 
 
 class Settings(BaseSettings):
@@ -40,6 +43,7 @@ class Settings(BaseSettings):
     # EMBEDDING_DIMENSIONS: int = 1024 # Optionally reduce dimensionality
 
     # LLM-related settings, split by subsystem so selection methods can be tuned independently.
+    LLM_PROVIDER: LLMProvider = "openai"
     SKILL_LLM_MODEL: str = "gpt-5-nano"
     SKILL_LLM_MAX_OUTPUT_TOKENS: int | None = None
     PROJ_LLM_MODEL: str = "gpt-5-nano"
@@ -54,6 +58,9 @@ class Settings(BaseSettings):
     LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT: int = 500
 
     OPENAI_API_KEY: str = ""
+    QWEN_API_KEY: str = ""
+    DASHSCOPE_API_KEY: str = ""
+    QWEN_BASE_URL: str = QWEN_DEFAULT_BASE_URL
     RESUMECR7_GITHUB_TOKEN: str = ""
     GITHUB_TOKEN: str = ""
 
@@ -108,12 +115,20 @@ class Settings(BaseSettings):
     def log_file_path(self) -> Path:
         return self.RESUMECR7_LOG_DIR / "resumecr7.log"
 
-    @field_validator("SKILL_METHOD", "PROJ_METHOD", mode="before")
+    @field_validator("SKILL_METHOD", "PROJ_METHOD", "LLM_PROVIDER", mode="before")
     @classmethod
     def normalize_method(cls, value: str) -> str:
         if isinstance(value, str):
             return value.strip().lower()
         return value
+
+    @field_validator("QWEN_BASE_URL")
+    @classmethod
+    def validate_qwen_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            raise ValueError("QWEN_BASE_URL must not be empty")
+        return normalized
 
     @field_validator("BULLETPOINTS_DEFAULT_COUNT")
     @classmethod
@@ -172,6 +187,59 @@ def _load_openai_api_key_from_generation_config(config_path: Path) -> str:
 
     api_key = openai_config.get("api_key")
     return api_key.strip() if isinstance(api_key, str) else ""
+
+
+def get_qwen_api_key(config_path: Path | str | None = None) -> str:
+    for env_name in ("QWEN_API_KEY", "DASHSCOPE_API_KEY"):
+        env_key = getattr(settings, env_name, "")
+        if env_key.strip():
+            return env_key.strip()
+    return _load_qwen_api_key_from_generation_config(
+        Path(config_path) if config_path is not None else settings.generation_config_path
+    )
+
+
+def _load_qwen_api_key_from_generation_config(config_path: Path) -> str:
+    if not config_path.exists():
+        return ""
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        payload = yaml.safe_load(handle)
+
+    if not isinstance(payload, dict):
+        return ""
+
+    qwen_config = payload.get("qwen")
+    if not isinstance(qwen_config, dict):
+        return ""
+
+    api_key = qwen_config.get("api_key")
+    return api_key.strip() if isinstance(api_key, str) else ""
+
+
+def get_qwen_base_url(config_path: Path | str | None = None) -> str:
+    if "QWEN_BASE_URL" in os.environ or settings.QWEN_BASE_URL != QWEN_DEFAULT_BASE_URL:
+        env_url = getattr(settings, "QWEN_BASE_URL", "")
+        if env_url.strip():
+            return env_url.strip().rstrip("/")
+    return _load_qwen_base_url_from_generation_config(
+        Path(config_path) if config_path is not None else settings.generation_config_path
+    )
+
+
+def _load_qwen_base_url_from_generation_config(config_path: Path) -> str:
+    if config_path.exists():
+        with config_path.open("r", encoding="utf-8") as handle:
+            payload = yaml.safe_load(handle)
+
+        if isinstance(payload, dict):
+            qwen_config = payload.get("qwen")
+            if isinstance(qwen_config, dict):
+                base_url = qwen_config.get("base_url")
+                if isinstance(base_url, str) and base_url.strip():
+                    return base_url.strip().rstrip("/")
+
+    return settings.QWEN_BASE_URL
 
 
 def get_github_token(config_path: Path | str | None = None) -> str:

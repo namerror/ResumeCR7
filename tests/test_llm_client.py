@@ -59,6 +59,50 @@ def test_score_skills_with_llm_sends_responses_schema(monkeypatch):
     assert result.metadata["model"] == "test-model"
 
 
+def test_score_skills_with_llm_uses_qwen_provider(monkeypatch):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text='{"technology":{"React":3},"programming":{},"concepts":{}}',
+                usage=SimpleNamespace(input_tokens=12, output_tokens=8, total_tokens=20),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **kwargs):
+            captured["init"] = kwargs
+            self.responses = DummyResponses()
+
+    monkeypatch.setenv("LLM_PROVIDER", "qwen")
+    monkeypatch.setattr(llm_client.settings, "LLM_PROVIDER", "qwen")
+    monkeypatch.setattr(llm_client.settings, "QWEN_API_KEY", "qwen-key")
+    monkeypatch.setattr(
+        llm_client.settings,
+        "QWEN_BASE_URL",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    monkeypatch.setattr(llm_client, "OpenAI", DummyOpenAI)
+
+    result = score_skills_with_llm(
+        job_role="Frontend Engineer",
+        job_text=None,
+        technology=["React"],
+        programming=[],
+        concepts=[],
+    )
+
+    assert captured["init"] == {
+        "api_key": "qwen-key",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }
+    assert captured["kwargs"]["model"] == "qwen3.6-flash"
+    assert captured["kwargs"]["extra_body"] == {"enable_thinking": False}
+    assert result.metadata["provider"] == "qwen"
+    assert result.metadata["model"] == "qwen3.6-flash"
+
+
 def test_score_skills_with_llm_omits_default_max_output_tokens(monkeypatch):
     captured = {}
 

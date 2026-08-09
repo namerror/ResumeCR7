@@ -11,6 +11,7 @@ os.environ["SKILL_METHOD"] = "baseline"
 os.environ["SKILL_BASELINE_FILTER"] = "false"
 os.environ["PROJ_METHOD"] = "llm"
 os.environ.pop("PROJ_TOP_N", None)
+os.environ["LLM_PROVIDER"] = "openai"
 
 
 def pytest_addoption(parser):

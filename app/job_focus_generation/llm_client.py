@@ -8,8 +8,9 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.config import get_openai_api_key, settings
+from app.config import settings
 from app.job_focus_generation.models import JobFocus
+from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
 from app.skill_selection.llm_client import _extract_output_text, supports_temperature
 
 logger = logging.getLogger("job_focus_llm_client")
@@ -170,11 +171,17 @@ def derive_job_focus_with_llm(
     schema = build_job_focus_schema()
     instructions = build_job_focus_instructions()
 
-    api_key = get_openai_api_key()
-    if not api_key.strip():
-        raise JobFocusLLMClientError("OPENAI_API_KEY is required for job-focus generation")
+    provider_config = resolve_llm_provider_config(
+        stage="job_focus_generation",
+        requested_model=model,
+        default_openai_model=settings.JOB_FOCUS_LLM_MODEL,
+    )
+    if not provider_config.api_key.strip():
+        raise JobFocusLLMClientError(
+            f"{provider_config.api_key_setting_name} is required for job-focus generation"
+        )
 
-    effective_model = model if model is not None else settings.JOB_FOCUS_LLM_MODEL
+    effective_model = provider_config.model
     effective_max_output_tokens = (
         max_output_tokens
         if max_output_tokens is not None
@@ -186,7 +193,7 @@ def derive_job_focus_with_llm(
     retry_reason: str | None = None
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(**provider_config.client_kwargs())
     except Exception as exc:
         logger.exception(
             "job_focus_llm_request_failed",
@@ -216,6 +223,7 @@ def derive_job_focus_with_llm(
                 schema=schema,
                 max_output_tokens=attempt_max_output_tokens,
             )
+            apply_provider_response_options(create_kwargs, provider_config)
             response = client.responses.create(**create_kwargs)
         except Exception as exc:
             logger.exception(
@@ -254,6 +262,7 @@ def derive_job_focus_with_llm(
                     model=effective_model,
                     latency_ms=latency_ms,
                 )
+                metadata.update(provider_config.metadata())
                 if retry_reason is not None:
                     metadata["retry_reason"] = retry_reason
                 return LLMJobFocusResult(job_focus=job_focus, metadata=metadata)

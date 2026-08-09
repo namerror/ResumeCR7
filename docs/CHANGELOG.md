@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Configurable concurrent bullet-point LLM requests for faster resume generation.
+- Configurable Qwen LLM provider support with Config UI controls for selecting
+  OpenAI or Qwen and managing both provider API keys.
 
 ## [0.1.3] - 2026-08-07
 

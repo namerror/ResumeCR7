@@ -14,7 +14,8 @@ from app.bulletpoints_generation.models import (
     BulletJobContext,
     BulletOutputTokenBudget,
 )
-from app.config import get_openai_api_key, settings
+from app.config import settings
+from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
 from app.skill_selection.llm_client import _extract_output_text
 from app.skill_selection.llm_client import supports_temperature
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
@@ -358,11 +359,17 @@ def generate_bulletpoints_with_llm(
     schema = build_bulletpoint_schema(count_range)
     instructions = build_bulletpoint_instructions(count_range, evidence_type=evidence_type)
 
-    api_key = get_openai_api_key()
-    if not api_key.strip():
-        raise BulletPointLLMClientError("OPENAI_API_KEY is required for bullet-point generation")
+    provider_config = resolve_llm_provider_config(
+        stage="bulletpoints_generation",
+        requested_model=model,
+        default_openai_model=settings.BULLETPOINTS_LLM_MODEL,
+    )
+    if not provider_config.api_key.strip():
+        raise BulletPointLLMClientError(
+            f"{provider_config.api_key_setting_name} is required for bullet-point generation"
+        )
 
-    effective_model = model if model is not None else settings.BULLETPOINTS_LLM_MODEL
+    effective_model = provider_config.model
     source_record = project if project is not None else experience
     highlight_count = len(source_record.highlights) if source_record is not None else 0
     token_budget = resolve_bulletpoint_max_output_tokens(
@@ -379,7 +386,7 @@ def generate_bulletpoints_with_llm(
     retry_reason: str | None = None
 
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(**provider_config.client_kwargs())
     except Exception as exc:
         logger.exception(
             "bulletpoints_llm_request_failed",
@@ -416,6 +423,7 @@ def generate_bulletpoints_with_llm(
                 max_output_tokens=attempt_max_output_tokens,
                 schema_name=f"{evidence_type}_bullet_points",
             )
+            apply_provider_response_options(create_kwargs, provider_config)
             response = client.responses.create(**create_kwargs)
         except Exception as exc:
             attempt_metadata = {
@@ -431,6 +439,7 @@ def generate_bulletpoints_with_llm(
                 latency_ms=latency_ms,
                 token_budget=token_budget,
             )
+            metadata.update(provider_config.metadata())
             logger.exception(
                 "bulletpoints_llm_request_failed",
                 extra={
@@ -472,6 +481,7 @@ def generate_bulletpoints_with_llm(
                     latency_ms=latency_ms,
                     token_budget=token_budget,
                 )
+                metadata.update(provider_config.metadata())
                 if retry_reason is not None:
                     metadata["retry_reason"] = retry_reason
                 return LLMBulletPointResult(bullet_points=bullets, metadata=metadata)
@@ -484,6 +494,7 @@ def generate_bulletpoints_with_llm(
                 latency_ms=latency_ms,
                 token_budget=token_budget,
             )
+            metadata.update(provider_config.metadata())
             if retry_reason is not None:
                 metadata["retry_reason"] = retry_reason
             raise BulletPointLLMClientError(
@@ -529,11 +540,17 @@ async def generate_bulletpoints_with_llm_async(
     schema = build_bulletpoint_schema(count_range)
     instructions = build_bulletpoint_instructions(count_range, evidence_type=evidence_type)
 
-    api_key = get_openai_api_key()
-    if not api_key.strip():
-        raise BulletPointLLMClientError("OPENAI_API_KEY is required for bullet-point generation")
+    provider_config = resolve_llm_provider_config(
+        stage="bulletpoints_generation",
+        requested_model=model,
+        default_openai_model=settings.BULLETPOINTS_LLM_MODEL,
+    )
+    if not provider_config.api_key.strip():
+        raise BulletPointLLMClientError(
+            f"{provider_config.api_key_setting_name} is required for bullet-point generation"
+        )
 
-    effective_model = model if model is not None else settings.BULLETPOINTS_LLM_MODEL
+    effective_model = provider_config.model
     source_record = project if project is not None else experience
     highlight_count = len(source_record.highlights) if source_record is not None else 0
     token_budget = resolve_bulletpoint_max_output_tokens(
@@ -550,7 +567,7 @@ async def generate_bulletpoints_with_llm_async(
     retry_reason: str | None = None
 
     try:
-        client = AsyncOpenAI(api_key=api_key)
+        client = AsyncOpenAI(**provider_config.client_kwargs())
     except Exception as exc:
         logger.exception(
             "bulletpoints_llm_request_failed",
@@ -589,6 +606,7 @@ async def generate_bulletpoints_with_llm_async(
                     max_output_tokens=attempt_max_output_tokens,
                     schema_name=f"{evidence_type}_bullet_points",
                 )
+                apply_provider_response_options(create_kwargs, provider_config)
                 response = await client.responses.create(**create_kwargs)
             except Exception as exc:
                 attempt_metadata = {
@@ -604,6 +622,7 @@ async def generate_bulletpoints_with_llm_async(
                     latency_ms=latency_ms,
                     token_budget=token_budget,
                 )
+                metadata.update(provider_config.metadata())
                 logger.exception(
                     "bulletpoints_llm_request_failed",
                     extra={
@@ -645,6 +664,7 @@ async def generate_bulletpoints_with_llm_async(
                         latency_ms=latency_ms,
                         token_budget=token_budget,
                     )
+                    metadata.update(provider_config.metadata())
                     if retry_reason is not None:
                         metadata["retry_reason"] = retry_reason
                     return LLMBulletPointResult(bullet_points=bullets, metadata=metadata)
@@ -657,6 +677,7 @@ async def generate_bulletpoints_with_llm_async(
                     latency_ms=latency_ms,
                     token_budget=token_budget,
                 )
+                metadata.update(provider_config.metadata())
                 if retry_reason is not None:
                     metadata["retry_reason"] = retry_reason
                 raise BulletPointLLMClientError(

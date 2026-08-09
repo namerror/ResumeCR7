@@ -36,6 +36,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
   letter-spacing: 0;
@@ -437,6 +438,7 @@ h3 {
 }
 
 .field input,
+.field select,
 .field textarea,
 .list-row input,
 .search-box input {
@@ -470,6 +472,7 @@ h3 {
 }
 
 .field input:focus,
+.field select:focus,
 .field textarea:focus,
 .list-row input:focus,
 .search-box input:focus {

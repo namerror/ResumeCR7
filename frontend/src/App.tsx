@@ -44,6 +44,7 @@ import type {
   EducationRecord,
   ExperienceRecord,
   JobTarget,
+  LLMProvider,
   ProjectRecord,
   ProjectSkills,
   ResumeEvidenceRegistry,
@@ -112,6 +113,8 @@ export default function App({ client = evidenceApi }: AppProps) {
   const [jobTargetDraft, setJobTargetDraft] = useState<JobTarget | null>(null);
   const [openAiKeyDraft, setOpenAiKeyDraft] = useState("");
   const [clearOpenAiKey, setClearOpenAiKey] = useState(false);
+  const [qwenKeyDraft, setQwenKeyDraft] = useState("");
+  const [clearQwenKey, setClearQwenKey] = useState(false);
   const [githubTokenDraft, setGithubTokenDraft] = useState("");
   const [clearGithubToken, setClearGithubToken] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>("user");
@@ -146,6 +149,8 @@ export default function App({ client = evidenceApi }: AppProps) {
     setConfigDraft(cloneEvidence(config));
     setOpenAiKeyDraft("");
     setClearOpenAiKey(false);
+    setQwenKeyDraft("");
+    setClearQwenKey(false);
     setGithubTokenDraft("");
     setClearGithubToken(false);
   }, []);
@@ -196,6 +201,8 @@ export default function App({ client = evidenceApi }: AppProps) {
   const configSecretDirty =
     openAiKeyDraft.trim().length > 0 ||
     clearOpenAiKey ||
+    qwenKeyDraft.trim().length > 0 ||
+    clearQwenKey ||
     githubTokenDraft.trim().length > 0 ||
     clearGithubToken;
   const configDirty = configValuesDirty || configSecretDirty;
@@ -298,6 +305,8 @@ export default function App({ client = evidenceApi }: AppProps) {
             draft: configDraft,
             openAiKeyDraft,
             clearOpenAiKey,
+            qwenKeyDraft,
+            clearQwenKey,
             githubTokenDraft,
             clearGithubToken,
           }),
@@ -687,9 +696,11 @@ export default function App({ client = evidenceApi }: AppProps) {
                 <ConfigEditor
                   clearGithubToken={clearGithubToken}
                   clearOpenAiKey={clearOpenAiKey}
+                  clearQwenKey={clearQwenKey}
                   config={configDraft}
                   githubTokenDraft={githubTokenDraft}
                   openAiKeyDraft={openAiKeyDraft}
+                  qwenKeyDraft={qwenKeyDraft}
                   onChange={mutateConfig}
                   onClearGithubToken={(value) => {
                     setClearGithubToken(value);
@@ -707,6 +718,14 @@ export default function App({ client = evidenceApi }: AppProps) {
                     setApplyError(null);
                     setMessage(null);
                   }}
+                  onClearQwenKey={(value) => {
+                    setClearQwenKey(value);
+                    if (value) {
+                      setQwenKeyDraft("");
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
                   onGithubTokenChange={(value) => {
                     setGithubTokenDraft(value);
                     if (value.trim()) {
@@ -719,6 +738,14 @@ export default function App({ client = evidenceApi }: AppProps) {
                     setOpenAiKeyDraft(value);
                     if (value.trim()) {
                       setClearOpenAiKey(false);
+                    }
+                    setApplyError(null);
+                    setMessage(null);
+                  }}
+                  onQwenKeyChange={(value) => {
+                    setQwenKeyDraft(value);
+                    if (value.trim()) {
+                      setClearQwenKey(false);
                     }
                     setApplyError(null);
                     setMessage(null);
@@ -1069,28 +1096,37 @@ function ResumeGenerationPanel({
 function ConfigEditor({
   clearGithubToken,
   clearOpenAiKey,
+  clearQwenKey,
   config,
   githubTokenDraft,
   openAiKeyDraft,
+  qwenKeyDraft,
   onChange,
   onClearGithubToken,
   onClearOpenAiKey,
+  onClearQwenKey,
   onGithubTokenChange,
   onOpenAiKeyChange,
+  onQwenKeyChange,
 }: {
   clearGithubToken: boolean;
   clearOpenAiKey: boolean;
+  clearQwenKey: boolean;
   config: ResumeGenerationConfig;
   githubTokenDraft: string;
   openAiKeyDraft: string;
+  qwenKeyDraft: string;
   onChange: (mutator: (next: ResumeGenerationConfig) => void) => void;
   onClearGithubToken: (value: boolean) => void;
   onClearOpenAiKey: (value: boolean) => void;
+  onClearQwenKey: (value: boolean) => void;
   onGithubTokenChange: (value: string) => void;
   onOpenAiKeyChange: (value: string) => void;
+  onQwenKeyChange: (value: string) => void;
 }) {
   const bulletRange = config.bullet_count_range;
   const openAiStatus = openAiKeyStatus(config, openAiKeyDraft, clearOpenAiKey);
+  const qwenStatus = qwenKeyStatus(config, qwenKeyDraft, clearQwenKey);
   const githubStatus = githubTokenStatus(config, githubTokenDraft, clearGithubToken);
   return (
     <div className="editor-surface">
@@ -1246,7 +1282,38 @@ function ConfigEditor({
 
         <div className="config-section">
           <div className="config-section-header">
-            <h3>OpenAI</h3>
+            <h3>LLM Provider</h3>
+            <span className="config-status">{config.llm_provider}</span>
+          </div>
+          <div className="field-grid">
+            <SelectField
+              label="LLM Provider"
+              value={config.llm_provider}
+              options={[
+                { label: "OpenAI", value: "openai" },
+                { label: "Qwen", value: "qwen" },
+              ]}
+              onChange={(llmProvider) =>
+                onChange((next) => {
+                  next.llm_provider = llmProvider;
+                })
+              }
+            />
+            <TextField
+              label="Qwen Base URL"
+              value={config.qwen_base_url}
+              onChange={(baseUrl) =>
+                onChange((next) => {
+                  next.qwen_base_url = baseUrl;
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-section-header">
+            <h3>OpenAI API Key</h3>
             <span className="config-status">{openAiStatus}</span>
           </div>
           <div className="secret-row">
@@ -1269,6 +1336,35 @@ function ConfigEditor({
                 <Trash2 aria-hidden="true" size={16} />
               )}
               {clearOpenAiKey ? "Keep" : "Clear"}
+            </button>
+          </div>
+        </div>
+
+        <div className="config-section">
+          <div className="config-section-header">
+            <h3>Qwen API Key</h3>
+            <span className="config-status">{qwenStatus}</span>
+          </div>
+          <div className="secret-row">
+            <PasswordField
+              label="Qwen API Key"
+              placeholder={config.qwen_api_key_configured ? "saved" : "not set"}
+              value={qwenKeyDraft}
+              onChange={onQwenKeyChange}
+            />
+            <button
+              className="button secondary compact"
+              disabled={!config.qwen_api_key_saved}
+              title={clearQwenKey ? "Keep saved Qwen API key" : "Clear saved Qwen API key"}
+              type="button"
+              onClick={() => onClearQwenKey(!clearQwenKey)}
+            >
+              {clearQwenKey ? (
+                <RotateCcw aria-hidden="true" size={16} />
+              ) : (
+                <Trash2 aria-hidden="true" size={16} />
+              )}
+              {clearQwenKey ? "Keep" : "Clear"}
             </button>
           </div>
         </div>
@@ -1692,6 +1788,35 @@ function TextField({
   );
 }
 
+function SelectField<T extends string>({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: T) => void;
+  options: Array<{ label: string; value: T }>;
+  value: T;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value as T)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function NumberField({
   defaultLabel,
   label,
@@ -1894,19 +2019,26 @@ function buildGenerationConfigPatch({
   baseline,
   clearGithubToken,
   clearOpenAiKey,
+  clearQwenKey,
   draft,
   githubTokenDraft,
   openAiKeyDraft,
+  qwenKeyDraft,
 }: {
   baseline: ResumeGenerationConfig;
   clearGithubToken: boolean;
   clearOpenAiKey: boolean;
+  clearQwenKey: boolean;
   draft: ResumeGenerationConfig;
   githubTokenDraft: string;
   openAiKeyDraft: string;
+  qwenKeyDraft: string;
 }): ResumeGenerationConfigPatch {
   const patch: ResumeGenerationConfigPatch = {};
 
+  if (baseline.llm_provider !== draft.llm_provider) {
+    patch.llm_provider = draft.llm_provider;
+  }
   if (baseline.skill_selection.top_n !== draft.skill_selection.top_n) {
     patch.skill_selection = { top_n: draft.skill_selection.top_n };
   }
@@ -1934,6 +2066,16 @@ function buildGenerationConfigPatch({
     patch.openai = { api_key: trimmedKey };
   } else if (clearOpenAiKey) {
     patch.openai = { clear_api_key: true };
+  }
+
+  if (baseline.qwen_base_url !== draft.qwen_base_url) {
+    patch.qwen = { base_url: draft.qwen_base_url.trim() };
+  }
+  const trimmedQwenKey = qwenKeyDraft.trim();
+  if (trimmedQwenKey) {
+    patch.qwen = { ...patch.qwen, api_key: trimmedQwenKey };
+  } else if (clearQwenKey) {
+    patch.qwen = { ...patch.qwen, clear_api_key: true };
   }
 
   const trimmedGithubToken = githubTokenDraft.trim();
@@ -1964,6 +2106,7 @@ function configExposedValuesChanged(
   }
   return !deepEqual(
     {
+      llm_provider: baseline.llm_provider,
       skill_selection: baseline.skill_selection,
       project_selection: baseline.project_selection,
       experience_selection: baseline.experience_selection,
@@ -1972,8 +2115,10 @@ function configExposedValuesChanged(
         output_dir: baseline.resume_output.output_dir,
       },
       bullet_count_range: baseline.bullet_count_range,
+      qwen_base_url: baseline.qwen_base_url,
     },
     {
+      llm_provider: draft.llm_provider,
       skill_selection: draft.skill_selection,
       project_selection: draft.project_selection,
       experience_selection: draft.experience_selection,
@@ -1982,6 +2127,7 @@ function configExposedValuesChanged(
         output_dir: draft.resume_output.output_dir,
       },
       bullet_count_range: draft.bullet_count_range,
+      qwen_base_url: draft.qwen_base_url,
     },
   );
 }
@@ -2017,6 +2163,26 @@ function openAiKeyStatus(
     return "set by environment";
   }
   if (config.openai_api_key_saved) {
+    return "saved";
+  }
+  return "not set";
+}
+
+function qwenKeyStatus(
+  config: ResumeGenerationConfig,
+  qwenKeyDraft: string,
+  clearQwenKey: boolean,
+): string {
+  if (clearQwenKey) {
+    return "will clear";
+  }
+  if (qwenKeyDraft.trim()) {
+    return config.qwen_api_key_saved ? "will replace" : "will save";
+  }
+  if (config.qwen_api_key_source === "environment") {
+    return "set by environment";
+  }
+  if (config.qwen_api_key_saved) {
     return "saved";
   }
   return "not set";

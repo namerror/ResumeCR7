@@ -81,6 +81,7 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
   return {
     schema_version: 1,
     config_path: "user/resume_generation/config.yaml",
+    llm_provider: "openai",
     skill_selection: {
       top_n: 20,
     },
@@ -105,6 +106,10 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
     openai_api_key_configured: false,
     openai_api_key_saved: false,
     openai_api_key_source: "none",
+    qwen_api_key_configured: false,
+    qwen_api_key_saved: false,
+    qwen_api_key_source: "none",
+    qwen_base_url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
     github_token_configured: false,
     github_token_saved: false,
     github_token_source: "none",

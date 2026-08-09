@@ -84,6 +84,7 @@ export function validateGenerationConfig(draft: ResumeGenerationConfig): string[
     draft.link_scanning.max_tokens_per_highlight,
   );
   requireText(errors, "Resume output directory", draft.resume_output.output_dir);
+  requireText(errors, "Qwen base URL", draft.qwen_base_url);
 
   if (draft.bullet_count_range !== null) {
     const { min, max } = draft.bullet_count_range;

@@ -2,7 +2,14 @@ import pytest
 from pydantic import ValidationError
 
 from app.data_paths import resolve_default_data_dir
-from app.config import Settings, get_github_token, get_openai_api_key, settings as global_settings
+from app.config import (
+    Settings,
+    get_github_token,
+    get_openai_api_key,
+    get_qwen_api_key,
+    get_qwen_base_url,
+    settings as global_settings,
+)
 
 
 SCOPED_ENV_VARS = [
@@ -11,6 +18,7 @@ SCOPED_ENV_VARS = [
     "SKILL_BASELINE_FILTER",
     "PROJ_METHOD",
     "PROJ_TOP_N",
+    "LLM_PROVIDER",
     "SKILL_LLM_MODEL",
     "SKILL_LLM_MAX_OUTPUT_TOKENS",
     "PROJ_LLM_MODEL",
@@ -27,6 +35,9 @@ SCOPED_ENV_VARS = [
     "RESUME_GENERATION_ROOT",
     "RESUMECR7_LOG_DIR",
     "OPENAI_API_KEY",
+    "QWEN_API_KEY",
+    "DASHSCOPE_API_KEY",
+    "QWEN_BASE_URL",
     "RESUMECR7_GITHUB_TOKEN",
     "GITHUB_TOKEN",
 ]
@@ -54,6 +65,7 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.SKILL_BASELINE_FILTER is False
     assert settings.PROJ_METHOD == "llm"
     assert settings.PROJ_TOP_N is None
+    assert settings.LLM_PROVIDER == "openai"
     assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
     assert settings.PROJ_LLM_MODEL == "gpt-5-nano"
     assert settings.SKILL_LLM_MAX_OUTPUT_TOKENS is None
@@ -64,6 +76,7 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.LINK_SCANNING_LLM_MAX_OUTPUT_TOKENS is None
     assert settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT == 6
     assert settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT == 500
+    assert settings.QWEN_BASE_URL == "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
     assert settings.RESUMECR7_PACKAGED is False
     assert str(settings.RESUMECR7_DATA_DIR).endswith("user")
     assert str(settings.RESUME_EVIDENCE_ROOT).endswith("user/resume_evidence")
@@ -240,11 +253,13 @@ def test_settings_normalizes_methods(monkeypatch):
     _clear_selection_env(monkeypatch)
     monkeypatch.setenv("SKILL_METHOD", " LLM ")
     monkeypatch.setenv("PROJ_METHOD", "BASELINE")
+    monkeypatch.setenv("LLM_PROVIDER", " QWEN ")
 
     settings = Settings(_env_file=None)
 
     assert settings.SKILL_METHOD == "llm"
     assert settings.PROJ_METHOD == "baseline"
+    assert settings.LLM_PROVIDER == "qwen"
 
 
 def test_settings_validates_methods(monkeypatch):
@@ -256,6 +271,12 @@ def test_settings_validates_methods(monkeypatch):
 
     _clear_selection_env(monkeypatch)
     monkeypatch.setenv("PROJ_METHOD", "embeddings")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+    _clear_selection_env(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
@@ -297,6 +318,45 @@ def test_get_openai_api_key_prefers_env_over_generation_config(monkeypatch, tmp_
     monkeypatch.setattr(global_settings, "OPENAI_API_KEY", "")
 
     assert get_openai_api_key() == "yaml-key"
+
+
+def test_get_qwen_settings_prefer_env_over_generation_config(monkeypatch, tmp_path):
+    _clear_selection_env(monkeypatch)
+    generation_root = tmp_path / "resume_generation"
+    generation_root.mkdir()
+    (generation_root / "config.yaml").write_text(
+        "schema_version: 1\n"
+        "qwen:\n"
+        "  api_key: yaml-qwen-key\n"
+        "  base_url: https://yaml.example/compatible-mode/v1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(global_settings, "RESUME_GENERATION_ROOT", generation_root)
+    monkeypatch.setattr(global_settings, "QWEN_API_KEY", " env-qwen-key ")
+    monkeypatch.setattr(global_settings, "DASHSCOPE_API_KEY", " fallback-qwen-key ")
+    monkeypatch.setenv("QWEN_BASE_URL", "https://env.example/compatible-mode/v1")
+    monkeypatch.setattr(
+        global_settings,
+        "QWEN_BASE_URL",
+        "https://env.example/compatible-mode/v1",
+    )
+
+    assert get_qwen_api_key() == "env-qwen-key"
+    assert get_qwen_base_url() == "https://env.example/compatible-mode/v1"
+
+    monkeypatch.setattr(global_settings, "QWEN_API_KEY", "")
+    assert get_qwen_api_key() == "fallback-qwen-key"
+
+    monkeypatch.setattr(global_settings, "DASHSCOPE_API_KEY", "")
+    monkeypatch.delenv("QWEN_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        global_settings,
+        "QWEN_BASE_URL",
+        "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+    )
+
+    assert get_qwen_api_key() == "yaml-qwen-key"
+    assert get_qwen_base_url() == "https://yaml.example/compatible-mode/v1"
 
 
 def test_get_github_token_prefers_env_over_generation_config(monkeypatch, tmp_path):

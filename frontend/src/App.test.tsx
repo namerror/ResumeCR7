@@ -416,11 +416,14 @@ describe("App", () => {
     expect(screen.getAllByText("3 to 3 (default)").length).toBeGreaterThan(0);
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).type).toBe("password");
     expect((screen.getByLabelText("OpenAI API Key") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Qwen API Key") as HTMLInputElement).type).toBe("password");
+    expect((screen.getByLabelText("Qwen API Key") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("LLM Provider") as HTMLSelectElement).value).toBe("openai");
     expect((screen.getByLabelText("GitHub Token") as HTMLInputElement).type).toBe("password");
     expect((screen.getByLabelText("GitHub Token") as HTMLInputElement).value).toBe("");
   });
 
-  it("applies exposed config edits and changed OpenAI keys", async () => {
+  it("applies exposed config edits and changed LLM keys", async () => {
     const evidence = sampleEvidence();
     const config = sampleGenerationConfig();
     const reloadedConfig = cloneEvidence(config);
@@ -431,6 +434,11 @@ describe("App", () => {
     reloadedConfig.openai_api_key_configured = true;
     reloadedConfig.openai_api_key_saved = true;
     reloadedConfig.openai_api_key_source = "config";
+    reloadedConfig.llm_provider = "qwen";
+    reloadedConfig.qwen_base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    reloadedConfig.qwen_api_key_configured = true;
+    reloadedConfig.qwen_api_key_saved = true;
+    reloadedConfig.qwen_api_key_source = "config";
     reloadedConfig.github_token_configured = true;
     reloadedConfig.github_token_saved = true;
     reloadedConfig.github_token_source = "config";
@@ -452,8 +460,17 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Resume output directory"), {
       target: { value: "user/resume_generation/final" },
     });
+    fireEvent.change(screen.getByLabelText("LLM Provider"), {
+      target: { value: "qwen" },
+    });
+    fireEvent.change(screen.getByLabelText("Qwen Base URL"), {
+      target: { value: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+    });
     fireEvent.change(screen.getByLabelText("OpenAI API Key"), {
       target: { value: "sk-test" },
+    });
+    fireEvent.change(screen.getByLabelText("Qwen API Key"), {
+      target: { value: "qwen-test" },
     });
     fireEvent.change(screen.getByLabelText("GitHub Token"), {
       target: { value: "github_pat_test" },
@@ -462,11 +479,16 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(client.updateGenerationConfig).toHaveBeenCalledWith({
+        llm_provider: "qwen",
         skill_selection: { top_n: 12 },
         project_selection: { top_n: 3 },
         experience_selection: { top_n: 2 },
         resume_output: { output_dir: "user/resume_generation/final" },
         openai: { api_key: "sk-test" },
+        qwen: {
+          api_key: "qwen-test",
+          base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        },
         github: { token: "github_pat_test" },
       });
     });

@@ -206,6 +206,38 @@ class ConfigOpenAIPatch(StrictSchemaModel):
         return self
 
 
+class ConfigQwenPatch(StrictSchemaModel):
+    api_key: str | None = None
+    clear_api_key: bool = False
+    base_url: str | None = None
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("api_key must not be empty; use clear_api_key to remove it")
+        return normalized
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            raise ValueError("qwen.base_url must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_clear_or_replace(self) -> "ConfigQwenPatch":
+        if self.clear_api_key and "api_key" in self.model_fields_set:
+            raise ValueError("Provide either api_key or clear_api_key, not both")
+        return self
+
+
 class ConfigGitHubPatch(StrictSchemaModel):
     token: str | None = None
     clear_token: bool = False
@@ -228,6 +260,7 @@ class ConfigGitHubPatch(StrictSchemaModel):
 
 
 class ResumeGenerationConfigPatch(StrictSchemaModel):
+    llm_provider: Literal["openai", "qwen"] | None = None
     skill_selection: ConfigSkillSelectionValues | None = None
     project_selection: ConfigProjectSelectionValues | None = None
     experience_selection: ConfigExperienceSelectionValues | None = None
@@ -235,7 +268,15 @@ class ResumeGenerationConfigPatch(StrictSchemaModel):
     resume_output: ConfigResumeOutputValues | None = None
     bullet_count_range: BulletCountRangeConfig | None = None
     openai: ConfigOpenAIPatch | None = None
+    qwen: ConfigQwenPatch | None = None
     github: ConfigGitHubPatch | None = None
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def normalize_llm_provider(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class ConfigDisplayDefaults(StrictSchemaModel):
@@ -267,6 +308,7 @@ class ConfigResumeOutputResponse(StrictSchemaModel):
 class ResumeGenerationConfigResponse(StrictSchemaModel):
     schema_version: Literal[1]
     config_path: str
+    llm_provider: Literal["openai", "qwen"]
     skill_selection: ConfigSkillSelectionValues
     project_selection: ConfigProjectSelectionValues
     experience_selection: ConfigExperienceSelectionValues
@@ -276,6 +318,10 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     openai_api_key_configured: bool
     openai_api_key_saved: bool
     openai_api_key_source: Literal["environment", "config", "none"]
+    qwen_api_key_configured: bool
+    qwen_api_key_saved: bool
+    qwen_api_key_source: Literal["environment", "config", "none"]
+    qwen_base_url: str
     github_token_configured: bool
     github_token_saved: bool
     github_token_source: Literal["environment", "config", "none"]
@@ -310,7 +356,9 @@ async def patch_resume_generation_config(
     payload: ResumeGenerationConfigPatch,
 ) -> ResumeGenerationConfigResponse:
     if (
-        _patch_changes_openai_key(payload) or _patch_changes_github_token(payload)
+        _patch_changes_openai_key(payload)
+        or _patch_changes_qwen_key(payload)
+        or _patch_changes_github_token(payload)
     ) and not _is_secure_config_request(request):
         raise HTTPException(
             status_code=403,
@@ -395,6 +443,9 @@ def _apply_config_patch(
 ) -> dict[str, Any]:
     updated = merge_generation_config_defaults(current_payload)
 
+    if "llm_provider" in patch.model_fields_set:
+        updated["llm_provider"] = patch.llm_provider
+
     if patch.skill_selection is not None:
         fields = patch.skill_selection.model_fields_set
         if "top_n" in fields:
@@ -441,6 +492,15 @@ def _apply_config_patch(
         elif "api_key" in patch.openai.model_fields_set:
             updated["openai"]["api_key"] = patch.openai.api_key
 
+    if patch.qwen is not None:
+        updated.setdefault("qwen", {})
+        if patch.qwen.clear_api_key:
+            updated["qwen"]["api_key"] = None
+        elif "api_key" in patch.qwen.model_fields_set:
+            updated["qwen"]["api_key"] = patch.qwen.api_key
+        if "base_url" in patch.qwen.model_fields_set:
+            updated["qwen"]["base_url"] = patch.qwen.base_url
+
     if patch.github is not None:
         updated.setdefault("github", {})
         if patch.github.clear_token:
@@ -455,10 +515,12 @@ def _config_response(
     config: ResumeGenerationConfig,
 ) -> ResumeGenerationConfigResponse:
     openai_source = _openai_api_key_source(config)
+    qwen_source = _qwen_api_key_source(config)
     github_source = _github_token_source(config)
     return ResumeGenerationConfigResponse(
         schema_version=1,
         config_path=str(resolve_generation_config_path()),
+        llm_provider=config.llm_provider,
         skill_selection=ConfigSkillSelectionValues(
             top_n=config.skill_selection.top_n,
         ),
@@ -483,6 +545,10 @@ def _config_response(
         openai_api_key_configured=openai_source != "none",
         openai_api_key_saved=bool(config.openai.api_key),
         openai_api_key_source=openai_source,
+        qwen_api_key_configured=qwen_source != "none",
+        qwen_api_key_saved=bool(config.qwen.api_key),
+        qwen_api_key_source=qwen_source,
+        qwen_base_url=config.qwen.base_url,
         github_token_configured=github_source != "none",
         github_token_saved=bool(config.github.token),
         github_token_source=github_source,
@@ -532,6 +598,18 @@ def _openai_api_key_source(
     return "none"
 
 
+def _qwen_api_key_source(
+    config: ResumeGenerationConfig,
+) -> Literal["environment", "config", "none"]:
+    if getattr(settings, "QWEN_API_KEY", "").strip():
+        return "environment"
+    if getattr(settings, "DASHSCOPE_API_KEY", "").strip():
+        return "environment"
+    if config.qwen.api_key:
+        return "config"
+    return "none"
+
+
 def _github_token_source(
     config: ResumeGenerationConfig,
 ) -> Literal["environment", "config", "none"]:
@@ -557,6 +635,12 @@ def _patch_changes_openai_key(payload: ResumeGenerationConfigPatch) -> bool:
     if payload.openai is None:
         return False
     return payload.openai.clear_api_key or "api_key" in payload.openai.model_fields_set
+
+
+def _patch_changes_qwen_key(payload: ResumeGenerationConfigPatch) -> bool:
+    if payload.qwen is None:
+        return False
+    return payload.qwen.clear_api_key or "api_key" in payload.qwen.model_fields_set
 
 
 def _patch_changes_github_token(payload: ResumeGenerationConfigPatch) -> bool:

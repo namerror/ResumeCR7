@@ -9,7 +9,8 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
-from app.config import get_github_token, get_openai_api_key, settings
+from app.config import get_github_token, settings
+from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
 from app.link_scanning.github_client import (
     GitHubRepoContext,
     GitHubRepoScanError,
@@ -569,9 +570,16 @@ def scan_evidence_links_with_llm(
             },
         )
 
-    api_key = get_openai_api_key()
-    if not api_key.strip():
-        raise LinkScanningLLMClientError("OPENAI_API_KEY is required for link scanning")
+    provider_config = resolve_llm_provider_config(
+        stage="link_scanning",
+        requested_model=model,
+        default_openai_model=settings.LINK_SCANNING_LLM_MODEL,
+    )
+    if not provider_config.api_key.strip():
+        raise LinkScanningLLMClientError(
+            f"{provider_config.api_key_setting_name} is required for link scanning"
+        )
+    effective_model = provider_config.model
 
     authorized_github_contexts = _fetch_authorized_github_contexts(
         scan_targets,
@@ -593,7 +601,7 @@ def scan_evidence_links_with_llm(
 
     start = time.perf_counter()
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(**provider_config.client_kwargs())
         create_kwargs = build_link_scan_response_create_kwargs(
             model=effective_model,
             instructions=instructions,
@@ -602,6 +610,7 @@ def scan_evidence_links_with_llm(
             max_output_tokens=effective_max_output_tokens,
             use_web_search=web_search_enabled,
         )
+        apply_provider_response_options(create_kwargs, provider_config)
         response = client.responses.create(**create_kwargs)
     except Exception as exc:
         logger.exception(
@@ -641,6 +650,7 @@ def scan_evidence_links_with_llm(
         github_repo_scopes=github_repo_scopes,
     )
     metadata = {
+        **provider_config.metadata(),
         "model": effective_model,
         "api_calls": 1,
         "latency_ms": round(latency_ms, 3),

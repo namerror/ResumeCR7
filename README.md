@@ -283,13 +283,19 @@ SKILL_TOP_N=10
 PROJ_METHOD=llm              # baseline, llm
 DEV_MODE=true
 LOG_LEVEL=INFO
+LLM_PROVIDER=openai          # openai, qwen
 OPENAI_API_KEY=your_key_here
+QWEN_API_KEY=your_qwen_key_here
+# DASHSCOPE_API_KEY can also provide the Qwen key.
+QWEN_BASE_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1
 RESUMECR7_GITHUB_TOKEN=github_pat_for_private_repo_scanning
 ```
 
-`OPENAI_API_KEY` is only required for embeddings, LLM-backed selection,
-job-focus generation, bullet generation, and enabled link scanning. Baseline
-paths remain functional without it.
+`OPENAI_API_KEY` is required for OpenAI-backed embeddings and OpenAI-backed LLM
+features. `QWEN_API_KEY` or `DASHSCOPE_API_KEY` is required when
+`LLM_PROVIDER=qwen` for LLM-backed selection, job-focus generation, bullet
+generation, and enabled link scanning. Baseline paths remain functional without
+LLM provider keys.
 
 Private GitHub repository link scanning can use `RESUMECR7_GITHUB_TOKEN`
 or `GITHUB_TOKEN`, or a saved token in the local generation config. Use a

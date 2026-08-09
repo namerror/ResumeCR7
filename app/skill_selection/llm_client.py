@@ -8,7 +8,8 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.config import get_openai_api_key, settings
+from app.config import settings
+from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
 
 logger = logging.getLogger("llm_client")
 
@@ -258,11 +259,15 @@ def score_skills_with_llm(
         "categories. Scores must be integers from 0 to 3."
     )
 
-    api_key = get_openai_api_key()
-    if not api_key.strip():
-        raise LLMClientError("OPENAI_API_KEY is required for LLM scoring")
+    provider_config = resolve_llm_provider_config(
+        stage="skill_selection",
+        requested_model=model,
+        default_openai_model=settings.SKILL_LLM_MODEL,
+    )
+    if not provider_config.api_key.strip():
+        raise LLMClientError(f"{provider_config.api_key_setting_name} is required for LLM scoring")
 
-    effective_model = model if model is not None else settings.SKILL_LLM_MODEL
+    effective_model = provider_config.model
     if max_output_tokens is not None:
         effective_max_output_tokens = max_output_tokens
     elif settings.SKILL_LLM_MAX_OUTPUT_TOKENS is not None:
@@ -278,7 +283,7 @@ def score_skills_with_llm(
     attempts: list[dict[str, Any]] = []
     retry_reason: str | None = None
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(**provider_config.client_kwargs())
     except Exception as exc:
         logger.exception(
             "llm_request_failed",
@@ -314,6 +319,7 @@ def score_skills_with_llm(
                 schema=schema,
                 max_output_tokens=attempt_max_output_tokens,
             )
+            apply_provider_response_options(create_kwargs, provider_config)
             response = client.responses.create(**create_kwargs)
         except Exception as exc:
             attempt_metadata = {
@@ -328,6 +334,7 @@ def score_skills_with_llm(
                 model=effective_model,
                 latency_ms=latency_ms,
             )
+            metadata.update(provider_config.metadata())
             logger.exception(
                 "llm_request_failed",
                 extra={
@@ -364,6 +371,7 @@ def score_skills_with_llm(
                     model=effective_model,
                     latency_ms=latency_ms,
                 )
+                metadata.update(provider_config.metadata())
                 if retry_reason is not None:
                     metadata["retry_reason"] = retry_reason
                 return LLMScoreResult(scores=scores, metadata=metadata)
@@ -375,6 +383,7 @@ def score_skills_with_llm(
                 model=effective_model,
                 latency_ms=latency_ms,
             )
+            metadata.update(provider_config.metadata())
             if retry_reason is not None:
                 metadata["retry_reason"] = retry_reason
             raise LLMClientError(
