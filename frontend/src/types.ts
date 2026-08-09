@@ -170,6 +170,7 @@ export interface BulletCountRangeConfig {
 export type OpenAIApiKeySource = "environment" | "config" | "none";
 export type LLMProvider = "openai" | "qwen";
 export type GitHubTokenSource = "environment" | "config" | "none";
+export type BulletPointGenerationStrategy = "section_batch" | "per_record";
 
 export interface ConfigDisplayDefaults {
   skill_selection_top_n: string;
@@ -201,6 +202,7 @@ export interface ResumeGenerationConfig {
   schema_version: 1;
   config_path: string;
   llm_provider: LLMProvider;
+  bullet_point_generation_strategy: BulletPointGenerationStrategy;
   skill_selection: ConfigTopNValues;
   project_selection: ConfigTopNValues;
   experience_selection: ConfigTopNValues;
@@ -223,6 +225,7 @@ export interface ResumeGenerationConfig {
 
 export interface ResumeGenerationConfigPatch {
   llm_provider?: LLMProvider;
+  bullet_point_generation_strategy?: BulletPointGenerationStrategy;
   skill_selection?: Partial<ConfigTopNValues>;
   project_selection?: Partial<ConfigTopNValues>;
   experience_selection?: Partial<ConfigTopNValues>;

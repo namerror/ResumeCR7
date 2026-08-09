@@ -12,8 +12,12 @@ from app.bulletpoints_generation.llm_client import (
     build_bulletpoint_instructions,
     build_bulletpoint_prompt_payload,
     build_bulletpoint_schema,
+    build_resume_section_bulletpoint_instructions,
+    build_resume_section_bulletpoint_prompt_payload,
+    build_resume_section_bulletpoint_schema,
     generate_bulletpoints_with_llm,
     generate_bulletpoints_with_llm_async,
+    generate_resume_section_bulletpoints_with_llm,
     resolve_bulletpoint_max_output_tokens,
 )
 from app.bulletpoints_generation.models import BulletCountRange, BulletJobContext
@@ -85,6 +89,8 @@ def test_build_bulletpoint_instructions_distinguishes_exact_and_flexible_counts(
     assert "Return between 2 and 4 bullet point strings" in flexible
     assert "raw factual notes" in exact
     assert "do not copy the evidence wording, structure, or tone" in exact
+    assert "past-tense action verb" in exact
+    assert "Use past-tense action verbs for all bullets" in exact
     assert "action + purpose/context + method/tool + supported impact" in exact
     assert "Target 18 to 26 words and never exceed 32 words" in exact
     assert "Use metrics only when the evidence supports them" in exact
@@ -95,6 +101,8 @@ def test_build_bulletpoint_instructions_distinguishes_exact_and_flexible_counts(
     assert "Use plain ASCII text only" in exact
     assert "pdfLaTeX" in exact
     assert "approximation signs" in exact
+    assert "present-tense verbs for active/current work" not in exact
+    assert "completed work when the evidence makes timing clear" not in exact
     assert "experience evidence" in experience
 
 
@@ -110,6 +118,7 @@ def test_build_bulletpoint_prompt_payload_excludes_links():
     assert payload["job"]["title"] == "Backend Engineer"
     assert payload["project"]["highlights"][0].startswith("Built project")
     assert payload["project"]["skills"]["programming"] == ["Python"]
+    assert "active" not in payload["project"]
     assert "links" not in payload["project"]
     assert "https://example.com/resumecr7" not in json.dumps(payload)
 
@@ -155,10 +164,73 @@ def test_build_bulletpoint_prompt_payload_supports_experience_evidence():
     assert payload["experience"]["role"] == "Backend Engineer"
     assert payload["experience"]["location"] == "Example City, ST"
     assert payload["experience"]["skills"]["concepts"] == ["API", "Testing"]
+    assert "active" not in payload["experience"]
+    assert "start" not in payload["experience"]
+    assert "end" not in payload["experience"]
     assert "project" not in payload
     assert "links" not in payload["experience"]
     assert "https://example.com/company" not in json.dumps(payload)
     assert "experience evidence" in payload["grounding_rules"][0]
+
+
+def test_build_resume_section_bulletpoint_prompt_payload_includes_all_selected_records():
+    project_range = BulletCountRange(min=2, max=3)
+    experience_range = BulletCountRange(min=1, max=2)
+    payload = json.loads(
+        build_resume_section_bulletpoint_prompt_payload(
+            context=BulletJobContext(title="Backend Engineer", description="Build APIs."),
+            projects=[_project()],
+            experiences=[_experience()],
+            project_count_range=project_range,
+            experience_count_range=experience_range,
+        )
+    )
+
+    assert payload["job"]["title"] == "Backend Engineer"
+    assert payload["projects"][0]["id"] == "resumecr7"
+    assert payload["experiences"][0]["id"] == "backend-engineer"
+    assert payload["bullet_count_ranges"]["projects"] == {"min": 2, "max": 3}
+    assert payload["bullet_count_ranges"]["experiences"] == {"min": 1, "max": 2}
+    assert "active" not in payload["projects"][0]
+    assert "active" not in payload["experiences"][0]
+    assert "start" not in payload["experiences"][0]
+    assert "end" not in payload["experiences"][0]
+    assert "links" not in payload["projects"][0]
+    assert "links" not in payload["experiences"][0]
+
+
+def test_build_resume_section_bulletpoint_schema_uses_record_ids_and_ranges():
+    schema = build_resume_section_bulletpoint_schema(
+        project_ids=["resumecr7"],
+        experience_ids=["backend-engineer"],
+        project_count_range=BulletCountRange(min=2, max=3),
+        experience_count_range=BulletCountRange(min=1, max=2),
+    )
+
+    project_items = schema["properties"]["project_bullet_points"]
+    experience_items = schema["properties"]["experience_bullet_points"]
+    assert project_items["minItems"] == 1
+    assert project_items["items"]["properties"]["project_id"]["enum"] == ["resumecr7"]
+    assert project_items["items"]["properties"]["bullet_points"]["maxItems"] == 3
+    assert experience_items["items"]["properties"]["experience_id"]["enum"] == [
+        "backend-engineer"
+    ]
+    assert experience_items["items"]["properties"]["bullet_points"]["minItems"] == 1
+
+
+def test_build_resume_section_bulletpoint_instructions_set_global_style_rules():
+    instructions = build_resume_section_bulletpoint_instructions(
+        project_count_range=BulletCountRange(min=2, max=3),
+        experience_count_range=BulletCountRange(min=1, max=2),
+    )
+
+    assert "past-tense action verb" in instructions
+    assert "Do not infer tense from eligibility, dates, or record status" in instructions
+    assert "active or current roles" not in instructions
+    assert "Every bullet must end with terminal punctuation" in instructions
+    assert "vary opening verbs across all bullets" in instructions
+    assert "avoid overusing develop, implement, build" in instructions
+    assert "avoid repeating ', enabling ...'" in instructions
 
 
 def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
@@ -207,6 +279,134 @@ def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):
     assert result.metadata["total_tokens"] == 30
     assert result.metadata["resolved_llm_max_output_tokens"] == kwargs["max_output_tokens"]
     assert result.metadata["llm_output_token_budget_mode"] == "dynamic"
+
+
+def test_generate_bulletpoints_with_llm_adds_missing_terminal_period(monkeypatch):
+    class DummyResponses:
+        def create(self, **_kwargs):
+            return SimpleNamespace(
+                output_text=json.dumps({"bullet_points": ["Built FastAPI services"]}),
+                usage=SimpleNamespace(input_tokens=20, output_tokens=10, total_tokens=30),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    result = generate_bulletpoints_with_llm(
+        context=BulletJobContext(title="Backend Engineer"),
+        project=_project(),
+        count_range=BulletCountRange(min=1, max=1),
+    )
+
+    assert result.bullet_points == ["Built FastAPI services."]
+
+
+def test_generate_resume_section_bulletpoints_with_llm_validates_ids_and_punctuation(
+    monkeypatch,
+):
+    captured = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {
+                        "project_bullet_points": [
+                            {
+                                "project_id": "resumecr7",
+                                "bullet_points": [
+                                    "Built FastAPI APIs for grounded resume workflows"
+                                ],
+                            }
+                        ],
+                        "experience_bullet_points": [
+                            {
+                                "experience_id": "backend-engineer",
+                                "bullet_points": [
+                                    "Designed backend APIs for internal platforms"
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                usage=SimpleNamespace(input_tokens=40, output_tokens=20, total_tokens=60),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **kwargs):
+            captured["init"] = kwargs
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(bullet_llm_client.settings, "BULLETPOINTS_LLM_MODEL", "test-model")
+
+    result = generate_resume_section_bulletpoints_with_llm(
+        context=BulletJobContext(title="Backend Engineer"),
+        projects=[_project()],
+        experiences=[_experience()],
+        project_count_range=BulletCountRange(min=1, max=1),
+        experience_count_range=BulletCountRange(min=1, max=1),
+    )
+
+    assert captured["kwargs"]["text"]["format"]["name"] == "resume_section_bullet_points"
+    assert json.loads(captured["kwargs"]["input"])["projects"][0]["id"] == "resumecr7"
+    assert result.project_bullet_points[0].project_id == "resumecr7"
+    assert result.project_bullet_points[0].bullet_points == [
+        "Built FastAPI APIs for grounded resume workflows."
+    ]
+    assert result.experience_bullet_points[0].experience_id == "backend-engineer"
+    assert result.experience_bullet_points[0].bullet_points == [
+        "Designed backend APIs for internal platforms."
+    ]
+    assert result.metadata["total_tokens"] == 60
+
+
+def test_generate_resume_section_bulletpoints_with_llm_rejects_unknown_ids(
+    monkeypatch,
+):
+    class DummyResponses:
+        def create(self, **_kwargs):
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {
+                        "project_bullet_points": [
+                            {
+                                "project_id": "invented-project",
+                                "bullet_points": ["Invented unsupported project."],
+                            }
+                        ],
+                        "experience_bullet_points": [
+                            {
+                                "experience_id": "backend-engineer",
+                                "bullet_points": ["Designed backend APIs."],
+                            }
+                        ],
+                    }
+                ),
+                usage=SimpleNamespace(input_tokens=40, output_tokens=20, total_tokens=60),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(bullet_llm_client, "OpenAI", DummyOpenAI)
+    monkeypatch.setattr(bullet_llm_client.settings, "OPENAI_API_KEY", "test-key")
+
+    with pytest.raises(BulletPointLLMClientError, match="Unknown project id"):
+        generate_resume_section_bulletpoints_with_llm(
+            context=BulletJobContext(title="Backend Engineer"),
+            projects=[_project()],
+            experiences=[_experience()],
+            project_count_range=BulletCountRange(min=1, max=1),
+            experience_count_range=BulletCountRange(min=1, max=1),
+        )
 
 
 def test_generate_bulletpoints_with_llm_async_uses_async_openai(monkeypatch):

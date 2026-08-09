@@ -7,11 +7,16 @@ from typing import Any, Callable, Mapping
 import httpx
 from pydantic import BaseModel
 
-from app.bulletpoints_generation.models import BulletGenerationRequest
+from app.bulletpoints_generation.models import (
+    BulletGenerationRequest,
+    ResumeSectionBulletGenerationRequest,
+)
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
     generate_bulletpoints_service,
     generate_bulletpoints_service_async,
+    generate_resume_section_bulletpoints_service,
+    generate_resume_section_bulletpoints_service_async,
 )
 from app.config import settings
 from app.job_focus_generation.models import JobFocusRequest
@@ -89,6 +94,10 @@ class LocalStageClient:
                 response = generate_bulletpoints_service(
                     BulletGenerationRequest.model_validate(json)
                 )
+            elif endpoint == "/generate-resume-section-bulletpoints":
+                response = generate_resume_section_bulletpoints_service(
+                    ResumeSectionBulletGenerationRequest.model_validate(json)
+                )
             else:
                 return _LocalStageResponse(404, {"detail": f"Unknown stage: {endpoint}"})
         except (BulletPointGenerationError, JobFocusGenerationError) as exc:
@@ -119,6 +128,10 @@ class LocalAsyncStageClient:
             elif endpoint == "/generate-bulletpoints":
                 response = await generate_bulletpoints_service_async(
                     BulletGenerationRequest.model_validate(json)
+                )
+            elif endpoint == "/generate-resume-section-bulletpoints":
+                response = await generate_resume_section_bulletpoints_service_async(
+                    ResumeSectionBulletGenerationRequest.model_validate(json)
                 )
             else:
                 return _LocalStageResponse(404, {"detail": f"Unknown stage: {endpoint}"})
@@ -392,6 +405,7 @@ def _llm_metadata_for_stage(stage: str, response_data: dict[str, Any]) -> dict[s
         "link_scanning": ("_link_scanning_llm",),
         "project_bullet_points": ("_bulletpoints_llm",),
         "experience_bullet_points": ("_bulletpoints_llm",),
+        "resume_section_bullet_points": ("_bulletpoints_llm",),
     }
     for key in detail_keys.get(stage, ()):
         metadata = details.get(key)

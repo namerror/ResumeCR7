@@ -1,19 +1,28 @@
 from app.bulletpoints_generation.llm_client import (
     BulletPointLLMClientError,
     LLMBulletPointResult,
+    LLMResumeSectionBulletPointResult,
     generate_bulletpoints_with_llm,
     generate_bulletpoints_with_llm_async,
+    generate_resume_section_bulletpoints_with_llm,
+    generate_resume_section_bulletpoints_with_llm_async,
 )
 from app.bulletpoints_generation.models import (
     BulletCountRange,
     BulletGenerationRequest,
     BulletGenerationResponse,
     BulletJobContext,
+    ExperienceBulletPointSet,
+    ProjectBulletPointSet,
+    ResumeSectionBulletGenerationRequest,
+    ResumeSectionBulletGenerationResponse,
 )
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
     generate_bulletpoints_service,
     generate_bulletpoints_service_async,
+    generate_resume_section_bulletpoints_service,
+    generate_resume_section_bulletpoints_service_async,
     record_bulletpoint_generation_error,
 )
 
@@ -24,10 +33,19 @@ __all__ = [
     "BulletJobContext",
     "BulletPointGenerationError",
     "BulletPointLLMClientError",
+    "ExperienceBulletPointSet",
     "LLMBulletPointResult",
+    "LLMResumeSectionBulletPointResult",
+    "ProjectBulletPointSet",
+    "ResumeSectionBulletGenerationRequest",
+    "ResumeSectionBulletGenerationResponse",
     "generate_bulletpoints_service",
     "generate_bulletpoints_service_async",
     "generate_bulletpoints_with_llm",
     "generate_bulletpoints_with_llm_async",
+    "generate_resume_section_bulletpoints_service",
+    "generate_resume_section_bulletpoints_service_async",
+    "generate_resume_section_bulletpoints_with_llm",
+    "generate_resume_section_bulletpoints_with_llm_async",
     "record_bulletpoint_generation_error",
 ]

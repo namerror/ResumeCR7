@@ -261,6 +261,7 @@ class ConfigGitHubPatch(StrictSchemaModel):
 
 class ResumeGenerationConfigPatch(StrictSchemaModel):
     llm_provider: Literal["openai", "qwen"] | None = None
+    bullet_point_generation_strategy: Literal["section_batch", "per_record"] | None = None
     skill_selection: ConfigSkillSelectionValues | None = None
     project_selection: ConfigProjectSelectionValues | None = None
     experience_selection: ConfigExperienceSelectionValues | None = None
@@ -274,6 +275,16 @@ class ResumeGenerationConfigPatch(StrictSchemaModel):
     @field_validator("llm_provider", mode="before")
     @classmethod
     def normalize_llm_provider(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("bullet_point_generation_strategy", mode="before")
+    @classmethod
+    def normalize_bullet_point_generation_strategy(
+        cls,
+        value: str | None,
+    ) -> str | None:
         if isinstance(value, str):
             return value.strip().lower()
         return value
@@ -309,6 +320,7 @@ class ResumeGenerationConfigResponse(StrictSchemaModel):
     schema_version: Literal[1]
     config_path: str
     llm_provider: Literal["openai", "qwen"]
+    bullet_point_generation_strategy: Literal["section_batch", "per_record"]
     skill_selection: ConfigSkillSelectionValues
     project_selection: ConfigProjectSelectionValues
     experience_selection: ConfigExperienceSelectionValues
@@ -446,6 +458,11 @@ def _apply_config_patch(
     if "llm_provider" in patch.model_fields_set:
         updated["llm_provider"] = patch.llm_provider
 
+    if "bullet_point_generation_strategy" in patch.model_fields_set:
+        updated["bullet_point_generation_strategy"] = (
+            patch.bullet_point_generation_strategy
+        )
+
     if patch.skill_selection is not None:
         fields = patch.skill_selection.model_fields_set
         if "top_n" in fields:
@@ -521,6 +538,7 @@ def _config_response(
         schema_version=1,
         config_path=str(resolve_generation_config_path()),
         llm_provider=config.llm_provider,
+        bullet_point_generation_strategy=config.bullet_point_generation_strategy,
         skill_selection=ConfigSkillSelectionValues(
             top_n=config.skill_selection.top_n,
         ),

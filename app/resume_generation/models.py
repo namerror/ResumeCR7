@@ -442,6 +442,9 @@ class GitHubConfig(StrictSchemaModel):
 
 class ResumeGenerationConfig(StrictSchemaModel):
     schema_version: Literal[1]
+    bullet_point_generation_strategy: Literal["section_batch", "per_record"] = (
+        "section_batch"
+    )
     llm_provider: Literal["openai", "qwen"] = Field(
         default_factory=lambda: settings.LLM_PROVIDER
     )

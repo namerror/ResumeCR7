@@ -431,6 +431,7 @@ describe("App", () => {
     reloadedConfig.project_selection.top_n = 3;
     reloadedConfig.experience_selection.top_n = 2;
     reloadedConfig.resume_output.output_dir = "user/resume_generation/final";
+    reloadedConfig.bullet_point_generation_strategy = "per_record";
     reloadedConfig.openai_api_key_configured = true;
     reloadedConfig.openai_api_key_saved = true;
     reloadedConfig.openai_api_key_source = "config";
@@ -460,6 +461,9 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Resume output directory"), {
       target: { value: "user/resume_generation/final" },
     });
+    fireEvent.change(screen.getByLabelText("Bullet generation strategy"), {
+      target: { value: "per_record" },
+    });
     fireEvent.change(screen.getByLabelText("LLM Provider"), {
       target: { value: "qwen" },
     });
@@ -480,6 +484,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(client.updateGenerationConfig).toHaveBeenCalledWith({
         llm_provider: "qwen",
+        bullet_point_generation_strategy: "per_record",
         skill_selection: { top_n: 12 },
         project_selection: { top_n: 3 },
         experience_selection: { top_n: 2 },

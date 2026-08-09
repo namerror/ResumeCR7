@@ -8,11 +8,15 @@ from app.bulletpoints_generation.llm_client import (
     BulletPointLLMClientError,
     generate_bulletpoints_with_llm,
     generate_bulletpoints_with_llm_async,
+    generate_resume_section_bulletpoints_with_llm,
+    generate_resume_section_bulletpoints_with_llm_async,
 )
 from app.bulletpoints_generation.models import (
     BulletCountRange,
     BulletGenerationRequest,
     BulletGenerationResponse,
+    ResumeSectionBulletGenerationRequest,
+    ResumeSectionBulletGenerationResponse,
 )
 from app.config import settings
 from app.metrics import metrics
@@ -231,6 +235,258 @@ async def generate_bulletpoints_service_async(
                 "job_title": req.context.title,
                 "evidence_type": req.evidence_type,
                 "evidence_id": req.evidence_id,
+                "method": "llm",
+                "error": str(exc),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+            },
+        )
+        raise BulletPointGenerationError(str(exc)) from exc
+
+
+def generate_resume_section_bulletpoints_service(
+    req: ResumeSectionBulletGenerationRequest,
+) -> ResumeSectionBulletGenerationResponse:
+    dev_mode = req.dev_mode if req.dev_mode is not None else settings.DEV_MODE
+    project_count_range = effective_bullet_count_range(
+        req.project_bullet_count_range
+    )
+    experience_count_range = effective_bullet_count_range(
+        req.experience_bullet_count_range
+    )
+    start = time.perf_counter()
+    request_counted = False
+    llm_metadata: dict[str, Any] | None = None
+
+    try:
+        llm_result = generate_resume_section_bulletpoints_with_llm(
+            context=req.context,
+            projects=req.projects,
+            experiences=req.experiences,
+            project_count_range=project_count_range,
+            experience_count_range=experience_count_range,
+            model=req.llm_model,
+            max_output_tokens=req.llm_max_output_tokens,
+            output_token_budget=req.llm_output_token_budget,
+        )
+        llm_metadata = llm_result.metadata
+
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        metrics.inc_request(method="llm", subsystem=METRICS_SUBSYSTEM)
+        request_counted = True
+        metrics.observe_tokens(
+            _extract_total_tokens(llm_metadata),
+            subsystem=METRICS_SUBSYSTEM,
+        )
+        metrics.observe_latency_ms(latency_ms, subsystem=METRICS_SUBSYSTEM)
+
+        logger.info(
+            "generate_resume_section_bulletpoints",
+            extra={
+                "event": "generate_resume_section_bulletpoints",
+                "subsystem": METRICS_SUBSYSTEM,
+                "job_title": req.context.title,
+                "method": "llm",
+                "latency_ms": round(latency_ms, 3),
+                "project_count": len(req.projects),
+                "experience_count": len(req.experiences),
+                "project_bullet_result_count": len(llm_result.project_bullet_points),
+                "experience_bullet_result_count": len(
+                    llm_result.experience_bullet_points
+                ),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+            },
+        )
+
+        details: dict[str, Any] | None = None
+        if dev_mode:
+            details = {
+                "method": "llm",
+                "requested_count_ranges": {
+                    "projects": (
+                        req.project_bullet_count_range.model_dump()
+                        if req.project_bullet_count_range is not None
+                        else None
+                    ),
+                    "experiences": (
+                        req.experience_bullet_count_range.model_dump()
+                        if req.experience_bullet_count_range is not None
+                        else None
+                    ),
+                },
+                "effective_count_ranges": {
+                    "projects": project_count_range.model_dump(),
+                    "experiences": experience_count_range.model_dump(),
+                },
+                "evidence_counts": {
+                    "projects": len(req.projects),
+                    "experiences": len(req.experiences),
+                },
+                "_bulletpoints_llm": llm_metadata,
+            }
+
+        return ResumeSectionBulletGenerationResponse(
+            project_bullet_points=llm_result.project_bullet_points,
+            experience_bullet_points=llm_result.experience_bullet_points,
+            details=details,
+        )
+
+    except BulletPointLLMClientError as exc:
+        if not request_counted:
+            metrics.inc_request(method="llm", subsystem=METRICS_SUBSYSTEM)
+        metrics.inc_error(subsystem=METRICS_SUBSYSTEM)
+        llm_metadata = exc.metadata
+        logger.warning(
+            "generate_resume_section_bulletpoints_failed",
+            extra={
+                "event": "generate_resume_section_bulletpoints_failed",
+                "subsystem": METRICS_SUBSYSTEM,
+                "job_title": req.context.title,
+                "method": "llm",
+                "error": str(exc),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+            },
+        )
+        raise BulletPointGenerationError(str(exc)) from exc
+
+
+async def generate_resume_section_bulletpoints_service_async(
+    req: ResumeSectionBulletGenerationRequest,
+) -> ResumeSectionBulletGenerationResponse:
+    dev_mode = req.dev_mode if req.dev_mode is not None else settings.DEV_MODE
+    project_count_range = effective_bullet_count_range(
+        req.project_bullet_count_range
+    )
+    experience_count_range = effective_bullet_count_range(
+        req.experience_bullet_count_range
+    )
+    start = time.perf_counter()
+    request_counted = False
+    llm_metadata: dict[str, Any] | None = None
+
+    try:
+        llm_result = await generate_resume_section_bulletpoints_with_llm_async(
+            context=req.context,
+            projects=req.projects,
+            experiences=req.experiences,
+            project_count_range=project_count_range,
+            experience_count_range=experience_count_range,
+            model=req.llm_model,
+            max_output_tokens=req.llm_max_output_tokens,
+            output_token_budget=req.llm_output_token_budget,
+        )
+        llm_metadata = llm_result.metadata
+
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        metrics.inc_request(method="llm", subsystem=METRICS_SUBSYSTEM)
+        request_counted = True
+        metrics.observe_tokens(
+            _extract_total_tokens(llm_metadata),
+            subsystem=METRICS_SUBSYSTEM,
+        )
+        metrics.observe_latency_ms(latency_ms, subsystem=METRICS_SUBSYSTEM)
+
+        logger.info(
+            "generate_resume_section_bulletpoints",
+            extra={
+                "event": "generate_resume_section_bulletpoints",
+                "subsystem": METRICS_SUBSYSTEM,
+                "job_title": req.context.title,
+                "method": "llm",
+                "latency_ms": round(latency_ms, 3),
+                "project_count": len(req.projects),
+                "experience_count": len(req.experiences),
+                "project_bullet_result_count": len(llm_result.project_bullet_points),
+                "experience_bullet_result_count": len(
+                    llm_result.experience_bullet_points
+                ),
+                "requested_llm_max_output_tokens": req.llm_max_output_tokens,
+                "resolved_llm_max_output_tokens": (
+                    llm_metadata.get("resolved_llm_max_output_tokens")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+                "llm_output_token_budget_mode": (
+                    llm_metadata.get("llm_output_token_budget_mode")
+                    if isinstance(llm_metadata, dict)
+                    else None
+                ),
+            },
+        )
+
+        details: dict[str, Any] | None = None
+        if dev_mode:
+            details = {
+                "method": "llm",
+                "requested_count_ranges": {
+                    "projects": (
+                        req.project_bullet_count_range.model_dump()
+                        if req.project_bullet_count_range is not None
+                        else None
+                    ),
+                    "experiences": (
+                        req.experience_bullet_count_range.model_dump()
+                        if req.experience_bullet_count_range is not None
+                        else None
+                    ),
+                },
+                "effective_count_ranges": {
+                    "projects": project_count_range.model_dump(),
+                    "experiences": experience_count_range.model_dump(),
+                },
+                "evidence_counts": {
+                    "projects": len(req.projects),
+                    "experiences": len(req.experiences),
+                },
+                "_bulletpoints_llm": llm_metadata,
+            }
+
+        return ResumeSectionBulletGenerationResponse(
+            project_bullet_points=llm_result.project_bullet_points,
+            experience_bullet_points=llm_result.experience_bullet_points,
+            details=details,
+        )
+
+    except BulletPointLLMClientError as exc:
+        if not request_counted:
+            metrics.inc_request(method="llm", subsystem=METRICS_SUBSYSTEM)
+        metrics.inc_error(subsystem=METRICS_SUBSYSTEM)
+        llm_metadata = exc.metadata
+        logger.warning(
+            "generate_resume_section_bulletpoints_failed",
+            extra={
+                "event": "generate_resume_section_bulletpoints_failed",
+                "subsystem": METRICS_SUBSYSTEM,
+                "job_title": req.context.title,
                 "method": "llm",
                 "error": str(exc),
                 "requested_llm_max_output_tokens": req.llm_max_output_tokens,

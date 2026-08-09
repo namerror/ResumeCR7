@@ -381,7 +381,9 @@ Implemented now:
 - `app/resume_generation/main.py` owns the pipeline-level loading of config, job target, and evidence.
 - `app.resume_generation.generate_selection_context(...)` adapts already-loaded evidence into skill and project selection service requests.
 - `app.resume_generation.derive_job_focus(...)` calls the job-focus service through the stage cache boundary.
-- `app.resume_generation.generate_project_bullet_points(...)` and `generate_experience_bullet_points(...)` call the bullet generation service for selected evidence records.
+- Resume generation can call the bullet generation service either once for the
+  selected Experience and Projects sections (`section_batch`) or per evidence
+  record (`per_record`).
 - `app.resume_generation.assembly` builds the typed intermediate resume result.
 - `app.resume_generation.latex` renders the current internal LaTeX artifact and copies user-facing `resume.tex`.
 - `app.resume_generation.pdf` renders the internal `.tex` artifact to the internal PDF artifact, then copies user-facing `resume.pdf`.

@@ -54,6 +54,8 @@ from app.resume_generation.bullet_points import (
     generate_experience_bullet_points,
     generate_project_bullet_points_async,
     generate_project_bullet_points,
+    generate_resume_section_bullet_points,
+    generate_resume_section_bullet_points_async,
 )
 from app.resume_generation.job_focus import derive_job_focus
 from app.resume_generation.cache import ResumeGenerationStageCache, ResumeGenerationStageCacheResult
@@ -164,6 +166,8 @@ __all__ = [
     "generate_experience_bullet_points_async",
     "generate_project_bullet_points",
     "generate_project_bullet_points_async",
+    "generate_resume_section_bullet_points",
+    "generate_resume_section_bullet_points_async",
     "generate_selection_context",
     "latex_escape",
     "load_generation_config",

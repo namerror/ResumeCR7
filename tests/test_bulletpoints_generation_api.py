@@ -6,6 +6,11 @@ from app.bulletpoints_generation import service as bullet_service
 from app.bulletpoints_generation.llm_client import (
     BulletPointLLMClientError,
     LLMBulletPointResult,
+    LLMResumeSectionBulletPointResult,
+)
+from app.bulletpoints_generation.models import (
+    ExperienceBulletPointSet,
+    ProjectBulletPointSet,
 )
 from app.main import app
 
@@ -227,6 +232,67 @@ def test_generate_bulletpoints_api_accepts_experience_record(monkeypatch):
     assert response.json()["bullet_points"] == [
         "Designed schema-validated APIs for backend platforms."
     ]
+
+
+def test_generate_resume_section_bulletpoints_api_success(monkeypatch):
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return LLMResumeSectionBulletPointResult(
+            project_bullet_points=[
+                ProjectBulletPointSet(
+                    project_id="resumecr7",
+                    bullet_points=["Built coordinated project bullet."],
+                )
+            ],
+            experience_bullet_points=[
+                ExperienceBulletPointSet(
+                    experience_id="backend-engineer",
+                    bullet_points=["Designed coordinated experience bullet."],
+                )
+            ],
+            metadata={
+                "model": "test-model",
+                "api_calls": 1,
+                "prompt_tokens": 50,
+                "completion_tokens": 20,
+                "total_tokens": 70,
+                "latency_ms": 2.0,
+            },
+        )
+
+    monkeypatch.setattr(
+        bullet_service,
+        "generate_resume_section_bulletpoints_with_llm_async",
+        fake_generate,
+    )
+
+    response = api_request(
+        "POST",
+        "/generate-resume-section-bulletpoints",
+        json={
+            "context": {
+                "title": "Backend Engineer",
+                "description": "Build Python APIs.",
+            },
+            "projects": [_project_payload()],
+            "experiences": [_experience_payload()],
+            "project_bullet_count_range": {"min": 1, "max": 2},
+            "experience_bullet_count_range": {"min": 1, "max": 1},
+            "dev_mode": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["project_count_range"].min == 1
+    assert captured["project_count_range"].max == 2
+    assert captured["experience_count_range"].min == 1
+    data = response.json()
+    assert data["project_bullet_points"][0]["project_id"] == "resumecr7"
+    assert data["experience_bullet_points"][0]["experience_id"] == "backend-engineer"
+    assert data["details"]["effective_count_ranges"]["projects"] == {"min": 1, "max": 2}
+    assert data["details"]["_bulletpoints_llm"]["total_tokens"] == 70
 
 
 def test_generate_bulletpoints_api_rejects_missing_or_ambiguous_evidence():

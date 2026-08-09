@@ -18,11 +18,14 @@ from app.project_selection.service import record_project_selection_error, select
 from app.bulletpoints_generation.models import (
     BulletGenerationRequest,
     BulletGenerationResponse,
+    ResumeSectionBulletGenerationRequest,
+    ResumeSectionBulletGenerationResponse,
 )
 from app.bulletpoints_generation.llm_client import DEFAULT_BULLET_OUTPUT_TOKEN_BUDGET
 from app.bulletpoints_generation.service import (
     BulletPointGenerationError,
     generate_bulletpoints_service_async,
+    generate_resume_section_bulletpoints_service_async,
     record_bulletpoint_generation_error,
 )
 from app.link_scanning.models import LinkScanRequest, LinkScanResponse
@@ -171,6 +174,39 @@ async def generate_bulletpoints(payload: BulletGenerationRequest) -> BulletGener
     )
     try:
         return await generate_bulletpoints_service_async(payload)
+    except ValueError as ve:
+        record_bulletpoint_generation_error()
+        raise HTTPException(status_code=400, detail=str(ve))
+    except BulletPointGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@app.post(
+    "/generate-resume-section-bulletpoints",
+    response_model=ResumeSectionBulletGenerationResponse,
+)
+async def generate_resume_section_bulletpoints(
+    payload: ResumeSectionBulletGenerationRequest,
+) -> ResumeSectionBulletGenerationResponse:
+    logger.info(
+        "app_content_stage_request",
+        extra={
+            "event": "app_content_stage_request",
+            "stage": "resume_section_bullet_points",
+            "endpoint": "/generate-resume-section-bulletpoints",
+            "source": "http",
+            "project_count": len(payload.projects),
+            "experience_count": len(payload.experiences),
+            "requested_llm_max_output_tokens": payload.llm_max_output_tokens,
+            "llm_output_token_budget": (
+                payload.llm_output_token_budget.model_dump()
+                if payload.llm_output_token_budget is not None
+                else None
+            ),
+        },
+    )
+    try:
+        return await generate_resume_section_bulletpoints_service_async(payload)
     except ValueError as ve:
         record_bulletpoint_generation_error()
         raise HTTPException(status_code=400, detail=str(ve))

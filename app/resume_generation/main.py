@@ -30,6 +30,8 @@ from app.resume_generation.bullet_points import (
     generate_experience_bullet_points,
     generate_project_bullet_points_async,
     generate_project_bullet_points,
+    generate_resume_section_bullet_points,
+    generate_resume_section_bullet_points_async,
 )
 from app.resume_generation.cache import ResumeGenerationStageCache
 from app.resume_generation.job_focus import derive_job_focus
@@ -424,63 +426,98 @@ def run_resume_generation_pipeline(
         },
     )
 
-    logger.info(
-        "resume_generation_stage_start",
-        extra={
-            "event": "resume_generation_stage_start",
-            "stage": "project_bullet_points",
-            "project_count": len(context.selected_projects),
-        },
-    )
-    bullet_points = generate_project_bullet_points(
-        selected_projects=context.selected_projects,
-        config=config,
-        job_target=job_target,
-        job_focus=job_focus,
-        cache=cache,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "project_bullet_points",
-            "result_count": len(bullet_points),
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("project_bullet_points")
-            ),
-        },
-    )
+    if config.bullet_point_generation_strategy == "section_batch":
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "resume_section_bullet_points",
+                "project_count": len(context.selected_projects),
+                "experience_count": len(selected_experience.experience),
+            },
+        )
+        section_bullet_points = generate_resume_section_bullet_points(
+            selected_projects=context.selected_projects,
+            experience=selected_experience.experience,
+            config=config,
+            job_target=job_target,
+            job_focus=job_focus,
+            cache=cache,
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        bullet_points = section_bullet_points.project_bullet_points
+        experience_bullet_points = section_bullet_points.experience_bullet_points
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "resume_section_bullet_points",
+                "project_result_count": len(bullet_points),
+                "experience_result_count": len(experience_bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("resume_section_bullet_points")
+                ),
+            },
+        )
+    else:
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "project_bullet_points",
+                "project_count": len(context.selected_projects),
+            },
+        )
+        bullet_points = generate_project_bullet_points(
+            selected_projects=context.selected_projects,
+            config=config,
+            job_target=job_target,
+            job_focus=job_focus,
+            cache=cache,
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "project_bullet_points",
+                "result_count": len(bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("project_bullet_points")
+                ),
+            },
+        )
 
-    logger.info(
-        "resume_generation_stage_start",
-        extra={
-            "event": "resume_generation_stage_start",
-            "stage": "experience_bullet_points",
-            "experience_count": len(selected_experience.experience),
-        },
-    )
-    experience_bullet_points = generate_experience_bullet_points(
-        experience=selected_experience.experience,
-        config=config,
-        job_target=job_target,
-        job_focus=job_focus,
-        cache=cache,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "experience_bullet_points",
-            "result_count": len(experience_bullet_points),
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("experience_bullet_points")
-            ),
-        },
-    )
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "experience_bullet_points",
+                "experience_count": len(selected_experience.experience),
+            },
+        )
+        experience_bullet_points = generate_experience_bullet_points(
+            experience=selected_experience.experience,
+            config=config,
+            job_target=job_target,
+            job_focus=job_focus,
+            cache=cache,
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "experience_bullet_points",
+                "result_count": len(experience_bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("experience_bullet_points")
+                ),
+            },
+        )
 
     # TODO: optionally overall content validation
 
@@ -661,77 +698,112 @@ async def run_resume_generation_pipeline_async(
         },
     )
 
-    logger.info(
-        "resume_generation_stage_start",
-        extra={
-            "event": "resume_generation_stage_start",
-            "stage": "project_bullet_points",
-            "project_count": len(context.selected_projects),
-        },
-    )
-    logger.info(
-        "resume_generation_stage_start",
-        extra={
-            "event": "resume_generation_stage_start",
-            "stage": "experience_bullet_points",
-            "experience_count": len(selected_experience.experience),
-        },
-    )
-    bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
-    project_bullet_stage_records: list[dict[str, Any]] = []
-    experience_bullet_stage_records: list[dict[str, Any]] = []
-    bullet_points, experience_bullet_points = await _gather_resume_generation_tasks(
-        generate_project_bullet_points_async(
+    if config.bullet_point_generation_strategy == "section_batch":
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "resume_section_bullet_points",
+                "project_count": len(context.selected_projects),
+                "experience_count": len(selected_experience.experience),
+            },
+        )
+        section_bullet_points = await generate_resume_section_bullet_points_async(
             selected_projects=context.selected_projects,
-            config=config,
-            job_target=job_target,
-            job_focus=job_focus,
-            cache=cache,
-            stage_response_records=project_bullet_stage_records,
-            semaphore=bullet_semaphore,
-        ),
-        generate_experience_bullet_points_async(
             experience=selected_experience.experience,
             config=config,
             job_target=job_target,
             job_focus=job_focus,
             cache=cache,
-            stage_response_records=experience_bullet_stage_records,
-            semaphore=bullet_semaphore,
-        ),
-    )
-    _observe_stage_response_records(
-        records=project_bullet_stage_records,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    _observe_stage_response_records(
-        records=experience_bullet_stage_records,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "project_bullet_points",
-            "result_count": len(bullet_points),
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("project_bullet_points")
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        bullet_points = section_bullet_points.project_bullet_points
+        experience_bullet_points = section_bullet_points.experience_bullet_points
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "resume_section_bullet_points",
+                "project_result_count": len(bullet_points),
+                "experience_result_count": len(experience_bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("resume_section_bullet_points")
+                ),
+            },
+        )
+    else:
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "project_bullet_points",
+                "project_count": len(context.selected_projects),
+            },
+        )
+        logger.info(
+            "resume_generation_stage_start",
+            extra={
+                "event": "resume_generation_stage_start",
+                "stage": "experience_bullet_points",
+                "experience_count": len(selected_experience.experience),
+            },
+        )
+        bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
+        project_bullet_stage_records: list[dict[str, Any]] = []
+        experience_bullet_stage_records: list[dict[str, Any]] = []
+        bullet_points, experience_bullet_points = await _gather_resume_generation_tasks(
+            generate_project_bullet_points_async(
+                selected_projects=context.selected_projects,
+                config=config,
+                job_target=job_target,
+                job_focus=job_focus,
+                cache=cache,
+                stage_response_records=project_bullet_stage_records,
+                semaphore=bullet_semaphore,
             ),
-        },
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "experience_bullet_points",
-            "result_count": len(experience_bullet_points),
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("experience_bullet_points")
+            generate_experience_bullet_points_async(
+                experience=selected_experience.experience,
+                config=config,
+                job_target=job_target,
+                job_focus=job_focus,
+                cache=cache,
+                stage_response_records=experience_bullet_stage_records,
+                semaphore=bullet_semaphore,
             ),
-        },
-    )
+        )
+        _observe_stage_response_records(
+            records=project_bullet_stage_records,
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        _observe_stage_response_records(
+            records=experience_bullet_stage_records,
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "project_bullet_points",
+                "result_count": len(bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("project_bullet_points")
+                ),
+            },
+        )
+        logger.info(
+            "resume_generation_stage_complete",
+            extra={
+                "event": "resume_generation_stage_complete",
+                "stage": "experience_bullet_points",
+                "result_count": len(experience_bullet_points),
+                **_token_usage_extra(
+                    token_usage_monitor.stage_total("experience_bullet_points")
+                ),
+            },
+        )
 
     logger.info(
         "resume_generation_stage_start",

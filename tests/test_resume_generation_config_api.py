@@ -61,6 +61,7 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["project_selection"]["top_n"] is None
     assert data["experience_selection"]["top_n"] is None
     assert data["llm_provider"] == "qwen"
+    assert data["bullet_point_generation_strategy"] == "section_batch"
     assert data["display_defaults"]["project_selection_top_n"] == "unlimited (default)"
     assert data["display_defaults"]["experience_selection_top_n"] == "unlimited (default)"
     assert data["resume_output"] == {
@@ -113,6 +114,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
             "resume_output": {"output_dir": str(output_dir)},
             "bullet_count_range": {"min": 2, "max": 4},
             "llm_provider": "qwen",
+            "bullet_point_generation_strategy": "per_record",
             "qwen": {
                 "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             },
@@ -124,6 +126,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     assert data["skill_selection"]["top_n"] == 12
     assert data["experience_selection"]["top_n"] == 2
     assert data["llm_provider"] == "qwen"
+    assert data["bullet_point_generation_strategy"] == "per_record"
     assert data["qwen_base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert data["resume_output"]["output_dir"] == str(output_dir)
     assert data["resume_output"]["tex_path"] == str(output_dir / "resume.tex")
@@ -144,6 +147,7 @@ def test_resume_generation_config_patch_preserves_hidden_yaml_values(generation_
     assert saved["link_scanning"]["max_tokens_per_highlight"] == 300
     assert saved["resume_output"]["output_dir"] == str(output_dir)
     assert saved["llm_provider"] == "qwen"
+    assert saved["bullet_point_generation_strategy"] == "per_record"
     assert saved["qwen"]["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 

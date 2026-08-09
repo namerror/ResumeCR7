@@ -40,6 +40,7 @@ import {
 import { sortSkillList } from "./skills";
 import type {
   CollectionRecord,
+  BulletPointGenerationStrategy,
   BulletCountRangeConfig,
   EducationRecord,
   ExperienceRecord,
@@ -1220,6 +1221,25 @@ function ConfigEditor({
         </div>
 
         <div className="config-section">
+          <h3>Bullet Generation</h3>
+          <div className="field-grid">
+            <SelectField<BulletPointGenerationStrategy>
+              label="Bullet generation strategy"
+              value={config.bullet_point_generation_strategy}
+              options={[
+                { label: "Whole section", value: "section_batch" },
+                { label: "Per entry", value: "per_record" },
+              ]}
+              onChange={(strategy) =>
+                onChange((next) => {
+                  next.bullet_point_generation_strategy = strategy;
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="config-section">
           <div className="config-section-header">
             <h3>Bullet Counts</h3>
             <button
@@ -2039,6 +2059,12 @@ function buildGenerationConfigPatch({
   if (baseline.llm_provider !== draft.llm_provider) {
     patch.llm_provider = draft.llm_provider;
   }
+  if (
+    baseline.bullet_point_generation_strategy
+    !== draft.bullet_point_generation_strategy
+  ) {
+    patch.bullet_point_generation_strategy = draft.bullet_point_generation_strategy;
+  }
   if (baseline.skill_selection.top_n !== draft.skill_selection.top_n) {
     patch.skill_selection = { top_n: draft.skill_selection.top_n };
   }
@@ -2107,6 +2133,7 @@ function configExposedValuesChanged(
   return !deepEqual(
     {
       llm_provider: baseline.llm_provider,
+      bullet_point_generation_strategy: baseline.bullet_point_generation_strategy,
       skill_selection: baseline.skill_selection,
       project_selection: baseline.project_selection,
       experience_selection: baseline.experience_selection,
@@ -2119,6 +2146,7 @@ function configExposedValuesChanged(
     },
     {
       llm_provider: draft.llm_provider,
+      bullet_point_generation_strategy: draft.bullet_point_generation_strategy,
       skill_selection: draft.skill_selection,
       project_selection: draft.project_selection,
       experience_selection: draft.experience_selection,

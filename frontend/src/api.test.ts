@@ -160,6 +160,7 @@ describe("evidence api client", () => {
       schema_version: 1 as const,
       config_path: "user/resume_generation/config.yaml",
       llm_provider: "openai" as const,
+      bullet_point_generation_strategy: "section_batch" as const,
       skill_selection: { top_n: 20 },
       project_selection: { top_n: null },
       experience_selection: { top_n: null },

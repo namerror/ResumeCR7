@@ -38,6 +38,12 @@ class _ExperienceBulletTaskResult:
     stage_response_records: list[dict[str, Any]]
 
 
+@dataclass
+class ResumeSectionBulletPointResults:
+    project_bullet_points: list[ProjectBulletPointResult]
+    experience_bullet_points: list[ExperienceBulletPointResult]
+
+
 def _effective_bullet_count_range(payload: dict[str, Any]) -> tuple[int, int]:
     count_range = payload.get("bullet_count_range")
     if isinstance(count_range, dict):
@@ -100,6 +106,179 @@ def _shape_bullet_response(
     return shaped
 
 
+def _resume_section_bullet_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "strategy": "section_batch",
+        "context": payload.get("context"),
+        "projects": payload.get("projects"),
+        "experiences": payload.get("experiences"),
+        "project_bullet_count_range": payload.get("project_bullet_count_range"),
+        "experience_bullet_count_range": payload.get("experience_bullet_count_range"),
+        "llm_model": payload.get("llm_model", settings.BULLETPOINTS_LLM_MODEL),
+        "llm_max_output_tokens": payload.get("llm_max_output_tokens"),
+        "llm_output_token_budget": payload.get("llm_output_token_budget"),
+    }
+
+
+def _resume_section_bullet_fetch_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    fetch_payload = dict(payload)
+    fetch_payload["dev_mode"] = True
+    return fetch_payload
+
+
+def _section_bullet_counts_match_request(
+    response_data: dict[str, Any],
+    *,
+    payload: dict[str, Any],
+) -> bool:
+    project_results = response_data.get("project_bullet_points")
+    experience_results = response_data.get("experience_bullet_points")
+    if not isinstance(project_results, list) or not isinstance(experience_results, list):
+        return False
+
+    project_ids = [
+        project.get("id")
+        for project in payload.get("projects", [])
+        if isinstance(project, dict)
+    ]
+    experience_ids = [
+        experience.get("id")
+        for experience in payload.get("experiences", [])
+        if isinstance(experience, dict)
+    ]
+    if not _section_records_match_request(
+        project_results,
+        id_field="project_id",
+        expected_ids=project_ids,
+        count_range=_effective_bullet_count_range(
+            {"bullet_count_range": payload.get("project_bullet_count_range")}
+        ),
+    ):
+        return False
+    return _section_records_match_request(
+        experience_results,
+        id_field="experience_id",
+        expected_ids=experience_ids,
+        count_range=_effective_bullet_count_range(
+            {"bullet_count_range": payload.get("experience_bullet_count_range")}
+        ),
+    )
+
+
+def _section_records_match_request(
+    records: list[Any],
+    *,
+    id_field: str,
+    expected_ids: list[Any],
+    count_range: tuple[int, int],
+) -> bool:
+    min_count, max_count = count_range
+    if len(records) != len(expected_ids):
+        return False
+    expected_id_set = set(expected_ids)
+    seen_ids: set[str] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            return False
+        record_id = record.get(id_field)
+        bullet_points = record.get("bullet_points")
+        if not isinstance(record_id, str) or record_id not in expected_id_set:
+            return False
+        if record_id in seen_ids:
+            return False
+        if not isinstance(bullet_points, list):
+            return False
+        if len(bullet_points) < min_count or len(bullet_points) > max_count:
+            return False
+        seen_ids.add(record_id)
+    return seen_ids == expected_id_set
+
+
+def _shape_resume_section_bullet_response(
+    response_data: dict[str, Any],
+    *,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    shaped = {
+        "project_bullet_points": response_data.get("project_bullet_points", []),
+        "experience_bullet_points": response_data.get("experience_bullet_points", []),
+    }
+    if _bullet_dev_mode(payload):
+        details = response_data.get("details")
+        if details is not None:
+            shaped["details"] = details
+    return shaped
+
+
+def _resume_section_bullet_payload(
+    *,
+    selected_projects: Iterable[ProjectRecord],
+    experience: Iterable[ExperienceRecord],
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    job_focus: JobFocusResult | None,
+) -> dict[str, Any]:
+    project_config = _exclude_none(config.project_bullet_point_generation)
+    experience_config = _exclude_none(config.experience_bullet_point_generation)
+    context_payload: dict[str, Any] = {"title": job_target.title}
+    if job_focus is not None:
+        context_payload["job_focus"] = job_focus.model_dump()
+    else:
+        context_payload["description"] = job_target.description
+
+    payload: dict[str, Any] = {
+        "context": context_payload,
+        "projects": [project.model_dump() for project in selected_projects],
+        "experiences": [
+            item.model_dump()
+            for item in experience
+            if item.active
+        ],
+    }
+    if "bullet_count_range" in project_config:
+        payload["project_bullet_count_range"] = project_config["bullet_count_range"]
+    if "bullet_count_range" in experience_config:
+        payload["experience_bullet_count_range"] = experience_config[
+            "bullet_count_range"
+        ]
+
+    for key in (
+        "dev_mode",
+        "llm_model",
+        "llm_max_output_tokens",
+        "llm_output_token_budget",
+    ):
+        if key in project_config:
+            payload[key] = project_config[key]
+
+    return payload
+
+
+def _section_results_from_response(
+    response: dict[str, Any],
+) -> ResumeSectionBulletPointResults:
+    return ResumeSectionBulletPointResults(
+        project_bullet_points=[
+            ProjectBulletPointResult(
+                project_id=item["project_id"],
+                bullet_points=item["bullet_points"],
+                details=response.get("details"),
+            )
+            for item in response.get("project_bullet_points", [])
+            if isinstance(item, dict)
+        ],
+        experience_bullet_points=[
+            ExperienceBulletPointResult(
+                experience_id=item["experience_id"],
+                bullet_points=item["bullet_points"],
+                details=response.get("details"),
+            )
+            for item in response.get("experience_bullet_points", [])
+            if isinstance(item, dict)
+        ],
+    )
+
+
 def _token_usage_from_stage_record(record: dict[str, Any]) -> TokenUsage:
     return TokenUsage(
         prompt_tokens=int(record.get("prompt_tokens", 0) or 0),
@@ -148,6 +327,98 @@ async def _gather_bullet_tasks_cancel_on_error(*awaitables: Any) -> list[Any]:
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
+
+
+def generate_resume_section_bullet_points(
+    *,
+    selected_projects: Iterable[ProjectRecord],
+    experience: Iterable[ExperienceRecord],
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    job_focus: JobFocusResult | None = None,
+    cache: ResumeGenerationStageCache | None = None,
+    token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
+    stage_response_records: list[dict] | None = None,
+) -> ResumeSectionBulletPointResults:
+    payload = _resume_section_bullet_payload(
+        selected_projects=selected_projects,
+        experience=experience,
+        config=config,
+        job_target=job_target,
+        job_focus=job_focus,
+    )
+    if not payload["projects"] and not payload["experiences"]:
+        return ResumeSectionBulletPointResults(
+            project_bullet_points=[],
+            experience_bullet_points=[],
+        )
+    with open_stage_client(config, httpx.Client) as client:
+        response = _cached_post_json(
+            cache=cache,
+            stage="resume_section_bullet_points",
+            client=client,
+            endpoint="/generate-resume-section-bulletpoints",
+            payload=payload,
+            cache_payload=_resume_section_bullet_cache_payload(payload),
+            fetch_payload=_resume_section_bullet_fetch_payload(payload),
+            should_use_cached=lambda data, request_payload=payload: (
+                _section_bullet_counts_match_request(
+                    data,
+                    payload=request_payload,
+                )
+            ),
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        if cache is not None:
+            response = _shape_resume_section_bullet_response(response, payload=payload)
+        return _section_results_from_response(response)
+
+
+async def generate_resume_section_bullet_points_async(
+    *,
+    selected_projects: Iterable[ProjectRecord],
+    experience: Iterable[ExperienceRecord],
+    config: ResumeGenerationConfig,
+    job_target: JobTarget,
+    job_focus: JobFocusResult | None = None,
+    cache: ResumeGenerationStageCache | None = None,
+    token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
+    stage_response_records: list[dict] | None = None,
+) -> ResumeSectionBulletPointResults:
+    payload = _resume_section_bullet_payload(
+        selected_projects=selected_projects,
+        experience=experience,
+        config=config,
+        job_target=job_target,
+        job_focus=job_focus,
+    )
+    if not payload["projects"] and not payload["experiences"]:
+        return ResumeSectionBulletPointResults(
+            project_bullet_points=[],
+            experience_bullet_points=[],
+        )
+    async with open_async_stage_client(config, httpx.AsyncClient) as client:
+        response = await _cached_post_json_async(
+            cache=cache,
+            stage="resume_section_bullet_points",
+            client=client,
+            endpoint="/generate-resume-section-bulletpoints",
+            payload=payload,
+            cache_payload=_resume_section_bullet_cache_payload(payload),
+            fetch_payload=_resume_section_bullet_fetch_payload(payload),
+            should_use_cached=lambda data, request_payload=payload: (
+                _section_bullet_counts_match_request(
+                    data,
+                    payload=request_payload,
+                )
+            ),
+            token_usage_monitor=token_usage_monitor,
+            stage_response_records=stage_response_records,
+        )
+        if cache is not None:
+            response = _shape_resume_section_bullet_response(response, payload=payload)
+        return _section_results_from_response(response)
 
 
 def generate_project_bullet_points(

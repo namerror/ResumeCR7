@@ -82,6 +82,7 @@ export function sampleGenerationConfig(): ResumeGenerationConfig {
     schema_version: 1,
     config_path: "user/resume_generation/config.yaml",
     llm_provider: "openai",
+    bullet_point_generation_strategy: "section_batch",
     skill_selection: {
       top_n: 20,
     },

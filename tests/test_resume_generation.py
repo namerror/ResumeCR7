@@ -45,6 +45,7 @@ from resume_generation import (
     generate_experience_bullet_points_async,
     generate_project_bullet_points,
     generate_project_bullet_points_async,
+    generate_resume_section_bullet_points,
     generate_selection_context,
     latex_escape,
     load_generation_config,
@@ -83,6 +84,7 @@ def _write_yaml(path: Path, payload: dict) -> Path:
 def _config_payload(**overrides) -> dict:
     payload = {
         "schema_version": 1,
+        "bullet_point_generation_strategy": "per_record",
         "app": {
             "base_url": "http://resumecr7.test",
             "timeout_seconds": 5,
@@ -616,6 +618,7 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     config = load_generation_config(path)
 
     assert isinstance(config, ResumeGenerationConfig)
+    assert config.bullet_point_generation_strategy == "per_record"
     assert config.openai.api_key is None
     assert config.app.base_url == "http://resumecr7.test"
     assert config.skill_selection.llm_model == "skill-model"
@@ -652,6 +655,12 @@ def test_load_generation_config_returns_typed_config(tmp_path):
     assert resolve_resume_pdf_output_path(config.resume_output.pdf_path) == (
         DEFAULT_RESUME_PDF_ARTIFACT_PATH
     )
+
+
+def test_resume_generation_config_defaults_to_section_batch():
+    config = ResumeGenerationConfig.model_validate({"schema_version": 1})
+
+    assert config.bullet_point_generation_strategy == "section_batch"
 
 
 def test_load_generation_config_accepts_dynamic_output_token_budgets(tmp_path):
@@ -1330,6 +1339,82 @@ def test_generate_experience_bullet_points_posts_once_per_active_experience(
     assert result[0].bullet_points == ["Generated bullet for backend-engineer."]
 
 
+def test_generate_resume_section_bullet_points_posts_once_for_selected_records(
+    monkeypatch,
+    tmp_path,
+):
+    config_payload = _config_payload(
+        bullet_point_generation_strategy="section_batch"
+    )
+    config_path = _write_yaml(tmp_path / "config.yaml", config_payload)
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+    config = load_generation_config(config_path)
+    job_target = load_job_target(job_path)
+    loaded_evidence = _loaded_evidence(projects_path, skills_path)
+    selected_project = loaded_evidence["projects"].projects_by_id()["active-project"]
+    experience_file = loaded_evidence["experience"]
+    requests: list[tuple[str, dict]] = []
+
+    class FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def post(self, endpoint: str, json: dict):
+            requests.append((endpoint, json))
+            return httpx.Response(
+                200,
+                json={
+                    "project_bullet_points": [
+                        {
+                            "project_id": "active-project",
+                            "bullet_points": ["Generated project batch bullet."],
+                        }
+                    ],
+                    "experience_bullet_points": [
+                        {
+                            "experience_id": "backend-engineer",
+                            "bullet_points": ["Generated experience batch bullet."],
+                        }
+                    ],
+                    "details": {"method": "llm"},
+                },
+            )
+
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.Client", FakeClient)
+
+    result = generate_resume_section_bullet_points(
+        selected_projects=[selected_project],
+        experience=experience_file.experience,
+        config=config,
+        job_target=job_target,
+    )
+
+    assert [endpoint for endpoint, _ in requests] == [
+        "/generate-resume-section-bulletpoints"
+    ]
+    payload = requests[0][1]
+    assert payload["context"] == {
+        "title": "Backend Engineer",
+        "description": "Build Python APIs with FastAPI.",
+    }
+    assert [project["id"] for project in payload["projects"]] == ["active-project"]
+    assert [item["id"] for item in payload["experiences"]] == ["backend-engineer"]
+    assert payload["project_bullet_count_range"] == {"min": 2, "max": 4}
+    assert payload["experience_bullet_count_range"] == {"min": 1, "max": 2}
+    assert payload["llm_model"] == "project-bullet-model"
+    assert result.project_bullet_points[0].project_id == "active-project"
+    assert result.experience_bullet_points[0].experience_id == "backend-engineer"
+
+
 def test_derive_job_focus_posts_job_target_once(monkeypatch, tmp_path):
     config_path = _write_yaml(tmp_path / "config.yaml", _config_payload())
     job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
@@ -1833,6 +1918,10 @@ def test_extract_response_token_usage_reads_stage_metadata():
         "experience_bullet_points",
         {"details": {"_bulletpoints_llm": {"total_tokens": 44}}},
     )
+    section_bullet_usage = extract_response_token_usage(
+        "resume_section_bullet_points",
+        {"details": {"_bulletpoints_llm": {"total_tokens": 55}}},
+    )
     missing_usage = extract_response_token_usage(
         "project_bullet_points",
         {"details": {"_bulletpoints_llm": {"total_tokens": "not-a-number"}}},
@@ -1848,6 +1937,7 @@ def test_extract_response_token_usage_reads_stage_metadata():
     assert project_usage.total_tokens == 22
     assert link_usage.total_tokens == 33
     assert bullet_usage.total_tokens == 44
+    assert section_bullet_usage.total_tokens == 55
     assert missing_usage.total_tokens == 0
 
 
@@ -3279,22 +3369,160 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
         "backend-engineer"
     ]
     assert assembly_calls[0]["experience"].experience[0].name == "Example Company"
-    assert assembly_calls[0]["selection_context"].selected_skills.technology == ["FastAPI"]
+    assert assembly_calls[0]["selection_context"].selected_skills.technology == [
+        "FastAPI"
+    ]
     assert [project.id for project in assembly_calls[0]["selected_projects"]] == [
         "active-project"
     ]
-    assert [item.project_id for item in assembly_calls[0]["project_bullet_points"]] == [
+    assert [
+        item.project_id for item in assembly_calls[0]["project_bullet_points"]
+    ] == [
         "active-project"
     ]
     assert assembly_calls[0]["project_bullet_points"][0].bullet_points == [
         "Generated bullet for active-project."
     ]
-    assert [item.experience_id for item in assembly_calls[0]["experience_bullet_points"]] == [
+    assert [
+        item.experience_id
+        for item in assembly_calls[0]["experience_bullet_points"]
+    ] == [
         "backend-engineer"
     ]
     assert assembly_calls[0]["experience_bullet_points"][0].bullet_points == [
         "Generated bullet for backend-engineer."
     ]
+
+
+def test_run_resume_generation_pipeline_defaults_to_section_batch(
+    monkeypatch,
+    tmp_path,
+):
+    config_payload = _config_payload()
+    config_payload.pop("bullet_point_generation_strategy")
+    config_path = _write_yaml(tmp_path / "config.yaml", config_payload)
+    job_path = _write_yaml(tmp_path / "job.yaml", _job_target_payload())
+    projects_path = _write_yaml(tmp_path / "projects.yaml", _projects_payload())
+    skills_path = _write_yaml(tmp_path / "skills.yaml", _skills_payload())
+    loaded_evidence = _loaded_evidence(projects_path, skills_path)
+    calls: list[tuple[str, dict]] = []
+
+    class FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            assert base_url == "http://resumecr7.test"
+            assert timeout == 5
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def post(self, endpoint: str, json: dict):
+            calls.append((endpoint, json))
+            if endpoint == "/select-skills":
+                return httpx.Response(
+                    200,
+                    json={
+                        "technology": ["FastAPI"],
+                        "programming": ["Python"],
+                        "concepts": ["API"],
+                    },
+                )
+            if endpoint == "/select-projects":
+                return httpx.Response(
+                    200,
+                    json={
+                        "selected_project_ids": ["active-project"],
+                        "ranked_projects": [
+                            {
+                                "project_id": "active-project",
+                                "score": 1.0,
+                                "method": "llm",
+                            }
+                        ],
+                    },
+                )
+            if endpoint == "/derive-job-focus":
+                return _job_focus_response()
+            if endpoint == "/generate-resume-section-bulletpoints":
+                return httpx.Response(
+                    200,
+                    json={
+                        "project_bullet_points": [
+                            {
+                                "project_id": "active-project",
+                                "bullet_points": ["Generated project batch bullet."],
+                            }
+                        ],
+                        "experience_bullet_points": [
+                            {
+                                "experience_id": "backend-engineer",
+                                "bullet_points": [
+                                    "Generated experience batch bullet."
+                                ],
+                            }
+                        ],
+                        "details": {
+                            "_bulletpoints_llm": {
+                                "prompt_tokens": 9,
+                                "completion_tokens": 4,
+                                "total_tokens": 13,
+                                "api_calls": 1,
+                                "latency_ms": 25.0,
+                            }
+                        },
+                    },
+                )
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    monkeypatch.setattr("resume_generation.selection.httpx.Client", FakeClient)
+    monkeypatch.setattr("resume_generation.bullet_points.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "resume_generation.main.load_registered_evidence",
+        lambda paths=None: loaded_evidence,
+    )
+    artifact_path = tmp_path / "artifacts" / "resume_result.json"
+    manifest_path = tmp_path / "artifacts" / "resume_run_manifest.json"
+
+    result = run_resume_generation_pipeline(
+        config_path=config_path,
+        job_target_path=job_path,
+        evidence_paths={
+            "projects": projects_path,
+            "skills": skills_path,
+        },
+        resume_result_artifact_path=artifact_path,
+        resume_run_manifest_artifact_path=manifest_path,
+    )
+
+    assert [endpoint for endpoint, _ in calls] == [
+        "/select-skills",
+        "/select-projects",
+        "/derive-job-focus",
+        "/generate-resume-section-bulletpoints",
+    ]
+    batch_payload = calls[-1][1]
+    assert [project["id"] for project in batch_payload["projects"]] == [
+        "active-project"
+    ]
+    assert [item["id"] for item in batch_payload["experiences"]] == [
+        "backend-engineer"
+    ]
+    assert result.projects[0].bullet_points == ["Generated project batch bullet."]
+    assert result.experience[0].bullet_points == [
+        "Generated experience batch bullet."
+    ]
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    section_stage = next(
+        record
+        for record in manifest_payload["stage_responses"]
+        if record["stage"] == "resume_section_bullet_points"
+    )
+    assert section_stage["endpoint"] == "/generate-resume-section-bulletpoints"
+    assert manifest_payload["token_usage"]["raw_stages"][
+        "resume_section_bullet_points"
+    ]["total_tokens"] == 13
 
 
 def test_resume_generation_pipeline_preserves_selected_experience_order(

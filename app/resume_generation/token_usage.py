@@ -19,6 +19,7 @@ _STAGE_DETAIL_KEYS = {
     "link_scanning": ("_link_scanning_llm",),
     "project_bullet_points": ("_bulletpoints_llm",),
     "experience_bullet_points": ("_bulletpoints_llm",),
+    "resume_section_bullet_points": ("_bulletpoints_llm",),
 }
 
 
@@ -90,6 +91,9 @@ class ResumeGenerationTokenUsageMonitor:
                 ).model_dump(),
                 "experience_bullet_points": self.stage_total(
                     "experience_bullet_points"
+                ).model_dump(),
+                "resume_section_bullet_points": self.stage_total(
+                    "resume_section_bullet_points"
                 ).model_dump(),
                 "assembly": TokenUsage().model_dump(),
             },

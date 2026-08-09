@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Configurable bullet generation strategy with whole-section batch generation
+  as the default and per-entry generation available as a compatibility mode.
 - Configurable concurrent bullet-point LLM requests for faster resume generation.
 - Configurable Qwen LLM provider support with Config UI controls for selecting
   OpenAI or Qwen and managing both provider API keys.
