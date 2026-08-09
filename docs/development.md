@@ -96,7 +96,14 @@ bash packaging/linux/install-pdf-dependencies.sh
 
 ## Release Check
 
-Validate release metadata with:
+Prepare a dated release section in `docs/CHANGELOG.md`, then bump release
+metadata and publish the commit/tag with:
+
+```bash
+uv run python scripts/bump_version.py vX.Y.Z
+```
+
+Validate release metadata directly with:
 
 ```bash
 uv run python scripts/validate_release.py --tag vX.Y.Z

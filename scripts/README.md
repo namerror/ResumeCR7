@@ -19,6 +19,19 @@ python scripts/build_skill_pools.py
 python scripts/build_skill_pools.py --raw-dir data/skill_pools/raw --output data/skill_pools/normalized/skill_pools.json
 ```
 
+## bump_version.py
+
+Bumps release metadata, commits the five release files, creates the release tag,
+and pushes the current branch and tag. Prepare the matching
+`docs/CHANGELOG.md` release section before running it. The script blocks
+unrelated worktree changes, but allows pending changes in the release files.
+
+```bash
+python scripts/bump_version.py vX.Y.Z
+python scripts/bump_version.py vX.Y.Z --no-push
+python scripts/bump_version.py vX.Y.Z --dry-run
+```
+
 ## eval_cases_generator.py
 
 Generates eval case files from skill pools. Output goes to `data/eval_cases/generated/` with a unique filename per run.
