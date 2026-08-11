@@ -63,6 +63,7 @@ describe("evidence api client", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
+        run_id: "run-1",
         resume_result: {},
         resume_result_path: "user/resume_generation/resume_result.json",
         manifest_path: "user/resume_generation/resume_run_manifest.json",
@@ -84,6 +85,36 @@ describe("evidence api client", () => {
         method: "POST",
         body: JSON.stringify(payload),
       }),
+    );
+  });
+
+  it("reads generation status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        schema_version: 1,
+        run_id: "run-1",
+        operation: "tex",
+        status: "running",
+        started_at: "2026-08-11T12:00:00Z",
+        completed_at: null,
+        current_stage_id: "job_focus_generation",
+        error: null,
+        stages: [],
+        job_focus: null,
+      }),
+    });
+    const api = createEvidenceApi({
+      baseUrl: "/api",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    const status = await api.getResumeGenerationStatus();
+
+    expect(status.status).toBe("running");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/resume-generation/status",
+      expect.objectContaining({}),
     );
   });
 

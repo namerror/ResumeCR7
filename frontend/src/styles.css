@@ -188,6 +188,12 @@ h3 {
   min-height: 34px;
 }
 
+.button.icon-only {
+  aspect-ratio: 1;
+  padding: 0;
+  width: 38px;
+}
+
 .icon-button {
   background: transparent;
   color: var(--ink);
@@ -352,6 +358,131 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.status-header-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.generation-run-summary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.generation-run-summary > div {
+  background: var(--panel-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 12px;
+}
+
+.generation-run-summary span,
+.job-focus-list > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.generation-run-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.generation-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generation-stage-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.generation-stage-row.running {
+  border-color: #aac3b6;
+  background: var(--accent-soft);
+}
+
+.generation-stage-row.succeeded .stage-icon {
+  color: var(--success);
+}
+
+.generation-stage-row.failed {
+  border-color: #e8b4ae;
+  background: var(--danger-soft);
+}
+
+.stage-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.stage-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.stage-copy span,
+.stage-state {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stage-state {
+  font-weight: 700;
+}
+
+.job-focus-panel {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.job-focus-panel p {
+  margin: 0;
+}
+
+.job-focus-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 128px minmax(0, 1fr);
+}
+
+.job-focus-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.job-focus-chip {
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 .record-action-row {

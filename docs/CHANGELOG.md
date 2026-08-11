@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Generation status monitor page with live `.tex` pipeline progress, stage
+  completion messages, and the derived job focus.
 - Resume generation now derives job focus before selection, uses it to guide
   skill/project selection and bullet wording, records keyword coverage in the
   run manifest, and defaults project selection to two projects.

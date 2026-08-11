@@ -114,6 +114,7 @@ export interface ResumeTexGenerationRequest {
 }
 
 export interface ResumeTexGenerationResponse {
+  run_id: string;
   resume_result: unknown;
   resume_result_path: string;
   manifest_path: string;
@@ -255,4 +256,39 @@ export interface ResumePdfGenerationResponse {
   pdfPath: string | null;
   artifactTexPath: string | null;
   artifactPdfPath: string | null;
+}
+
+export type ResumeGenerationRunStatus = "idle" | "running" | "succeeded" | "failed";
+export type ResumeGenerationStageStatus = "pending" | "running" | "succeeded" | "failed";
+
+export interface JobFocus {
+  summary: string;
+  required_skills: string[];
+  preferred_skills: string[];
+  responsibilities: string[];
+  domain_emphasis: string[];
+  resume_relevant_constraints: string[];
+  excluded_context: string[];
+}
+
+export interface ResumeGenerationStatusStage {
+  id: string;
+  label: string;
+  status: ResumeGenerationStageStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  message: string | null;
+}
+
+export interface ResumeGenerationStatus {
+  schema_version: 1;
+  run_id: string | null;
+  operation: "tex" | null;
+  status: ResumeGenerationRunStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  current_stage_id: string | null;
+  error: string | null;
+  stages: ResumeGenerationStatusStage[];
+  job_focus: JobFocus | null;
 }

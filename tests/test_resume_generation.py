@@ -21,6 +21,7 @@ from app.project_selection.models import (
     ProjectSelectionResult as AppProjectSelectionResult,
     RankedProject,
 )
+from app.resume_generation.status import resume_generation_status_store
 from app.skill_selection.models import SkillSelectResponse
 from app.project_selection.llm_client import LLMProjectScoreResult
 from app.skill_selection.llm_client import LLMScoreResult
@@ -5498,17 +5499,47 @@ def test_resume_generation_enrich_link_evidence_route_rejects_all_with_target_id
     assert "evidence_id requires" in response.text
 
 
+def test_resume_generation_status_route_returns_idle_snapshot():
+    resume_generation_status_store.reset()
+
+    response = api_request("GET", "/resume-generation/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {
+        "schema_version": 1,
+        "run_id": None,
+        "operation": None,
+        "status": "idle",
+        "started_at": None,
+        "completed_at": None,
+        "current_stage_id": None,
+        "error": None,
+        "stages": [],
+        "job_focus": None,
+    }
+
+
 def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     monkeypatch,
     tmp_path,
 ):
+    resume_generation_status_store.reset()
     resume_result = _sample_intermediate_resume_result()
     tex_path = tmp_path / "resume.tex"
     tex_path.write_text("rendered tex\n", encoding="utf-8")
     calls: list[str] = []
 
-    async def fake_run_resume_generation_pipeline():
+    async def fake_run_resume_generation_pipeline(**kwargs):
         calls.append("pipeline")
+        status_reporter = kwargs["status_reporter"]
+        status_reporter("job_focus_generation", "running", "Generating job focus", None)
+        status_reporter(
+            "job_focus_generation",
+            "succeeded",
+            "Done",
+            JobFocus.model_validate(_job_focus_payload()),
+        )
         return resume_result
 
     def fake_write_resume_latex_from_config(result):
@@ -5530,6 +5561,7 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     assert response.status_code == 200
     assert calls == ["pipeline", "latex"]
     data = response.json()
+    assert data["run_id"]
     assert data["resume_result"]["top"]["name"] == "Example Candidate"
     assert data["tex_path"] == str(tex_path)
     assert data["artifact_tex_path"].endswith("user/resume_generation/artifacts/resume.tex")
@@ -5540,12 +5572,22 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     assert data["manifest_path"].endswith(
         "user/resume_generation/artifacts/resume_run_manifest.json"
     )
+    status_response = api_request("GET", "/resume-generation/status")
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["run_id"] == data["run_id"]
+    assert status_payload["status"] == "succeeded"
+    assert status_payload["job_focus"]["summary"] == (
+        "Backend API role focused on Python services."
+    )
+    assert [stage["status"] for stage in status_payload["stages"]][-1] == "succeeded"
 
 
 def test_resume_generation_tex_route_accepts_job_target_override(
     monkeypatch,
     tmp_path,
 ):
+    resume_generation_status_store.reset()
     resume_result = _sample_intermediate_resume_result()
     tex_path = tmp_path / "resume.tex"
     tex_path.write_text("rendered tex\n", encoding="utf-8")
@@ -5585,6 +5627,29 @@ def test_resume_generation_tex_route_accepts_job_target_override(
     assert isinstance(job_target, JobTarget)
     assert job_target.title == "Frontend Engineer"
     assert job_target.description == "Build React interfaces."
+
+
+def test_resume_generation_tex_route_marks_status_failed(monkeypatch):
+    resume_generation_status_store.reset()
+
+    async def fake_run_resume_generation_pipeline(**kwargs):
+        status_reporter = kwargs["status_reporter"]
+        status_reporter("job_focus_generation", "running", "Generating job focus", None)
+        raise ResumeGenerationError("selection service unavailable")
+
+    monkeypatch.setattr(
+        "app.resume_generation.api.run_resume_generation_pipeline_async",
+        fake_run_resume_generation_pipeline,
+    )
+
+    response = api_request("POST", "/resume-generation/tex", json={})
+
+    assert response.status_code == 502
+    status_response = api_request("GET", "/resume-generation/status")
+    data = status_response.json()
+    assert data["status"] == "failed"
+    assert data["error"] == "selection service unavailable"
+    assert data["stages"][0]["status"] == "failed"
 
 
 def test_resume_generation_pdf_route_returns_rendered_pdf(monkeypatch, tmp_path):

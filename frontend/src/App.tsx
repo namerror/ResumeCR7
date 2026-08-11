@@ -1,4 +1,5 @@
 import {
+  Activity,
   AlertCircle,
   BriefcaseBusiness,
   CheckCircle2,
@@ -51,6 +52,8 @@ import type {
   ResumeEvidenceRegistry,
   ResumeGenerationConfig,
   ResumeGenerationConfigPatch,
+  ResumeGenerationStatus,
+  ResumeGenerationStatusStage,
   SkillCategory,
 } from "./types";
 import { skillCategories } from "./types";
@@ -60,6 +63,7 @@ type SectionKey =
   | "user"
   | "skills"
   | "generate"
+  | "status"
   | "config"
   | "experience"
   | "projects"
@@ -93,6 +97,7 @@ const sectionDefinitions: Array<{
   { key: "projects", label: "Projects", icon: FolderKanban },
   { key: "education", label: "Education", icon: GraduationCap },
   { key: "generate", label: "Generate", icon: FileText },
+  { key: "status", label: "Status", icon: Activity },
   { key: "config", label: "Config", icon: Settings2 },
 ];
 
@@ -129,6 +134,8 @@ export default function App({ client = evidenceApi }: AppProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [isGeneratingTex, setIsGeneratingTex] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState<ResumeGenerationStatus | null>(null);
+  const [generationStatusError, setGenerationStatusError] = useState<string | null>(null);
   const [enrichingTarget, setEnrichingTarget] = useState<EnrichmentTarget | null>(null);
 
   const resetEvidence = useCallback((evidence: ResumeEvidenceRegistry) => {
@@ -190,9 +197,38 @@ export default function App({ client = evidenceApi }: AppProps) {
     }
   }, [client, resetConfig, resetEvidence, resetJobTarget]);
 
+  const loadGenerationStatus = useCallback(async () => {
+    try {
+      const status = await client.getResumeGenerationStatus();
+      setGenerationStatus(status);
+      setGenerationStatusError(null);
+    } catch (error) {
+      setGenerationStatusError(formatError(error));
+    }
+  }, [client]);
+
   useEffect(() => {
     void loadEvidence();
   }, [loadEvidence]);
+
+  useEffect(() => {
+    void loadGenerationStatus();
+  }, [loadGenerationStatus]);
+
+  useEffect(() => {
+    if (activeSection === "status") {
+      void loadGenerationStatus();
+    }
+
+    if (!isGeneratingTex && generationStatus?.status !== "running") {
+      return undefined;
+    }
+
+    const pollId = window.setInterval(() => {
+      void loadGenerationStatus();
+    }, 1000);
+    return () => window.clearInterval(pollId);
+  }, [activeSection, generationStatus?.status, isGeneratingTex, loadGenerationStatus]);
 
   const evidenceDirty = useMemo(() => hasDraftChanges(baseline, draft), [baseline, draft]);
   const configValuesDirty = useMemo(
@@ -464,16 +500,20 @@ export default function App({ client = evidenceApi }: AppProps) {
       return;
     }
 
+    setActiveSection("status");
     setIsGeneratingTex(true);
     setApplyError(null);
+    setGenerationStatusError(null);
     setMessage(null);
     setCurrentOperation("Generating .tex resume");
 
     try {
       const result = await client.generateResumeTex({});
       setMessage(`Generated .tex at ${result.tex_path}.`);
+      await loadGenerationStatus();
     } catch (error) {
       setApplyError(formatError(error));
+      await loadGenerationStatus();
     } finally {
       setCurrentOperation(null);
       setIsGeneratingTex(false);
@@ -691,6 +731,13 @@ export default function App({ client = evidenceApi }: AppProps) {
                       next.title = title;
                     });
                   }}
+                />
+              ) : null}
+              {activeSection === "status" ? (
+                <GenerationStatusPanel
+                  error={generationStatusError}
+                  status={generationStatus}
+                  onRefresh={() => void loadGenerationStatus()}
                 />
               ) : null}
               {activeSection === "config" ? (
@@ -1089,6 +1136,117 @@ function ResumeGenerationPanel({
           )}
           Generate PDF
         </button>
+      </div>
+    </div>
+  );
+}
+
+function GenerationStatusPanel({
+  error,
+  status,
+  onRefresh,
+}: {
+  error: string | null;
+  status: ResumeGenerationStatus | null;
+  onRefresh: () => void;
+}) {
+  const activeStage = status?.stages.find((stage) => stage.id === status.current_stage_id);
+  return (
+    <div className="editor-surface">
+      <div className="status-header-row">
+        <SectionHeader
+          title="Generation Status"
+          eyebrow={status?.status === "running" ? "Running" : "Monitor"}
+        />
+        <button className="button secondary icon-only" type="button" onClick={onRefresh} title="Refresh">
+          <RefreshCw aria-hidden="true" size={17} />
+        </button>
+      </div>
+
+      {error ? (
+        <div className="notice error" role="alert">
+          <AlertCircle aria-hidden="true" size={18} />
+          {error}
+        </div>
+      ) : null}
+
+      <div className={`generation-run-summary ${status?.status ?? "idle"}`}>
+        <div>
+          <span>Run</span>
+          <strong>{status ? generationRunLabel(status.status) : "Loading"}</strong>
+        </div>
+        <div>
+          <span>Current</span>
+          <strong>{activeStage?.label ?? "None"}</strong>
+        </div>
+        <div>
+          <span>Started</span>
+          <strong>{formatStatusTime(status?.started_at)}</strong>
+        </div>
+      </div>
+
+      <div className="generation-stage-list" aria-label="Generation stages">
+        {status && status.stages.length > 0 ? (
+          status.stages.map((stage) => <GenerationStageRow key={stage.id} stage={stage} />)
+        ) : (
+          <StatePanel icon={Activity} title="No generation run" />
+        )}
+      </div>
+
+      {status?.job_focus ? (
+        <div className="job-focus-panel">
+          <SectionHeader title="Job Focus" eyebrow="Found" compact />
+          <p>{status.job_focus.summary}</p>
+          <JobFocusList label="Required" values={status.job_focus.required_skills} />
+          <JobFocusList label="Preferred" values={status.job_focus.preferred_skills} />
+          <JobFocusList label="Responsibilities" values={status.job_focus.responsibilities} />
+          <JobFocusList label="Emphasis" values={status.job_focus.domain_emphasis} />
+          <JobFocusList
+            label="Constraints"
+            values={status.job_focus.resume_relevant_constraints}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GenerationStageRow({ stage }: { stage: ResumeGenerationStatusStage }) {
+  const Icon =
+    stage.status === "succeeded"
+      ? CheckCircle2
+      : stage.status === "failed"
+        ? AlertCircle
+        : stage.status === "running"
+          ? Loader2
+          : Activity;
+  return (
+    <div className={`generation-stage-row ${stage.status}`}>
+      <span className="stage-icon" aria-hidden="true">
+        <Icon className={stage.status === "running" ? "spin" : undefined} size={18} />
+      </span>
+      <div className="stage-copy">
+        <strong>{stage.label}</strong>
+        <span>{stage.message ?? generationStageLabel(stage.status)}</span>
+      </div>
+      <span className="stage-state">{generationStageLabel(stage.status)}</span>
+    </div>
+  );
+}
+
+function JobFocusList({ label, values }: { label: string; values: string[] }) {
+  if (values.length === 0) {
+    return null;
+  }
+  return (
+    <div className="job-focus-list">
+      <span>{label}</span>
+      <div>
+        {values.map((value) => (
+          <span className="job-focus-chip" key={value}>
+            {value}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -2256,6 +2414,43 @@ function sectionCount(section: SectionKey, evidence: ResumeEvidenceRegistry): nu
     return evidence.education.education.length;
   }
   return undefined;
+}
+
+function generationRunLabel(status: ResumeGenerationStatus["status"]): string {
+  if (status === "idle") {
+    return "Idle";
+  }
+  if (status === "running") {
+    return "Running";
+  }
+  if (status === "succeeded") {
+    return "Succeeded";
+  }
+  return "Failed";
+}
+
+function generationStageLabel(status: ResumeGenerationStatusStage["status"]): string {
+  if (status === "pending") {
+    return "Pending";
+  }
+  if (status === "running") {
+    return "Running";
+  }
+  if (status === "succeeded") {
+    return "Done";
+  }
+  return "Failed";
+}
+
+function formatStatusTime(value: string | null | undefined): string {
+  if (!value) {
+    return "None";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(value));
 }
 
 function countSkills(skills: ProjectSkills): number {

@@ -52,6 +52,7 @@ from app.resume_generation.selection import (
     generate_selection_context,
     generate_skill_selection_async,
 )
+from app.resume_generation.status import GenerationStatusReporter
 from app.resume_generation.tailoring import build_tailoring_audit
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
@@ -108,6 +109,17 @@ def _token_usage_extra(usage: TokenUsage) -> dict[str, int | float]:
         "api_calls": usage.api_calls,
         "latency_ms": round(usage.latency_ms, 3),
     }
+
+
+def _report_generation_status(
+    reporter: GenerationStatusReporter | None,
+    stage_id: str,
+    status: str,
+    message: str | None = None,
+    job_focus: JobFocusResult | None = None,
+) -> None:
+    if reporter is not None:
+        reporter(stage_id, status, message, job_focus)
 
 
 def _observe_stage_response_records(
@@ -620,6 +632,7 @@ async def run_resume_generation_pipeline_async(
     evidence_paths: dict[str, Path | str] | None = None,
     resume_result_artifact_path: Path | str | None = None,
     resume_run_manifest_artifact_path: Path | str | None = None,
+    status_reporter: GenerationStatusReporter | None = None,
 ) -> IntermediateResumeResult:
     resolved_config_path = resolve_generation_config_path(config_path)
     resolved_job_target_path = resolve_job_target_path(job_target_path)
@@ -666,6 +679,12 @@ async def run_resume_generation_pipeline_async(
         "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
     )
+    _report_generation_status(
+        status_reporter,
+        "job_focus_generation",
+        "running",
+        "Generating job focus",
+    )
     (
         context_config_path,
         context_job_target_path,
@@ -703,10 +722,29 @@ async def run_resume_generation_pipeline_async(
         (job_focus,) = await _wait_resume_generation_tasks_cancel_on_error(
             [job_focus_task]
         )
+        _report_generation_status(
+            status_reporter,
+            "job_focus_generation",
+            "succeeded",
+            "Done",
+            job_focus,
+        )
 
         logger.info(
             "resume_generation_stage_start",
             extra={"event": "resume_generation_stage_start", "stage": "selection"},
+        )
+        _report_generation_status(
+            status_reporter,
+            "skill_selection",
+            "running",
+            "Selecting skills",
+        )
+        _report_generation_status(
+            status_reporter,
+            "project_selection",
+            "running",
+            "Selecting projects",
         )
         skill_task = asyncio.create_task(
             generate_skill_selection_async(
@@ -735,6 +773,12 @@ async def run_resume_generation_pipeline_async(
             [project_task]
         )
         project_selection, selected_projects = project_result
+        _report_generation_status(
+            status_reporter,
+            "project_selection",
+            "succeeded",
+            "Done",
+        )
 
         if config.bullet_point_generation_strategy == "section_batch":
             logger.info(
@@ -745,6 +789,12 @@ async def run_resume_generation_pipeline_async(
                     "project_count": len(selected_projects),
                     "experience_count": len(selected_experience.experience),
                 },
+            )
+            _report_generation_status(
+                status_reporter,
+                "bullet_points",
+                "running",
+                "Generating bullet points",
             )
             section_bullet_stage_records: list[dict[str, Any]] = []
             section_bullet_task = asyncio.create_task(
@@ -766,8 +816,20 @@ async def run_resume_generation_pipeline_async(
                     [skill_task, section_bullet_task]
                 )
             )
+            _report_generation_status(
+                status_reporter,
+                "skill_selection",
+                "succeeded",
+                "Done",
+            )
             bullet_points = section_bullet_points.project_bullet_points
             experience_bullet_points = section_bullet_points.experience_bullet_points
+            _report_generation_status(
+                status_reporter,
+                "bullet_points",
+                "succeeded",
+                "Done",
+            )
             project_bullet_stage_records: list[dict[str, Any]] = []
             experience_bullet_stage_records: list[dict[str, Any]] = []
         else:
@@ -786,6 +848,12 @@ async def run_resume_generation_pipeline_async(
                     "stage": "experience_bullet_points",
                     "experience_count": len(selected_experience.experience),
                 },
+            )
+            _report_generation_status(
+                status_reporter,
+                "bullet_points",
+                "running",
+                "Generating bullet points",
             )
             bullet_semaphore = asyncio.Semaphore(config.concurrency.bullet_point_requests)
             project_bullet_stage_records = []
@@ -819,6 +887,18 @@ async def run_resume_generation_pipeline_async(
                 await _wait_resume_generation_tasks_cancel_on_error(
                     [skill_task, project_bullet_task, experience_bullet_task]
                 )
+            )
+            _report_generation_status(
+                status_reporter,
+                "skill_selection",
+                "succeeded",
+                "Done",
+            )
+            _report_generation_status(
+                status_reporter,
+                "bullet_points",
+                "succeeded",
+                "Done",
             )
             section_bullet_stage_records = []
     except BaseException:
@@ -932,6 +1012,12 @@ async def run_resume_generation_pipeline_async(
         "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "assembly"},
     )
+    _report_generation_status(
+        status_reporter,
+        "assembly",
+        "running",
+        "Assembling resume",
+    )
     resume_result = assemble_intermediate_resume_result(
         user_info=_user_info,
         education=_education,
@@ -949,6 +1035,12 @@ async def run_resume_generation_pipeline_async(
             "stage": "assembly",
             **_token_usage_extra(TokenUsage()),
         },
+    )
+    _report_generation_status(
+        status_reporter,
+        "assembly",
+        "succeeded",
+        "Done",
     )
 
     artifact_path = write_resume_result_artifact(

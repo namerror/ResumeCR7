@@ -45,6 +45,10 @@ from app.resume_generation.pdf import (
     resolve_resume_user_pdf_output_path,
 )
 from app.resume_generation.selection import ResumeGenerationError
+from app.resume_generation.status import (
+    ResumeGenerationStatusSnapshot,
+    resume_generation_status_store,
+)
 
 router = APIRouter(prefix="/resume-generation", tags=["resume-generation"])
 
@@ -114,6 +118,7 @@ class ResumeTexGenerationRequest(StrictSchemaModel):
 
 
 class ResumeTexGenerationResponse(StrictSchemaModel):
+    run_id: str
     resume_result: IntermediateResumeResult
     resume_result_path: str
     manifest_path: str
@@ -346,6 +351,11 @@ class JobTargetResponse(StrictSchemaModel):
     title: str
     description: str | None
     job_target_path: str
+
+
+@router.get("/status", response_model=ResumeGenerationStatusSnapshot)
+async def get_resume_generation_status() -> ResumeGenerationStatusSnapshot:
+    return resume_generation_status_store.snapshot()
 
 
 def _validation_error(exc: Exception) -> HTTPException:
@@ -686,21 +696,42 @@ async def generate_resume_tex(
     payload: ResumeTexGenerationRequest | None = None,
 ) -> ResumeTexGenerationResponse:
     effective_payload = payload or ResumeTexGenerationRequest()
+    run_id = resume_generation_status_store.start_run(operation="tex")
     try:
         if effective_payload.job_target is None:
-            resume_result = await run_resume_generation_pipeline_async()
+            resume_result = await run_resume_generation_pipeline_async(
+                status_reporter=resume_generation_status_store.reporter(),
+            )
         else:
             resume_result = await run_resume_generation_pipeline_async(
                 job_target_override=effective_payload.job_target,
+                status_reporter=resume_generation_status_store.reporter(),
             )
+        resume_generation_status_store.update_stage(
+            "latex_rendering",
+            "running",
+            "Rendering .tex",
+        )
         tex_path = write_resume_latex_from_config(resume_result)
+        resume_generation_status_store.update_stage(
+            "latex_rendering",
+            "succeeded",
+            "Done",
+        )
         tex_content = tex_path.read_text(encoding="utf-8")
+        resume_generation_status_store.complete_run()
     except ResumeGenerationError as exc:
+        resume_generation_status_store.fail_run(str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (FileNotFoundError, TypeError, ValueError) as exc:
+        resume_generation_status_store.fail_run(str(exc))
         raise _validation_error(exc) from exc
+    except Exception as exc:
+        resume_generation_status_store.fail_run(str(exc))
+        raise
 
     return ResumeTexGenerationResponse(
+        run_id=run_id,
         resume_result=resume_result,
         resume_result_path=str(resolve_resume_result_artifact_path()),
         manifest_path=str(resolve_resume_run_manifest_artifact_path()),

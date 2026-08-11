@@ -26,6 +26,7 @@ describe("App", () => {
       "Projects",
       "Education",
       "Generate",
+      "Status",
       "Config",
     ]);
   });
@@ -324,6 +325,50 @@ describe("App", () => {
     });
   });
 
+  it("switches to status and renders generation progress", async () => {
+    const evidence = sampleEvidence();
+    const client = createMockClient(evidence);
+    (client.getResumeGenerationStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      schema_version: 1,
+      run_id: "run-1",
+      operation: "tex",
+      status: "succeeded",
+      started_at: "2026-08-11T12:00:00Z",
+      completed_at: "2026-08-11T12:00:05Z",
+      current_stage_id: null,
+      error: null,
+      stages: [
+        {
+          id: "job_focus_generation",
+          label: "Generating job focus",
+          status: "succeeded",
+          started_at: "2026-08-11T12:00:00Z",
+          completed_at: "2026-08-11T12:00:01Z",
+          message: "Done",
+        },
+      ],
+      job_focus: {
+        summary: "Backend API role focused on Python services.",
+        required_skills: ["Python", "FastAPI"],
+        preferred_skills: ["Docker"],
+        responsibilities: ["Build and maintain REST APIs"],
+        domain_emphasis: ["Backend platforms"],
+        resume_relevant_constraints: ["Remote collaboration"],
+        excluded_context: ["Benefits and company culture"],
+      },
+    });
+
+    render(<App client={client} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate .tex" }));
+
+    expect(await screen.findByText("Generation Status")).toBeTruthy();
+    expect(await screen.findByText("Generating job focus")).toBeTruthy();
+    expect(await screen.findByText("Backend API role focused on Python services.")).toBeTruthy();
+    expect(await screen.findByText("FastAPI")).toBeTruthy();
+  });
+
   it("shows a short pdf prerequisite message when no tex exists", async () => {
     const evidence = sampleEvidence();
     const client = createMockClient(evidence);
@@ -567,6 +612,7 @@ function createMockClient(
     updateSkills: vi.fn(),
     updateUser: vi.fn().mockResolvedValue(reloaded.user),
     generateResumeTex: vi.fn().mockResolvedValue({
+      run_id: "run-1",
       resume_result: {},
       resume_result_path: "user/resume_generation/resume_result.json",
       manifest_path: "user/resume_generation/resume_run_manifest.json",
@@ -580,6 +626,18 @@ function createMockClient(
       pdfPath: "user/resume_generation/output/resume.pdf",
       artifactTexPath: "user/resume_generation/artifacts/resume.tex",
       artifactPdfPath: "user/resume_generation/artifacts/resume.pdf",
+    }),
+    getResumeGenerationStatus: vi.fn().mockResolvedValue({
+      schema_version: 1,
+      run_id: null,
+      operation: null,
+      status: "idle",
+      started_at: null,
+      completed_at: null,
+      current_stage_id: null,
+      error: null,
+      stages: [],
+      job_focus: null,
     }),
     enrichResumeLinkEvidence: vi.fn().mockResolvedValue({
       dry_run: false,

@@ -15,6 +15,7 @@ import type {
   ResumeEvidenceRegistry,
   ResumeGenerationConfig,
   ResumeGenerationConfigPatch,
+  ResumeGenerationStatus,
   ResumePdfGenerationResponse,
   ResumeTexGenerationRequest,
   ResumeTexGenerationResponse,
@@ -56,6 +57,7 @@ export interface EvidenceApi {
   updateGenerationConfig(
     payload: ResumeGenerationConfigPatch,
   ): Promise<ResumeGenerationConfig>;
+  getResumeGenerationStatus(): Promise<ResumeGenerationStatus>;
   getJobTarget(): Promise<JobTargetResponse>;
   updateJobTarget(payload: JobTarget): Promise<JobTargetResponse>;
 }
@@ -205,6 +207,8 @@ export function createEvidenceApi(options: ApiOptions = {}): EvidenceApi {
         method: "PATCH",
         body: JSON.stringify(payload),
       }),
+    getResumeGenerationStatus: () =>
+      request<ResumeGenerationStatus>("/resume-generation/status"),
     getJobTarget: () => request<JobTargetResponse>("/resume-generation/job-target"),
     updateJobTarget: (payload) =>
       request<JobTargetResponse>("/resume-generation/job-target", {
