@@ -97,7 +97,7 @@ class ProjectOutputTokenBudgetConfig(StrictSchemaModel):
 
 class ProjectSelectionConfig(StrictSchemaModel):
     method: Literal["baseline", "llm"] | None = "llm"
-    top_n: int | None = None
+    top_n: int | None = 2
     dev_mode: bool | None = True
     llm_model: str | None = "gpt-5-nano"
     llm_max_output_tokens: int | None = None

@@ -10,9 +10,11 @@ from resume_evidence.models import ProjectSkills
 from app.project_selection import llm_client as project_llm_client
 from app.project_selection.llm_client import (
     ProjectLLMClientError,
+    build_project_prompt_payload,
     resolve_project_max_output_tokens,
     score_projects_with_llm,
 )
+from app.job_focus_generation.models import JobFocus
 
 
 def _candidate(project_id: str, name: str) -> ProjectCandidate:
@@ -74,6 +76,30 @@ def test_score_projects_with_llm_sends_strict_project_schema(monkeypatch):
     assert result.metadata["resolved_llm_max_output_tokens"] is None
     assert result.metadata["llm_output_token_budget_mode"] == "uncapped"
     assert result.metadata["llm_output_token_budget"] is None
+
+
+def test_build_project_prompt_payload_includes_job_focus():
+    payload = json.loads(
+        build_project_prompt_payload(
+            context=ProjectJobContext(
+                title="Database Engineer",
+                description="Raw posting.",
+                job_focus=JobFocus(
+                    summary="Database kernel role.",
+                    required_skills=["Distributed systems", "C++"],
+                    preferred_skills=["RocksDB"],
+                    responsibilities=["Build query processing features"],
+                    domain_emphasis=["AI-native databases"],
+                    resume_relevant_constraints=["State availability"],
+                    excluded_context=["Benefits"],
+                ),
+            ),
+            candidates=[_candidate("database-project", "Database Project")],
+        )
+    )
+
+    assert payload["job"]["focus"]["required_skills"] == ["Distributed systems", "C++"]
+    assert payload["projects"][0]["id"] == "database-project"
 
 
 def test_resolve_project_max_output_tokens_scales_and_caps():

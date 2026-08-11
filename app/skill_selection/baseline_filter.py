@@ -12,6 +12,32 @@ logger = logging.getLogger("baseline_filter")
 CATEGORIES = ("technology", "programming", "concepts")
 
 
+def _focus_job_text(job_text: str | None, job_focus: object | None) -> str | None:
+    if job_focus is None:
+        return job_text
+
+    focus_parts: list[str] = []
+    for field_name in (
+        "summary",
+        "required_skills",
+        "preferred_skills",
+        "responsibilities",
+        "domain_emphasis",
+    ):
+        value = getattr(job_focus, field_name, None)
+        if isinstance(value, str):
+            focus_parts.append(value)
+        elif isinstance(value, list):
+            focus_parts.extend(item for item in value if isinstance(item, str))
+
+    focus_text = "\n".join(part.strip() for part in focus_parts if part.strip())
+    if not focus_text:
+        return job_text
+    if job_text:
+        return f"{focus_text}\n{job_text}"
+    return focus_text
+
+
 def _effective_method(requested_method: str, meta: dict | None) -> str:
     if not isinstance(meta, dict):
         return requested_method
@@ -76,6 +102,7 @@ def _call_second_pass_scorer(
     method: str,
     job_role: str,
     job_text: str | None,
+    job_focus: object | None,
     technology: list[str],
     programming: list[str],
     concepts: list[str],
@@ -85,7 +112,8 @@ def _call_second_pass_scorer(
     if method == "embeddings":
         return embedding_select_skills(
             job_role=job_role,
-            job_text=job_text,
+            job_text=_focus_job_text(job_text, job_focus),
+            job_focus=job_focus,
             technology=technology,
             programming=programming,
             concepts=concepts,
@@ -118,7 +146,7 @@ def _full_baseline_filter_fallback(
 ) -> tuple[dict, dict]:
     selected, meta = baseline_select_skills(
         job_role=req.job_role,
-        job_text=req.job_text,
+        job_text=_focus_job_text(req.job_text, req.job_focus),
         technology=req.technology,
         programming=req.programming,
         concepts=req.concepts,
@@ -150,7 +178,7 @@ def select_with_baseline_filter(
 ) -> tuple[dict, dict]:
     _, baseline_meta = baseline_select_skills(
         job_role=req.job_role,
-        job_text=req.job_text,
+        job_text=_focus_job_text(req.job_text, req.job_focus),
         technology=req.technology,
         programming=req.programming,
         concepts=req.concepts,
@@ -208,6 +236,7 @@ def select_with_baseline_filter(
                 method=method,
                 job_role=req.job_role,
                 job_text=req.job_text,
+                job_focus=req.job_focus,
                 technology=unrecognized_inputs["technology"],
                 programming=unrecognized_inputs["programming"],
                 concepts=unrecognized_inputs["concepts"],

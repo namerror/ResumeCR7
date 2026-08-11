@@ -62,7 +62,7 @@ def test_resume_generation_config_get_redacts_openai_key(generation_root):
     assert data["experience_selection"]["top_n"] is None
     assert data["llm_provider"] == "qwen"
     assert data["bullet_point_generation_strategy"] == "section_batch"
-    assert data["display_defaults"]["project_selection_top_n"] == "unlimited (default)"
+    assert data["display_defaults"]["project_selection_top_n"] == "2 (default)"
     assert data["display_defaults"]["experience_selection_top_n"] == "unlimited (default)"
     assert data["resume_output"] == {
         "output_dir": str(generation_root / "output"),

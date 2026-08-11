@@ -15,7 +15,7 @@ skill_selection:
   llm_max_output_tokens: null
 project_selection:
   method: baseline
-  top_n: null
+  top_n: 2
   dev_mode: true
   llm_model: gpt-5-nano
   llm_max_output_tokens: null

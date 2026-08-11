@@ -20,7 +20,7 @@ from app.bulletpoints_generation.service import (
     generate_resume_section_bulletpoints_service_async,
 )
 from app.config import settings
-from app.job_focus_generation.models import JobFocusRequest
+from app.job_focus_generation.models import JobFocus as JobFocusResult, JobFocusRequest
 from app.job_focus_generation.service import (
     JobFocusGenerationError,
     derive_job_focus_service,
@@ -280,6 +280,7 @@ def build_skill_selection_payload(
     job_target: JobTarget,
     skills_file: SkillsFile,
     config: ResumeGenerationConfig,
+    job_focus: JobFocusResult | None = None,
 ) -> dict[str, Any]:
     payload = {
         "job_role": job_target.title,
@@ -287,6 +288,8 @@ def build_skill_selection_payload(
         **skills_file.skills.model_dump(),
         **_exclude_none(config.skill_selection),
     }
+    if job_focus is not None:
+        payload["job_focus"] = job_focus.model_dump()
     return {key: value for key, value in payload.items() if value is not None}
 
 
@@ -295,6 +298,7 @@ def _project_selection_payload(
     job_target: JobTarget,
     projects_file: ProjectsFile,
     config: ResumeGenerationConfig,
+    job_focus: JobFocusResult | None = None,
 ) -> dict[str, Any]:
     candidates = [
         {
@@ -314,6 +318,8 @@ def _project_selection_payload(
         "candidates": candidates,
         **_exclude_none(config.project_selection),
     }
+    if job_focus is not None:
+        payload["context"]["job_focus"] = job_focus.model_dump()
     return {key: value for key, value in payload.items() if value is not None}
 
 
@@ -648,6 +654,7 @@ def generate_selection_context(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
+    job_focus: JobFocusResult | None = None,
 ) -> ResumeSelectionContext:
     resolved_config_path = resolve_generation_config_path(config_path)
     resolved_job_target_path = resolve_job_target_path(job_target_path)
@@ -669,6 +676,7 @@ def generate_selection_context(
             job_target=job_target,
             skills_file=skills_file,
             config=config,
+            job_focus=job_focus,
         )
         skill_cache_payload = _selection_cache_payload(skill_payload)
         skill_fetch_payload = _canonical_selection_fetch_payload(
@@ -700,6 +708,7 @@ def generate_selection_context(
             job_target=job_target,
             projects_file=projects_file,
             config=config,
+            job_focus=job_focus,
         )
         project_cache_payload = _selection_cache_payload(project_payload)
         project_fetch_payload = _canonical_selection_fetch_payload(
@@ -785,11 +794,13 @@ async def generate_skill_selection_async(
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    job_focus: JobFocusResult | None = None,
 ) -> SkillSelectionResult:
     skill_payload = build_skill_selection_payload(
         job_target=job_target,
         skills_file=skills_file,
         config=config,
+        job_focus=job_focus,
     )
     skill_cache_payload = _selection_cache_payload(skill_payload)
     skill_fetch_payload = _canonical_selection_fetch_payload(
@@ -848,11 +859,13 @@ async def generate_project_selection_async(
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    job_focus: JobFocusResult | None = None,
 ) -> tuple[ProjectSelectionResult, list[ProjectRecord]]:
     project_payload = _project_selection_payload(
         job_target=job_target,
         projects_file=projects_file,
         config=config,
+        job_focus=job_focus,
     )
     project_cache_payload = _selection_cache_payload(project_payload)
     project_fetch_payload = _canonical_selection_fetch_payload(
@@ -921,6 +934,7 @@ async def generate_selection_context_async(
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    job_focus: JobFocusResult | None = None,
 ) -> ResumeSelectionContext:
     (
         resolved_config_path,
@@ -944,6 +958,7 @@ async def generate_selection_context_async(
             cache=cache,
             stage_response_records=skill_records,
             semaphore=semaphore,
+            job_focus=job_focus,
         ),
         generate_project_selection_async(
             config=config,
@@ -952,6 +967,7 @@ async def generate_selection_context_async(
             cache=cache,
             stage_response_records=project_records,
             semaphore=semaphore,
+            job_focus=job_focus,
         ),
     )
     if stage_response_records is not None:

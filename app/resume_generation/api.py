@@ -579,7 +579,7 @@ def _config_display_defaults() -> ConfigDisplayDefaults:
     default_bullet_count = settings.BULLETPOINTS_DEFAULT_COUNT
     return ConfigDisplayDefaults(
         skill_selection_top_n=f"{settings.SKILL_TOP_N} (default)",
-        project_selection_top_n="unlimited (default)",
+        project_selection_top_n=f"{settings.PROJ_TOP_N} (default)",
         experience_selection_top_n="unlimited (default)",
         link_scanning_highlight_count=(
             f"{settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT} (default)"
@@ -595,7 +595,7 @@ def _config_default_values() -> ConfigDefaultValues:
     default_bullet_count = settings.BULLETPOINTS_DEFAULT_COUNT
     return ConfigDefaultValues(
         skill_selection_top_n=settings.SKILL_TOP_N,
-        project_selection_top_n=None,
+        project_selection_top_n=settings.PROJ_TOP_N,
         experience_selection_top_n=None,
         link_scanning_highlight_count=settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT,
         link_scanning_max_tokens_per_highlight=settings.LINK_SCANNING_MAX_TOKENS_PER_HIGHLIGHT,

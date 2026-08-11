@@ -9,6 +9,7 @@ from typing import Any
 from openai import OpenAI
 
 from app.config import settings
+from app.job_focus_generation.models import JobFocus
 from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
 
 logger = logging.getLogger("llm_client")
@@ -68,14 +69,21 @@ def build_prompt_payload(
     *,
     job_role: str,
     job_text: str | None,
+    job_focus: JobFocus | None = None,
     technology: list[str],
     programming: list[str],
     concepts: list[str],
 ) -> str:
     """Serialize the scorer input as compact JSON for the fixed prompt."""
+    job_payload: dict[str, Any] = {
+        "role": job_role,
+        "text": job_text or "",
+    }
+    if job_focus is not None:
+        job_payload["focus"] = job_focus.model_dump()
+
     payload = {
-        "job_role": job_role,
-        "job_text": job_text or "",
+        "job": job_payload,
         "skills": {
             "technology": technology,
             "programming": programming,
@@ -231,6 +239,7 @@ def score_skills_with_llm(
     *,
     job_role: str,
     job_text: str | None,
+    job_focus: JobFocus | None = None,
     technology: list[str],
     programming: list[str],
     concepts: list[str],
@@ -246,6 +255,7 @@ def score_skills_with_llm(
     prompt_payload = build_prompt_payload(
         job_role=job_role,
         job_text=job_text,
+        job_focus=job_focus,
         technology=technology,
         programming=programming,
         concepts=concepts,
@@ -254,8 +264,11 @@ def score_skills_with_llm(
 
     instructions = (
         "You are a deterministic skill relevance scorer. "
-        "Return JSON only. Score every provided candidate skill for the given job role "
-        "and optional job text. Do not add, remove, rename, or move skills between "
+        "Return JSON only. Score every provided candidate skill for the given job. "
+        "When a distilled job focus is present, prioritize exact evidence-backed "
+        "matches to required_skills, preferred_skills, responsibilities, and "
+        "domain_emphasis over generic role-family matches. Use the raw job text only "
+        "as secondary context. Do not add, remove, rename, or move skills between "
         "categories. Scores must be integers from 0 to 3."
     )
 

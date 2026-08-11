@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.job_focus_generation.models import JobFocus
 from app.skill_selection.scoring.baseline import baseline_select_skills, normalize_skill
 from app.skill_selection.llm_client import LLMClientError, score_skills_with_llm
 
@@ -109,6 +110,7 @@ def llm_select_skills(
     programming: list[str],
     concepts: list[str],
     job_text: str | None = None,
+    job_focus: JobFocus | None = None,
     top_n: int | None = None,
     dev_mode: bool = False,
     llm_model: str | None = None,
@@ -126,6 +128,7 @@ def llm_select_skills(
         llm_result = score_skills_with_llm(
             job_role=job_role,
             job_text=job_text,
+            job_focus=job_focus,
             technology=technology,
             programming=programming,
             concepts=concepts,

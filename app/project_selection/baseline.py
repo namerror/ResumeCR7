@@ -75,11 +75,27 @@ def _normalized_project_name(project: ProjectCandidate) -> str:
 
 def text_overlap_score(project_summary: str, context: ProjectJobContext) -> float:
     summary_tokens = _tokens(project_summary)
-    job_tokens = _tokens(f"{context.title} {context.description or ''}")
+    job_tokens = _tokens(_context_text(context))
     if not summary_tokens or not job_tokens:
         return 0.0
 
     return len(summary_tokens & job_tokens) / len(summary_tokens)
+
+
+def _context_text(context: ProjectJobContext) -> str:
+    if context.job_focus is None:
+        return f"{context.title} {context.description or ''}"
+    focus = context.job_focus
+    return " ".join(
+        [
+            context.title,
+            focus.summary,
+            *focus.required_skills,
+            *focus.preferred_skills,
+            *focus.responsibilities,
+            *focus.domain_emphasis,
+        ]
+    )
 
 
 def score_project_baseline(
@@ -90,7 +106,7 @@ def score_project_baseline(
     inputs = _category_inputs(candidate)
     _, skill_details = baseline_select_skills(
         job_role=context.title,
-        job_text=context.description,
+        job_text=_context_text(context),
         technology=inputs["technology"],
         programming=inputs["programming"],
         concepts=inputs["concepts"],

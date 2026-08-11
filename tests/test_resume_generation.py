@@ -3338,9 +3338,9 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
     )
 
     assert calls == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-bulletpoints",
         "/generate-bulletpoints",
         "assemble",
@@ -3363,13 +3363,13 @@ def test_resume_generation_pipeline_loads_config_job_and_evidence_once(monkeypat
     assert [
         (record["stage"], record["cache_status"], record["cache_key"])
         for record in manifest_payload["stage_responses"]
-    ] == [
-        ("skill_selection", "disabled", None),
-        ("project_selection", "disabled", None),
-        ("job_focus_generation", "disabled", None),
-        ("project_bullet_points", "disabled", None),
-        ("experience_bullet_points", "disabled", None),
-    ]
+        ] == [
+            ("job_focus_generation", "disabled", None),
+            ("skill_selection", "disabled", None),
+            ("project_selection", "disabled", None),
+            ("project_bullet_points", "disabled", None),
+            ("experience_bullet_points", "disabled", None),
+        ]
     assert "token_usage" in manifest_payload
     assert [item.id for item in loaded_evidence["experience"].experience] == [
         "backend-engineer",
@@ -3509,12 +3509,17 @@ def test_run_resume_generation_pipeline_defaults_to_section_batch(
     )
 
     assert [endpoint for endpoint, _ in calls] == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-resume-section-bulletpoints",
     ]
     batch_payload = calls[-1][1]
+    assert calls[1][1]["job_focus"]["required_skills"] == ["Python", "FastAPI"]
+    assert calls[2][1]["context"]["job_focus"]["required_skills"] == [
+        "Python",
+        "FastAPI",
+    ]
     assert [project["id"] for project in batch_payload["projects"]] == [
         "active-project"
     ]
@@ -3643,9 +3648,9 @@ def test_run_resume_generation_pipeline_async_starts_section_bullets_before_skil
     assert starts["/generate-resume-section-bulletpoints"] < ends["/select-skills"]
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert [record["stage"] for record in manifest_payload["stage_responses"]] == [
+        "job_focus_generation",
         "skill_selection",
         "project_selection",
-        "job_focus_generation",
         "resume_section_bullet_points",
     ]
 
@@ -4073,9 +4078,9 @@ def test_resume_generation_pipeline_reuses_cached_stage_results(monkeypatch, tmp
         )
 
     assert calls == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-bulletpoints",
         "/generate-bulletpoints",
     ]
@@ -4346,9 +4351,9 @@ def test_resume_generation_pipeline_does_not_cache_skill_llm_fallback(
             )
 
     assert calls == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-bulletpoints",
         "/generate-bulletpoints",
         "/select-skills",
@@ -4629,13 +4634,13 @@ def test_experience_bullet_model_change_does_not_regenerate_project_bullets(
     assert [
         (call["endpoint"], call["project_id"], call["experience_id"], call["llm_model"])
         for call in calls
-    ] == [
-        ("/select-skills", None, None, "skill-model"),
-        ("/select-projects", None, None, "project-model"),
-        ("/derive-job-focus", None, None, "job-focus-model"),
-        ("/generate-bulletpoints", "active-project", None, "project-bullet-model"),
-        (
-            "/generate-bulletpoints",
+        ] == [
+            ("/derive-job-focus", None, None, "job-focus-model"),
+            ("/select-skills", None, None, "skill-model"),
+            ("/select-projects", None, None, "project-model"),
+            ("/generate-bulletpoints", "active-project", None, "project-bullet-model"),
+            (
+                "/generate-bulletpoints",
             None,
             "backend-engineer",
             "experience-bullet-model",
@@ -4693,13 +4698,13 @@ def test_project_bullet_model_change_does_not_regenerate_experience_bullets(
     assert [
         (call["endpoint"], call["project_id"], call["experience_id"], call["llm_model"])
         for call in calls
-    ] == [
-        ("/select-skills", None, None, "skill-model"),
-        ("/select-projects", None, None, "project-model"),
-        ("/derive-job-focus", None, None, "job-focus-model"),
-        ("/generate-bulletpoints", "active-project", None, "project-bullet-model"),
-        (
-            "/generate-bulletpoints",
+        ] == [
+            ("/derive-job-focus", None, None, "job-focus-model"),
+            ("/select-skills", None, None, "skill-model"),
+            ("/select-projects", None, None, "project-model"),
+            ("/generate-bulletpoints", "active-project", None, "project-bullet-model"),
+            (
+                "/generate-bulletpoints",
             None,
             "backend-engineer",
             "experience-bullet-model",
@@ -4759,13 +4764,13 @@ def test_skill_evidence_change_only_invalidates_skill_selection(
     assert [
         (call["endpoint"], call["project_id"], call["experience_id"])
         for call in calls
-    ] == [
-        ("/select-skills", None, None),
-        ("/select-projects", None, None),
-        ("/derive-job-focus", None, None),
-        ("/generate-bulletpoints", "active-project", None),
-        ("/generate-bulletpoints", None, "backend-engineer"),
-        ("/select-skills", None, None),
+        ] == [
+            ("/derive-job-focus", None, None),
+            ("/select-skills", None, None),
+            ("/select-projects", None, None),
+            ("/generate-bulletpoints", "active-project", None),
+            ("/generate-bulletpoints", None, "backend-engineer"),
+            ("/select-skills", None, None),
     ]
 
 
@@ -4968,14 +4973,14 @@ def test_resume_generation_pipeline_cache_misses_when_job_target_changes(
     )
 
     assert calls == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
+        "/generate-bulletpoints",
+        "/generate-bulletpoints",
         "/derive-job-focus",
-        "/generate-bulletpoints",
-        "/generate-bulletpoints",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-bulletpoints",
         "/generate-bulletpoints",
     ]
@@ -5111,9 +5116,9 @@ def test_resume_generation_pipeline_resumes_after_project_bullet_failure(
     )
 
     assert calls == [
+        ("/derive-job-focus", None),
         ("/select-skills", None),
         ("/select-projects", None),
-        ("/derive-job-focus", None),
         ("/generate-bulletpoints", "active-project"),
         ("/generate-bulletpoints", "second-project"),
         ("/generate-bulletpoints", "second-project"),
@@ -5211,9 +5216,9 @@ def test_resume_generation_pipeline_does_not_scan_links_before_bullet_generation
     )
 
     assert calls == [
+        "/derive-job-focus",
         "/select-skills",
         "/select-projects",
-        "/derive-job-focus",
         "/generate-bulletpoints",
         "/generate-bulletpoints",
     ]
@@ -5782,9 +5787,9 @@ def test_resume_generation_pipeline_uses_local_stage_services_by_default(
     )
 
     assert calls == [
+        ("derive-job-focus", "job-focus-model"),
         ("select-skills", "skill-model"),
         ("select-projects", "project-model"),
-        ("derive-job-focus", "job-focus-model"),
         ("generate-bulletpoints", "active-project"),
         ("generate-bulletpoints", "backend-engineer"),
     ]

@@ -7,8 +7,10 @@ from app.skill_selection import llm_client
 from app.skill_selection.llm_client import (
     LLMClientError,
     _extract_output_text,
+    build_prompt_payload,
     score_skills_with_llm,
 )
+from app.job_focus_generation.models import JobFocus
 
 
 def test_score_skills_with_llm_sends_responses_schema(monkeypatch):
@@ -57,6 +59,31 @@ def test_score_skills_with_llm_sends_responses_schema(monkeypatch):
     assert result.metadata["total_tokens"] == 20
     assert result.metadata["api_calls"] == 1
     assert result.metadata["model"] == "test-model"
+
+
+def test_build_skill_prompt_payload_includes_job_focus():
+    payload = json.loads(
+        build_prompt_payload(
+            job_role="Database Engineer",
+            job_text="Raw posting.",
+            job_focus=JobFocus(
+                summary="Database kernel role.",
+                required_skills=["Distributed systems", "C++"],
+                preferred_skills=["RocksDB"],
+                responsibilities=["Build query processing features"],
+                domain_emphasis=["AI-native databases"],
+                resume_relevant_constraints=["State availability"],
+                excluded_context=["Benefits"],
+            ),
+            technology=["SQLite"],
+            programming=["C++"],
+            concepts=["Distributed Computing"],
+        )
+    )
+
+    assert payload["job"]["role"] == "Database Engineer"
+    assert payload["job"]["focus"]["required_skills"] == ["Distributed systems", "C++"]
+    assert payload["skills"]["programming"] == ["C++"]
 
 
 def test_score_skills_with_llm_uses_qwen_provider(monkeypatch):

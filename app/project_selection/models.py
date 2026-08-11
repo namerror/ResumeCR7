@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from app.job_focus_generation.models import JobFocus
 from app.resume_evidence.models import ProjectSkills
 
 
@@ -14,6 +15,7 @@ class StrictSchemaModel(BaseModel):
 class ProjectJobContext(StrictSchemaModel):
     title: str
     description: str | None = None
+    job_focus: JobFocus | None = None
 
 
 class ProjectCandidate(StrictSchemaModel):

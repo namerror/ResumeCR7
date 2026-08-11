@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Any, List, Dict
 
+from app.job_focus_generation.models import JobFocus
+
 
 class SkillSelectRequest(BaseModel):
     job_role: str
@@ -8,6 +10,7 @@ class SkillSelectRequest(BaseModel):
     programming: List[str]
     concepts: List[str]
     job_text: str | None = None  # Optional full job description text for context
+    job_focus: JobFocus | None = None  # Optional distilled job focus for stronger tailoring
     top_n: int | None = None  # Optional override for how many skills to select per category
     method: str | None = None  # Optional override for selection method (e.g., "baseline", "embeddings", "llm")
     baseline_filter: bool | None = None  # Optional override for baseline pre-filtering before model-backed scoring

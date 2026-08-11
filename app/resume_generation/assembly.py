@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from app.job_focus_generation.models import JobFocus
 from app.resume_evidence.models import (
     EducationFile,
     ExperienceFile,
@@ -20,6 +21,7 @@ from app.resume_generation.models import (
     ResumeSkillsSection,
     ResumeTopSection,
 )
+from app.resume_generation.tailoring import reorder_skills_for_job_focus
 
 
 def assemble_intermediate_resume_result(
@@ -31,6 +33,7 @@ def assemble_intermediate_resume_result(
     selected_projects: Iterable[ProjectRecord],
     project_bullet_points: Iterable[ProjectBulletPointResult],
     experience_bullet_points: Iterable[ExperienceBulletPointResult] | None = None,
+    job_focus: JobFocus | None = None,
 ) -> IntermediateResumeResult:
     bullet_points_by_project_id = {
         result.project_id: result.bullet_points for result in project_bullet_points
@@ -39,6 +42,15 @@ def assemble_intermediate_resume_result(
         result.experience_id: result.bullet_points
         for result in experience_bullet_points or []
     }
+
+    selected_skills = reorder_skills_for_job_focus(
+        ResumeSkillsSection(
+            technology=selection_context.selected_skills.technology,
+            programming=selection_context.selected_skills.programming,
+            concepts=selection_context.selected_skills.concepts,
+        ),
+        job_focus,
+    )
 
     return IntermediateResumeResult(
         top=ResumeTopSection(
@@ -83,11 +95,7 @@ def assemble_intermediate_resume_result(
             )
             for project in selected_projects
         ],
-        skills=ResumeSkillsSection(
-            technology=selection_context.selected_skills.technology,
-            programming=selection_context.selected_skills.programming,
-            concepts=selection_context.selected_skills.concepts,
-        ),
+        skills=selected_skills,
     )
 
 

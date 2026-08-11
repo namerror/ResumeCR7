@@ -58,11 +58,15 @@ def build_project_prompt_payload(
     context: ProjectJobContext,
     candidates: list[ProjectCandidate],
 ) -> str:
+    job_payload: dict[str, Any] = {
+        "title": context.title,
+        "description": context.description or "",
+    }
+    if context.job_focus is not None:
+        job_payload["focus"] = context.job_focus.model_dump()
+
     payload = {
-        "job": {
-            "title": context.title,
-            "description": context.description or "",
-        },
+        "job": job_payload,
         "projects": [
             {
                 "id": candidate.id,
@@ -225,8 +229,12 @@ def score_projects_with_llm(
     instructions = (
         "You are a deterministic project relevance scorer. Return JSON only. "
         "Score every provided candidate project for the given job context using only "
-        "the project summary and categorized skills. Do not add, remove, rename, or "
-        "rewrite projects. Scores must be integers from 0 to 3."
+        "the project summary and categorized skills. When a distilled job focus is "
+        "present, prioritize evidence-supported matches to required_skills, "
+        "preferred_skills, responsibilities, and domain_emphasis. Give a score of 0 "
+        "when a project has no meaningful evidence-supported match, even if it is "
+        "generally technical. Do not add, remove, rename, or rewrite projects. "
+        "Scores must be integers from 0 to 3."
     )
 
     provider_config = resolve_llm_provider_config(

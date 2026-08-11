@@ -52,6 +52,7 @@ from app.resume_generation.selection import (
     generate_selection_context,
     generate_skill_selection_async,
 )
+from app.resume_generation.tailoring import build_tailoring_audit
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
 DEFAULT_RESUME_RESULT_ARTIFACT_PATH = settings.resume_result_artifact_path
@@ -299,6 +300,7 @@ def build_resume_run_manifest(
     stage_response_records: list[dict[str, Any]],
     token_usage_monitor: ResumeGenerationTokenUsageMonitor,
     resume_result_artifact_path: Path | str,
+    resume_result: IntermediateResumeResult,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -321,6 +323,10 @@ def build_resume_run_manifest(
             "selected_project_ids": [project.id for project in context.selected_projects],
         },
         "job_focus": job_focus.model_dump(),
+        "tailoring_audit": build_tailoring_audit(
+            resume_result=resume_result,
+            job_focus=job_focus,
+        ),
         "stage_responses": stage_response_records,
         "token_usage": token_usage_monitor.summary(),
     }
@@ -378,6 +384,28 @@ def run_resume_generation_pipeline(
 
     logger.info(
         "resume_generation_stage_start",
+        extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
+    )
+    job_focus = derive_job_focus(
+        config=config,
+        job_target=job_target,
+        cache=cache,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "job_focus_generation",
+            **_token_usage_extra(
+                token_usage_monitor.stage_total("job_focus_generation")
+            ),
+        },
+    )
+
+    logger.info(
+        "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "selection"},
     )
     # selection context includes skills and projects ranked by relevance to the job target.
@@ -391,6 +419,7 @@ def run_resume_generation_pipeline(
         cache=cache,
         token_usage_monitor=token_usage_monitor,
         stage_response_records=stage_response_records,
+        job_focus=job_focus,
     )
     logger.info(
         "resume_generation_stage_complete",
@@ -413,28 +442,6 @@ def run_resume_generation_pipeline(
     selected_experience = _select_resume_experience(
         _experience,
         top_n=config.experience_selection.top_n,
-    )
-
-    logger.info(
-        "resume_generation_stage_start",
-        extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
-    )
-    job_focus = derive_job_focus(
-        config=config,
-        job_target=job_target,
-        cache=cache,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "job_focus_generation",
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("job_focus_generation")
-            ),
-        },
     )
 
     if config.bullet_point_generation_strategy == "section_batch":
@@ -544,6 +551,7 @@ def run_resume_generation_pipeline(
         selected_projects=context.selected_projects,
         project_bullet_points=bullet_points,
         experience_bullet_points=experience_bullet_points,
+        job_focus=job_focus,
     )
     logger.info(
         "resume_generation_stage_complete",
@@ -574,6 +582,7 @@ def run_resume_generation_pipeline(
         stage_response_records=stage_response_records,
         token_usage_monitor=token_usage_monitor,
         resume_result_artifact_path=artifact_path,
+        resume_result=resume_result,
     )
     manifest_path = write_resume_run_manifest_artifact(
         manifest,
@@ -655,10 +664,6 @@ async def run_resume_generation_pipeline_async(
 
     logger.info(
         "resume_generation_stage_start",
-        extra={"event": "resume_generation_stage_start", "stage": "selection"},
-    )
-    logger.info(
-        "resume_generation_stage_start",
         extra={"event": "resume_generation_stage_start", "stage": "job_focus_generation"},
     )
     (
@@ -679,26 +684,6 @@ async def run_resume_generation_pipeline_async(
     job_focus_stage_records: list[dict[str, Any]] = []
     managed_tasks: list[asyncio.Task[Any]] = []
 
-    skill_task = asyncio.create_task(
-        generate_skill_selection_async(
-            config=config,
-            job_target=job_target,
-            skills_file=skills_file,
-            cache=cache,
-            stage_response_records=skill_stage_records,
-            semaphore=llm_semaphore,
-        )
-    )
-    project_task = asyncio.create_task(
-        generate_project_selection_async(
-            config=config,
-            job_target=job_target,
-            projects_file=projects_file,
-            cache=cache,
-            stage_response_records=project_stage_records,
-            semaphore=llm_semaphore,
-        )
-    )
     job_focus_task = asyncio.create_task(
         derive_job_focus_async(
             config=config,
@@ -708,15 +693,46 @@ async def run_resume_generation_pipeline_async(
             semaphore=llm_semaphore,
         )
     )
-    managed_tasks.extend([skill_task, project_task, job_focus_task])
+    managed_tasks.append(job_focus_task)
 
     try:
         selected_experience = _select_resume_experience(
             _experience,
             top_n=config.experience_selection.top_n,
         )
-        project_result, job_focus = await _wait_resume_generation_tasks_cancel_on_error(
-            [project_task, job_focus_task]
+        (job_focus,) = await _wait_resume_generation_tasks_cancel_on_error(
+            [job_focus_task]
+        )
+
+        logger.info(
+            "resume_generation_stage_start",
+            extra={"event": "resume_generation_stage_start", "stage": "selection"},
+        )
+        skill_task = asyncio.create_task(
+            generate_skill_selection_async(
+                config=config,
+                job_target=job_target,
+                skills_file=skills_file,
+                cache=cache,
+                stage_response_records=skill_stage_records,
+                semaphore=llm_semaphore,
+                job_focus=job_focus,
+            )
+        )
+        project_task = asyncio.create_task(
+            generate_project_selection_async(
+                config=config,
+                job_target=job_target,
+                projects_file=projects_file,
+                cache=cache,
+                stage_response_records=project_stage_records,
+                semaphore=llm_semaphore,
+                job_focus=job_focus,
+            )
+        )
+        managed_tasks.extend([skill_task, project_task])
+        (project_result,) = await _wait_resume_generation_tasks_cancel_on_error(
+            [project_task]
         )
         project_selection, selected_projects = project_result
 
@@ -822,6 +838,21 @@ async def run_resume_generation_pipeline_async(
         evidence_paths=context_evidence_paths,
     )
     _observe_stage_response_records(
+        records=job_focus_stage_records,
+        token_usage_monitor=token_usage_monitor,
+        stage_response_records=stage_response_records,
+    )
+    logger.info(
+        "resume_generation_stage_complete",
+        extra={
+            "event": "resume_generation_stage_complete",
+            "stage": "job_focus_generation",
+            **_token_usage_extra(
+                token_usage_monitor.stage_total("job_focus_generation")
+            ),
+        },
+    )
+    _observe_stage_response_records(
         records=skill_stage_records,
         token_usage_monitor=token_usage_monitor,
         stage_response_records=stage_response_records,
@@ -841,21 +872,6 @@ async def run_resume_generation_pipeline_async(
                 token_usage_monitor.combined_total(
                     ("skill_selection", "project_selection")
                 )
-            ),
-        },
-    )
-    _observe_stage_response_records(
-        records=job_focus_stage_records,
-        token_usage_monitor=token_usage_monitor,
-        stage_response_records=stage_response_records,
-    )
-    logger.info(
-        "resume_generation_stage_complete",
-        extra={
-            "event": "resume_generation_stage_complete",
-            "stage": "job_focus_generation",
-            **_token_usage_extra(
-                token_usage_monitor.stage_total("job_focus_generation")
             ),
         },
     )
@@ -924,6 +940,7 @@ async def run_resume_generation_pipeline_async(
         selected_projects=context.selected_projects,
         project_bullet_points=bullet_points,
         experience_bullet_points=experience_bullet_points,
+        job_focus=job_focus,
     )
     logger.info(
         "resume_generation_stage_complete",
@@ -954,6 +971,7 @@ async def run_resume_generation_pipeline_async(
         stage_response_records=stage_response_records,
         token_usage_monitor=token_usage_monitor,
         resume_result_artifact_path=artifact_path,
+        resume_result=resume_result,
     )
     manifest_path = write_resume_run_manifest_artifact(
         manifest,
