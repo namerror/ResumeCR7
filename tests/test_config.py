@@ -64,7 +64,7 @@ def test_settings_scoped_defaults(monkeypatch):
     assert settings.SKILL_TOP_N == 20
     assert settings.SKILL_BASELINE_FILTER is False
     assert settings.PROJ_METHOD == "llm"
-    assert settings.PROJ_TOP_N == 2
+    assert settings.PROJ_TOP_N is None
     assert settings.LLM_PROVIDER == "openai"
     assert settings.SKILL_LLM_MODEL == "gpt-5-nano"
     assert settings.PROJ_LLM_MODEL == "gpt-5-nano"

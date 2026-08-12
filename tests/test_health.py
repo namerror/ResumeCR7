@@ -29,7 +29,7 @@ def test_health():
     assert data["skill_selection"]["top_n"] == 10
     assert data["skill_selection"]["baseline_filter"] is False
     assert data["project_selection"]["method"] == "llm"
-    assert data["project_selection"]["top_n"] == 2
+    assert data["project_selection"]["top_n"] is None
     assert data["skill_selection"]["llm_max_output_tokens"] is None
     assert data["project_selection"]["llm_output_token_budget"] is None
     assert data["bulletpoints_generation"]["llm_model"] == "gpt-5-mini"

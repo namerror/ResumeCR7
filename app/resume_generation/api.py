@@ -587,9 +587,14 @@ def _config_response(
 
 def _config_display_defaults() -> ConfigDisplayDefaults:
     default_bullet_count = settings.BULLETPOINTS_DEFAULT_COUNT
+    project_top_n_default = (
+        "unlimited (default)"
+        if settings.PROJ_TOP_N is None
+        else f"{settings.PROJ_TOP_N} (default)"
+    )
     return ConfigDisplayDefaults(
         skill_selection_top_n=f"{settings.SKILL_TOP_N} (default)",
-        project_selection_top_n=f"{settings.PROJ_TOP_N} (default)",
+        project_selection_top_n=project_top_n_default,
         experience_selection_top_n="unlimited (default)",
         link_scanning_highlight_count=(
             f"{settings.LINK_SCANNING_DEFAULT_HIGHLIGHT_COUNT} (default)"

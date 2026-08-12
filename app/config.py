@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     SKILL_TOP_N: int = 20
     SKILL_METHOD: SkillSelectionMethod = "llm"
     SKILL_BASELINE_FILTER: bool = False
-    PROJ_TOP_N: int | None = 2
+    PROJ_TOP_N: int | None = None
     PROJ_METHOD: ProjectSelectionMethod = "llm"
     DEV_MODE: bool = True
     LOG_LEVEL: str = "INFO"

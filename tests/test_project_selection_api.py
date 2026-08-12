@@ -75,6 +75,21 @@ def test_select_projects_api_uses_scoped_settings_when_request_omits_overrides(m
     assert data["ranked_projects"][0]["method"] == "baseline"
 
 
+def test_select_projects_api_omitted_top_n_defaults_to_unlimited(monkeypatch):
+    monkeypatch.setattr(project_service.settings, "PROJ_METHOD", "baseline")
+    monkeypatch.setattr(project_service.settings, "PROJ_TOP_N", None)
+    payload = _request_payload()
+    payload.pop("method")
+    payload.pop("top_n")
+
+    response = api_request("POST", "/select-projects", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data["selected_project_ids"]) == {"resumecr7", "portfolio"}
+    assert len(data["ranked_projects"]) == 2
+
+
 def test_select_projects_api_request_overrides_scoped_settings(monkeypatch):
     monkeypatch.setattr(project_service.settings, "PROJ_METHOD", "llm")
     monkeypatch.setattr(project_service.settings, "PROJ_TOP_N", None)
