@@ -280,6 +280,13 @@ export interface ResumeGenerationStatusStage {
   message: string | null;
 }
 
+export interface MetricOpportunityNote {
+  evidence_type: "project" | "experience";
+  evidence_id: string;
+  name: string;
+  suggestions: string[];
+}
+
 export interface ResumeGenerationStatus {
   schema_version: 1;
   run_id: string | null;
@@ -291,4 +298,5 @@ export interface ResumeGenerationStatus {
   error: string | null;
   stages: ResumeGenerationStatusStage[];
   job_focus: JobFocus | null;
+  metric_notes: MetricOpportunityNote[];
 }

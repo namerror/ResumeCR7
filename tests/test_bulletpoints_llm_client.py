@@ -93,7 +93,9 @@ def test_build_bulletpoint_instructions_distinguishes_exact_and_flexible_counts(
     assert "Use past-tense action verbs for all bullets" in exact
     assert "action + purpose/context + method/tool + supported impact" in exact
     assert "Target 18 to 26 words and never exceed 32 words" in exact
-    assert "Use metrics only when the evidence supports them" in exact
+    assert "Prefer quantified impact when the evidence supports it" in exact
+    assert "Never invent percentages, speedups, uptime, counts" in exact
+    assert "Treat numeric_evidence as high-value source material" in exact
     assert "make the first bullet explain what the project/system does" in exact
     assert "Do not use semicolons" in exact
     assert "Do not use internal dash separators" in exact
@@ -121,6 +123,34 @@ def test_build_bulletpoint_prompt_payload_excludes_links():
     assert "active" not in payload["project"]
     assert "links" not in payload["project"]
     assert "https://example.com/resumecr7" not in json.dumps(payload)
+
+
+def test_build_bulletpoint_prompt_payload_extracts_numeric_evidence():
+    project = _project().model_copy(
+        update={
+            "highlights": [
+                "Maintained 97% uptime for content workflows.",
+                "Increased online engagement by 400% after launch.",
+            ]
+        }
+    )
+    payload = json.loads(
+        build_bulletpoint_prompt_payload(
+            context=BulletJobContext(title="AI Engineer"),
+            project=project,
+            count_range=BulletCountRange(min=2, max=2),
+        )
+    )
+
+    assert payload["project"]["numeric_evidence"] == [
+        "Maintained 97% uptime for content workflows.",
+        "Increased online engagement by 400% after launch.",
+    ]
+    assert any(
+        "Preserve exact metrics from numeric_evidence" in rule
+        for rule in payload["grounding_rules"]
+    )
+    assert any("Do not invent percentages" in rule for rule in payload["grounding_rules"])
 
 
 def test_build_bulletpoint_prompt_payload_prefers_job_focus_over_description():
@@ -231,6 +261,8 @@ def test_build_resume_section_bulletpoint_instructions_set_global_style_rules():
     assert "vary opening verbs across all bullets" in instructions
     assert "avoid overusing develop, implement, build" in instructions
     assert "avoid repeating ', enabling ...'" in instructions
+    assert "Prefer quantified impact when the evidence supports it" in instructions
+    assert "Never invent percentages, speedups, uptime, counts" in instructions
 
 
 def test_generate_bulletpoints_with_llm_sends_strict_schema(monkeypatch):

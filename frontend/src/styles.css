@@ -460,6 +460,56 @@ h3 {
   padding-top: 16px;
 }
 
+.metric-opportunity-panel {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.metric-note-list {
+  display: grid;
+  gap: 10px;
+}
+
+.metric-note {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 0.36fr) minmax(0, 1fr);
+  padding: 12px;
+}
+
+.metric-note > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.metric-note > div span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.metric-note ul {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+  padding-left: 18px;
+}
+
+.metric-note li {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .job-focus-panel p {
   margin: 0;
 }
@@ -853,9 +903,14 @@ h3 {
   }
 
   .config-section-header,
+  .metric-note,
   .secret-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .metric-note {
+    display: flex;
   }
 
   .button.compact {

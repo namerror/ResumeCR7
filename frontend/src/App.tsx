@@ -47,6 +47,7 @@ import type {
   ExperienceRecord,
   JobTarget,
   LLMProvider,
+  MetricOpportunityNote,
   ProjectRecord,
   ProjectSkills,
   ResumeEvidenceRegistry,
@@ -1193,6 +1194,10 @@ function GenerationStatusPanel({
         )}
       </div>
 
+      {status?.metric_notes.length ? (
+        <MetricOpportunityPanel notes={status.metric_notes} />
+      ) : null}
+
       {status?.job_focus ? (
         <div className="job-focus-panel">
           <SectionHeader title="Job Focus" eyebrow="Found" compact />
@@ -1207,6 +1212,32 @@ function GenerationStatusPanel({
           />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MetricOpportunityPanel({ notes }: { notes: MetricOpportunityNote[] }) {
+  return (
+    <div className="metric-opportunity-panel">
+      <SectionHeader title="Metric Opportunities" eyebrow="Evidence" compact />
+      <div className="metric-note-list">
+        {notes.map((note) => (
+          <div
+            className="metric-note"
+            key={`${note.evidence_type}-${note.evidence_id}`}
+          >
+            <div>
+              <strong>{note.name}</strong>
+              <span>{note.evidence_type === "project" ? "Project" : "Experience"}</span>
+            </div>
+            <ul>
+              {note.suggestions.map((suggestion) => (
+                <li key={suggestion}>{suggestion}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

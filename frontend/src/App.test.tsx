@@ -356,6 +356,14 @@ describe("App", () => {
         resume_relevant_constraints: ["Remote collaboration"],
         excluded_context: ["Benefits and company culture"],
       },
+      metric_notes: [
+        {
+          evidence_type: "project",
+          evidence_id: "resumecr7",
+          name: "ResumeCR7",
+          suggestions: ["Add a real runtime, latency, throughput, or speedup metric if known."],
+        },
+      ],
     });
 
     render(<App client={client} />);
@@ -367,6 +375,11 @@ describe("App", () => {
     expect(await screen.findByText("Generating job focus")).toBeTruthy();
     expect(await screen.findByText("Backend API role focused on Python services.")).toBeTruthy();
     expect(await screen.findByText("FastAPI")).toBeTruthy();
+    expect(await screen.findByText("Metric Opportunities")).toBeTruthy();
+    expect(await screen.findByText("ResumeCR7")).toBeTruthy();
+    expect(
+      await screen.findByText("Add a real runtime, latency, throughput, or speedup metric if known."),
+    ).toBeTruthy();
   });
 
   it("shows a short pdf prerequisite message when no tex exists", async () => {
@@ -638,6 +651,7 @@ function createMockClient(
       error: null,
       stages: [],
       job_focus: null,
+      metric_notes: [],
     }),
     enrichResumeLinkEvidence: vi.fn().mockResolvedValue({
       dry_run: false,

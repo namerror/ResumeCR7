@@ -102,6 +102,7 @@ describe("evidence api client", () => {
         error: null,
         stages: [],
         job_focus: null,
+        metric_notes: [],
       }),
     });
     const api = createEvidenceApi({

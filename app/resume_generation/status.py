@@ -5,6 +5,8 @@ from threading import Lock
 from typing import Callable, Literal
 from uuid import uuid4
 
+from pydantic import Field
+
 from app.resume_generation.models import JobFocusResult, StrictSchemaModel
 
 GenerationOperation = Literal["tex"]
@@ -21,6 +23,13 @@ class GenerationStatusStage(StrictSchemaModel):
     message: str | None = None
 
 
+class MetricOpportunityNote(StrictSchemaModel):
+    evidence_type: Literal["project", "experience"]
+    evidence_id: str
+    name: str
+    suggestions: list[str]
+
+
 class ResumeGenerationStatusSnapshot(StrictSchemaModel):
     schema_version: Literal[1]
     run_id: str | None
@@ -32,10 +41,17 @@ class ResumeGenerationStatusSnapshot(StrictSchemaModel):
     error: str | None
     stages: list[GenerationStatusStage]
     job_focus: JobFocusResult | None = None
+    metric_notes: list[MetricOpportunityNote] = Field(default_factory=list)
 
 
 GenerationStatusReporter = Callable[
-    [str, GenerationStageStatus, str | None, JobFocusResult | None],
+    [
+        str,
+        GenerationStageStatus,
+        str | None,
+        JobFocusResult | None,
+        list[MetricOpportunityNote] | None,
+    ],
     None,
 ]
 
@@ -105,6 +121,7 @@ class ResumeGenerationStatusStore:
         status: GenerationStageStatus,
         message: str | None = None,
         job_focus: JobFocusResult | None = None,
+        metric_notes: list[MetricOpportunityNote] | None = None,
     ) -> None:
         now = utc_now()
         with self._lock:
@@ -141,6 +158,9 @@ class ResumeGenerationStatusStore:
                     "current_stage_id": current_stage_id,
                     "stages": stages,
                     "job_focus": job_focus or self._snapshot.job_focus,
+                    "metric_notes": metric_notes
+                    if metric_notes is not None
+                    else self._snapshot.metric_notes,
                 }
             )
 
@@ -200,6 +220,7 @@ class ResumeGenerationStatusStore:
             error=None,
             stages=[],
             job_focus=None,
+            metric_notes=[],
         )
 
 

@@ -10,11 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from app.bulletpoints_generation.metric_guidance import build_metric_opportunity_notes
 from app.runtime_data import bootstrap_runtime_data
 from app.resume_evidence import (
     EducationFile,
     ExperienceFile,
     ExperienceRecord,
+    ProjectRecord,
     UserInfoFile,
     load_registered_evidence,
 )
@@ -52,7 +54,7 @@ from app.resume_generation.selection import (
     generate_selection_context,
     generate_skill_selection_async,
 )
-from app.resume_generation.status import GenerationStatusReporter
+from app.resume_generation.status import GenerationStatusReporter, MetricOpportunityNote
 from app.resume_generation.tailoring import build_tailoring_audit
 from app.resume_generation.token_usage import ResumeGenerationTokenUsageMonitor, TokenUsage
 
@@ -117,9 +119,27 @@ def _report_generation_status(
     status: str,
     message: str | None = None,
     job_focus: JobFocusResult | None = None,
+    metric_notes: list[MetricOpportunityNote] | None = None,
 ) -> None:
     if reporter is not None:
-        reporter(stage_id, status, message, job_focus)
+        if metric_notes is None:
+            reporter(stage_id, status, message, job_focus)
+        else:
+            reporter(stage_id, status, message, job_focus, metric_notes)
+
+
+def _build_status_metric_notes(
+    *,
+    projects: list[ProjectRecord],
+    experiences: list[ExperienceRecord],
+) -> list[MetricOpportunityNote]:
+    return [
+        MetricOpportunityNote.model_validate(note)
+        for note in build_metric_opportunity_notes(
+            projects=projects,
+            experiences=experiences,
+        )
+    ]
 
 
 def _observe_stage_response_records(
@@ -773,11 +793,16 @@ async def run_resume_generation_pipeline_async(
             [project_task]
         )
         project_selection, selected_projects = project_result
+        metric_notes = _build_status_metric_notes(
+            projects=selected_projects,
+            experiences=selected_experience.experience,
+        )
         _report_generation_status(
             status_reporter,
             "project_selection",
             "succeeded",
             "Done",
+            metric_notes=metric_notes,
         )
 
         if config.bullet_point_generation_strategy == "section_batch":

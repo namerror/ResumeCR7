@@ -21,6 +21,7 @@ from app.llm_provider import apply_provider_response_options, resolve_llm_provid
 from app.skill_selection.llm_client import _extract_output_text
 from app.skill_selection.llm_client import supports_temperature
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
+from app.bulletpoints_generation.metric_guidance import build_record_numeric_evidence
 
 logger = logging.getLogger("bulletpoints_llm_client")
 
@@ -152,6 +153,8 @@ def build_bulletpoint_prompt_payload(
         "grounding_rules": [
             f"Use only the supplied {evidence_type} evidence as the source of user experience.",
             "The job focus or description may guide emphasis but is not evidence of user experience.",
+            "Preserve exact metrics from numeric_evidence when they fit the bullet naturally.",
+            "Do not invent percentages, speedups, uptime, counts, or other numeric impact.",
             "Omit unsupported claims instead of guessing.",
             "Return plain bullet text without leading bullet symbols.",
         ],
@@ -189,6 +192,8 @@ def build_resume_section_bulletpoint_prompt_payload(
         "grounding_rules": [
             "Use only the supplied project and experience evidence as the source of user experience.",
             "The job focus or description may guide emphasis but is not evidence of user experience.",
+            "Preserve exact metrics from each record's numeric_evidence when they fit naturally.",
+            "Do not invent percentages, speedups, uptime, counts, or other numeric impact.",
             "Omit unsupported claims instead of guessing.",
             "Return plain bullet text without leading bullet symbols.",
         ],
@@ -215,7 +220,10 @@ def build_bulletpoint_instructions(
         f"{evidence_type} summary, highlights, skills, and factual fields as evidence "
         "of the user's work. The job focus or description may guide emphasis, but it "
         "is not evidence of user experience. Omit unsupported claims instead of "
-        "guessing. When job focus is provided, identify exact required skill, "
+        "guessing. Never invent percentages, speedups, uptime, counts, scale, "
+        "complexity reductions, or other numeric impact. Treat numeric_evidence "
+        "as high-value source material and preserve exact supported numbers when "
+        "they fit naturally. When job focus is provided, identify exact required skill, "
         "preferred skill, responsibility, and domain-emphasis phrases that are "
         "directly supported by the evidence, then use those exact employer terms "
         "where they fit naturally. Prioritize supported target keywords in the "
@@ -227,8 +235,8 @@ def build_bulletpoint_instructions(
         "structure: action + purpose/context + method/tool + supported impact. Use "
         "past-tense action verbs for all bullets. Do not infer tense from eligibility, "
         "dates, or record status. Target 18 to 26 words and never exceed 32 words. "
-        "Express one main accomplishment only. Use metrics only when the evidence "
-        "supports them; otherwise use a "
+        "Express one main accomplishment only. Prefer quantified impact when the "
+        "evidence supports it; otherwise use a "
         "concrete qualitative outcome or purpose. Prefer clear verbs and nouns over "
         "filler such as robust, seamless, cutting-edge, leveraged, utilized, enhanced, "
         "or optimized unless the evidence proves the improvement. For project bullets, "
@@ -265,6 +273,10 @@ def build_resume_section_bulletpoint_instructions(
         "summaries, highlights, skills, and factual fields as evidence of the user's "
         "work. The job focus or description may guide emphasis, but it is not "
         "evidence of user experience. Omit unsupported claims instead of guessing. "
+        "Never invent percentages, speedups, uptime, counts, scale, complexity "
+        "reductions, or other numeric impact. Treat each record's numeric_evidence "
+        "as high-value source material and preserve exact supported numbers when "
+        "they fit naturally. "
         "When job focus is provided, identify exact required skill, preferred skill, "
         "responsibility, and domain-emphasis phrases that are directly supported by "
         "each record's evidence, then use those exact employer terms where they fit "
@@ -278,7 +290,7 @@ def build_resume_section_bulletpoint_instructions(
         "dates, or record status. Each bullet should follow this "
         "structure when supported: action + purpose/context + method/tool + impact. "
         "Target 18 to 26 words and never exceed 32 words. Express one main "
-        "accomplishment only. Use metrics only when the evidence supports them; "
+        "accomplishment only. Prefer quantified impact when the evidence supports it; "
         "otherwise use a concrete qualitative outcome or purpose. Prefer clear "
         "verbs and nouns over filler such as robust, seamless, cutting-edge, "
         "leveraged, utilized, enhanced, or optimized unless the evidence proves "
@@ -323,15 +335,19 @@ def _build_evidence_payload(
         )
 
     if project is not None:
+        payload = {
+            "id": project.id,
+            "name": project.name,
+            "summary": project.summary,
+            "highlights": project.highlights,
+            "skills": project.skills.model_dump(),
+        }
+        numeric_evidence = build_record_numeric_evidence(project)
+        if numeric_evidence:
+            payload["numeric_evidence"] = numeric_evidence
         return (
             "project",
-            {
-                "id": project.id,
-                "name": project.name,
-                "summary": project.summary,
-                "highlights": project.highlights,
-                "skills": project.skills.model_dump(),
-            },
+            payload,
         )
 
     if experience is None:
@@ -339,17 +355,21 @@ def _build_evidence_payload(
             "Exactly one of project or experience must be provided"
         )
 
+    payload = {
+        "id": experience.id,
+        "name": experience.name,
+        "role": experience.role,
+        "summary": experience.summary,
+        "highlights": experience.highlights,
+        "skills": experience.skills.model_dump(),
+        "location": experience.location,
+    }
+    numeric_evidence = build_record_numeric_evidence(experience)
+    if numeric_evidence:
+        payload["numeric_evidence"] = numeric_evidence
     return (
         "experience",
-        {
-            "id": experience.id,
-            "name": experience.name,
-            "role": experience.role,
-            "summary": experience.summary,
-            "highlights": experience.highlights,
-            "skills": experience.skills.model_dump(),
-            "location": experience.location,
-        },
+        payload,
     )
 
 

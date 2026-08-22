@@ -21,7 +21,7 @@ from app.project_selection.models import (
     ProjectSelectionResult as AppProjectSelectionResult,
     RankedProject,
 )
-from app.resume_generation.status import resume_generation_status_store
+from app.resume_generation.status import MetricOpportunityNote, resume_generation_status_store
 from app.skill_selection.models import SkillSelectResponse
 from app.project_selection.llm_client import LLMProjectScoreResult
 from app.skill_selection.llm_client import LLMScoreResult
@@ -5517,6 +5517,7 @@ def test_resume_generation_status_route_returns_idle_snapshot():
         "error": None,
         "stages": [],
         "job_focus": None,
+        "metric_notes": [],
     }
 
 
@@ -5539,6 +5540,22 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
             "succeeded",
             "Done",
             JobFocus.model_validate(_job_focus_payload()),
+        )
+        status_reporter(
+            "project_selection",
+            "succeeded",
+            "Done",
+            None,
+            [
+                MetricOpportunityNote(
+                    evidence_type="project",
+                    evidence_id="resumecr7",
+                    name="ResumeCR7",
+                    suggestions=[
+                        "Add a real runtime, latency, throughput, or speedup metric if known."
+                    ],
+                )
+            ],
         )
         return resume_result
 
@@ -5580,6 +5597,16 @@ def test_resume_generation_tex_route_runs_pipeline_and_returns_tex_content(
     assert status_payload["job_focus"]["summary"] == (
         "Backend API role focused on Python services."
     )
+    assert status_payload["metric_notes"] == [
+        {
+            "evidence_type": "project",
+            "evidence_id": "resumecr7",
+            "name": "ResumeCR7",
+            "suggestions": [
+                "Add a real runtime, latency, throughput, or speedup metric if known."
+            ],
+        }
+    ]
     assert [stage["status"] for stage in status_payload["stages"]][-1] == "succeeded"
 
 
