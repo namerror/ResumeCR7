@@ -361,6 +361,97 @@ def test_scan_evidence_links_with_llm_sends_web_search_request(monkeypatch):
     assert result.metadata["total_tokens"] == 30
 
 
+def test_scan_evidence_links_with_qwen_repairs_malformed_response(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class DummyResponses:
+        def create(self, **kwargs):
+            captured["response_kwargs"] = kwargs
+            return SimpleNamespace(
+                output_text="{not-json",
+                output=[
+                    SimpleNamespace(
+                        action=SimpleNamespace(
+                            sources=[SimpleNamespace(url="https://example.com/resumecr7")]
+                        )
+                    )
+                ],
+                usage=SimpleNamespace(input_tokens=20, output_tokens=10, total_tokens=30),
+            )
+
+    class DummyChatCompletions:
+        def create(self, **kwargs):
+            captured["repair_kwargs"] = kwargs
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=json.dumps(
+                                {
+                                    "highlights": [
+                                        {
+                                            "text": (
+                                                "Scanned page confirms ResumeCR7 uses FastAPI "
+                                                "for grounded resume evidence workflows."
+                                            ),
+                                            "source_url": "https://example.com/resumecr7",
+                                        }
+                                    ]
+                                }
+                            )
+                        )
+                    )
+                ],
+                usage=SimpleNamespace(prompt_tokens=11, completion_tokens=7, total_tokens=18),
+            )
+
+    class DummyOpenAI:
+        def __init__(self, **kwargs):
+            captured["init"] = kwargs
+            self.responses = DummyResponses()
+            self.chat = SimpleNamespace(completions=DummyChatCompletions())
+
+    monkeypatch.setenv("LLM_PROVIDER", "qwen")
+    monkeypatch.setattr(link_llm_client.settings, "LLM_PROVIDER", "qwen")
+    monkeypatch.setattr(link_llm_client.settings, "QWEN_API_KEY", "qwen-key")
+    monkeypatch.setattr(
+        link_llm_client.settings,
+        "QWEN_BASE_URL",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    monkeypatch.setattr(link_llm_client, "OpenAI", DummyOpenAI)
+
+    result = scan_evidence_links_with_llm(
+        evidence_type="project",
+        evidence=_project(),
+    )
+
+    assert captured["init"] == {
+        "api_key": "qwen-key",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }
+    response_kwargs = captured["response_kwargs"]
+    assert response_kwargs["model"] == "qwen3.7-plus"
+    assert response_kwargs["tools"] == [{"type": "web_search"}]
+    assert response_kwargs["reasoning"] == {"effort": "none"}
+    repair_kwargs = captured["repair_kwargs"]
+    assert repair_kwargs["model"] == "qwen3.7-plus"
+    assert repair_kwargs["response_format"]["type"] == "json_schema"
+    assert repair_kwargs["response_format"]["json_schema"]["name"] == (
+        "link_evidence_enrichment"
+    )
+    repair_payload = json.loads(repair_kwargs["messages"][1]["content"])
+    assert repair_payload["failure_reason"].startswith(
+        "Link-scanning LLM response was not valid JSON"
+    )
+    assert result.highlights[0].source_url == "https://example.com/resumecr7"
+    assert result.metadata["api_calls"] == 2
+    assert result.metadata["prompt_tokens"] == 31
+    assert result.metadata["completion_tokens"] == 17
+    assert result.metadata["total_tokens"] == 48
+    assert "repair_reason" in result.metadata
+
+
 def test_scan_evidence_links_with_llm_accepts_same_github_repo_source(monkeypatch):
     class DummyResponses:
         def create(self, **_kwargs):

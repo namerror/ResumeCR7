@@ -10,7 +10,11 @@ from urllib.parse import urlparse
 from openai import OpenAI
 
 from app.config import get_github_token, settings
-from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
+from app.llm_provider import (
+    apply_provider_response_options,
+    qwen_chat_completion_response_format,
+    resolve_llm_provider_config,
+)
 from app.link_scanning.github_client import (
     GitHubRepoContext,
     GitHubRepoScanError,
@@ -319,9 +323,31 @@ def build_link_scan_response_create_kwargs(
 def _usage_metadata(response: Any) -> dict[str, int]:
     usage = getattr(response, "usage", None)
     return {
-        "prompt_tokens": int(getattr(usage, "input_tokens", 0) or 0),
-        "completion_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "prompt_tokens": int(
+            (
+                getattr(usage, "input_tokens", None)
+                if getattr(usage, "input_tokens", None) is not None
+                else getattr(usage, "prompt_tokens", 0)
+            )
+            or 0
+        ),
+        "completion_tokens": int(
+            (
+                getattr(usage, "output_tokens", None)
+                if getattr(usage, "output_tokens", None) is not None
+                else getattr(usage, "completion_tokens", 0)
+            )
+            or 0
+        ),
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+    }
+
+
+def _combine_usage_metadata(*items: dict[str, int]) -> dict[str, int]:
+    return {
+        "prompt_tokens": sum(item.get("prompt_tokens", 0) for item in items),
+        "completion_tokens": sum(item.get("completion_tokens", 0) for item in items),
+        "total_tokens": sum(item.get("total_tokens", 0) for item in items),
     }
 
 
@@ -502,6 +528,72 @@ def _validate_link_scan_response(
     return highlights
 
 
+def _repair_qwen_link_scan_response(
+    *,
+    client: OpenAI,
+    model: str,
+    schema: dict[str, Any],
+    invalid_output: str,
+    failure_reason: str,
+    scanned_links: list[str],
+    cited_source_urls: list[str],
+    github_repo_scopes: list[str],
+) -> tuple[dict[str, Any], dict[str, int]]:
+    repair_payload = json.dumps(
+        {
+            "failure_reason": failure_reason,
+            "invalid_output": invalid_output,
+            "scanned_links": scanned_links,
+            "allowed_cited_source_urls": cited_source_urls,
+            "allowed_github_repo_scopes": github_repo_scopes,
+            "repair_rules": [
+                "Return only JSON conforming to the schema.",
+                "Keep only highlights directly supported by the invalid output.",
+                "Use only scanned_links, allowed_cited_source_urls, or allowed_github_repo_scopes for source_url.",
+                "If a highlight cannot be repaired safely, omit it.",
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    kwargs = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You repair link-scanning JSON for grounded resume evidence. "
+                    "Do not add new facts. Return JSON only."
+                ),
+            },
+            {"role": "user", "content": repair_payload},
+        ],
+        "response_format": qwen_chat_completion_response_format(
+            schema_name="link_evidence_enrichment",
+            schema=schema,
+        ),
+        "temperature": 0,
+    }
+    response = client.chat.completions.create(**kwargs)
+    output_text = _extract_output_text(response)
+    if not output_text:
+        raise LinkScanningLLMClientError(
+            "Link-scanning LLM repair response did not include output text"
+        )
+
+    try:
+        repaired = json.loads(output_text)
+    except json.JSONDecodeError as exc:
+        raise LinkScanningLLMClientError(
+            f"Link-scanning LLM repair response was not valid JSON: {exc}"
+        ) from exc
+    if not isinstance(repaired, dict):
+        raise LinkScanningLLMClientError(
+            "Link-scanning LLM repair response must be a JSON object"
+        )
+    return repaired, _usage_metadata(response)
+
+
 def resolve_link_scan_max_output_tokens(
     *,
     max_output_tokens: int | None = None,
@@ -630,29 +722,58 @@ def scan_evidence_links_with_llm(
     if not output_text:
         raise LinkScanningLLMClientError("Link-scanning LLM response did not include output_text")
 
-    try:
-        raw_response = json.loads(output_text)
-    except json.JSONDecodeError as exc:
-        raise LinkScanningLLMClientError(
-            f"Link-scanning LLM response was not valid JSON: {exc}"
-        ) from exc
-
     source_urls = _extract_source_urls(response)
     github_repo_scopes = [
         target.repo_scope
         for target in scan_targets
         if target.mode == "github_repo" and target.repo_scope is not None
     ]
-    highlights = _validate_link_scan_response(
-        raw_response,
-        scanned_links=links,
-        cited_source_urls=source_urls,
-        github_repo_scopes=github_repo_scopes,
+    primary_usage = _usage_metadata(response)
+    repair_usage: dict[str, int] | None = None
+    repair_reason: str | None = None
+    try:
+        try:
+            raw_response = json.loads(output_text)
+        except json.JSONDecodeError as exc:
+            raise LinkScanningLLMClientError(
+                f"Link-scanning LLM response was not valid JSON: {exc}"
+            ) from exc
+        highlights = _validate_link_scan_response(
+            raw_response,
+            scanned_links=links,
+            cited_source_urls=source_urls,
+            github_repo_scopes=github_repo_scopes,
+        )
+    except LinkScanningLLMClientError as exc:
+        if provider_config.provider != "qwen":
+            raise
+        repair_reason = str(exc)
+        raw_response, repair_usage = _repair_qwen_link_scan_response(
+            client=client,
+            model=effective_model,
+            schema=schema,
+            invalid_output=output_text,
+            failure_reason=repair_reason,
+            scanned_links=links,
+            cited_source_urls=source_urls,
+            github_repo_scopes=github_repo_scopes,
+        )
+        highlights = _validate_link_scan_response(
+            raw_response,
+            scanned_links=links,
+            cited_source_urls=source_urls,
+            github_repo_scopes=github_repo_scopes,
+        )
+
+    combined_usage = (
+        _combine_usage_metadata(primary_usage, repair_usage)
+        if repair_usage is not None
+        else primary_usage
     )
     metadata = {
         **provider_config.metadata(),
         "model": effective_model,
-        "api_calls": 1,
+        "api_calls": 2 if repair_usage is not None else 1,
         "latency_ms": round(latency_ms, 3),
         "scanned_links": links,
         "requested_highlight_count": effective_requested_highlight_count,
@@ -677,6 +798,8 @@ def scan_evidence_links_with_llm(
         ],
         "web_search_enabled": web_search_enabled,
         "source_urls": source_urls,
-        **_usage_metadata(response),
+        **combined_usage,
     }
+    if repair_reason is not None:
+        metadata["repair_reason"] = repair_reason
     return LLMLinkScanResult(highlights=highlights, metadata=metadata)

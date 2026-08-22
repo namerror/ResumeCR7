@@ -10,7 +10,11 @@ from openai import OpenAI
 
 from app.config import settings
 from app.job_focus_generation.models import JobFocus
-from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
+from app.llm_provider import (
+    apply_provider_response_options,
+    build_qwen_chat_completion_kwargs,
+    resolve_llm_provider_config,
+)
 
 logger = logging.getLogger("llm_client")
 
@@ -102,8 +106,22 @@ def build_prompt_payload(
 def _usage_metadata(response: Any) -> dict[str, int]:
     usage = getattr(response, "usage", None)
     return {
-        "prompt_tokens": int(getattr(usage, "input_tokens", 0) or 0),
-        "completion_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "prompt_tokens": int(
+            (
+                getattr(usage, "input_tokens", None)
+                if getattr(usage, "input_tokens", None) is not None
+                else getattr(usage, "prompt_tokens", 0)
+            )
+            or 0
+        ),
+        "completion_tokens": int(
+            (
+                getattr(usage, "output_tokens", None)
+                if getattr(usage, "output_tokens", None) is not None
+                else getattr(usage, "completion_tokens", 0)
+            )
+            or 0
+        ),
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
     }
 
@@ -132,7 +150,29 @@ def _extract_output_text(response: Any) -> str | None:
     if isinstance(output_text, str) and output_text.strip():
         return output_text
 
+    choices_text = _extract_chat_choice_text(getattr(response, "choices", None))
+    if choices_text is not None:
+        return choices_text
+
     return _extract_text_from_part(getattr(response, "output", None))
+
+
+def _extract_chat_choice_text(choices: Any) -> str | None:
+    if choices is None:
+        return None
+    if isinstance(choices, list):
+        for choice in choices:
+            text = _extract_chat_choice_text(choice)
+            if text is not None:
+                return text
+        return None
+    if isinstance(choices, dict):
+        return _extract_text_from_part(choices.get("message"))
+
+    message = getattr(choices, "message", None)
+    if message is not None:
+        return _extract_text_from_part(message)
+    return None
 
 
 def _extract_text_from_part(part: Any, seen: set[int] | None = None) -> str | None:
@@ -325,15 +365,25 @@ def score_skills_with_llm(
         start=1,
     ):
         try:
-            create_kwargs = build_response_create_kwargs(
-                model=effective_model,
-                instructions=instructions,
-                prompt_payload=prompt_payload,
-                schema=schema,
-                max_output_tokens=attempt_max_output_tokens,
-            )
-            apply_provider_response_options(create_kwargs, provider_config)
-            response = client.responses.create(**create_kwargs)
+            if provider_config.provider == "qwen":
+                create_kwargs = build_qwen_chat_completion_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema_name="skill_scores",
+                    schema=schema,
+                )
+                response = client.chat.completions.create(**create_kwargs)
+            else:
+                create_kwargs = build_response_create_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema=schema,
+                    max_output_tokens=attempt_max_output_tokens,
+                )
+                apply_provider_response_options(create_kwargs, provider_config)
+                response = client.responses.create(**create_kwargs)
         except Exception as exc:
             attempt_metadata = {
                 "attempt": attempt_index,

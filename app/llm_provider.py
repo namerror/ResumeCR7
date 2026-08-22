@@ -25,8 +25,8 @@ LLMStage = Literal[
 ]
 
 QWEN_DEFAULT_MODELS: dict[LLMStage, str] = {
-    "skill_selection": "qwen3.6-flash",
-    "project_selection": "qwen3.6-flash",
+    "skill_selection": "qwen3.7-flash",
+    "project_selection": "qwen3.7-flash",
     "job_focus_generation": "qwen3.7-plus",
     "bulletpoints_generation": "qwen3.7-plus",
     "link_scanning": "qwen3.7-plus",
@@ -64,6 +64,12 @@ class ResolvedLLMProvider:
             metadata["base_url"] = self.base_url
         return metadata
 
+    def cache_identity(self) -> dict[str, Any]:
+        identity: dict[str, Any] = {"provider": self.provider, "model": self.model}
+        if self.base_url is not None:
+            identity["base_url"] = self.base_url
+        return identity
+
 
 def resolve_llm_provider_config(
     *,
@@ -89,6 +95,26 @@ def resolve_llm_provider_config(
     )
 
 
+def resolve_llm_cache_identity(
+    *,
+    stage: LLMStage,
+    requested_model: str | None,
+    default_openai_model: str,
+    config_path: Path | str | None = None,
+) -> dict[str, Any]:
+    provider = resolve_llm_provider(config_path=config_path)
+    if provider == "qwen":
+        return {
+            "provider": "qwen",
+            "model": _resolve_qwen_model(stage=stage, requested_model=requested_model),
+            "base_url": get_qwen_base_url(config_path=config_path),
+        }
+    return {
+        "provider": "openai",
+        "model": requested_model if requested_model is not None else default_openai_model,
+    }
+
+
 def resolve_llm_provider(config_path: Path | str | None = None) -> LLMProvider:
     if "LLM_PROVIDER" in os.environ or settings.LLM_PROVIDER != "openai":
         return _normalize_provider(settings.LLM_PROVIDER)
@@ -106,9 +132,44 @@ def apply_provider_response_options(
     provider_config: ResolvedLLMProvider,
 ) -> None:
     if provider_config.provider == "qwen":
-        extra_body = kwargs.setdefault("extra_body", {})
-        if isinstance(extra_body, dict):
-            extra_body.setdefault("enable_thinking", False)
+        kwargs.setdefault("reasoning", {"effort": "none"})
+
+
+def qwen_chat_completion_response_format(
+    *,
+    schema_name: str,
+    schema: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": schema_name,
+            "schema": schema,
+            "strict": True,
+        },
+    }
+
+
+def build_qwen_chat_completion_kwargs(
+    *,
+    model: str,
+    instructions: str,
+    prompt_payload: str,
+    schema_name: str,
+    schema: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": prompt_payload},
+        ],
+        "response_format": qwen_chat_completion_response_format(
+            schema_name=schema_name,
+            schema=schema,
+        ),
+        "temperature": 0,
+    }
 
 
 def _resolve_qwen_model(*, stage: LLMStage, requested_model: str | None) -> str:

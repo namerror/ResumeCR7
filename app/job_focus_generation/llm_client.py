@@ -10,7 +10,11 @@ from openai import OpenAI
 
 from app.config import settings
 from app.job_focus_generation.models import JobFocus
-from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
+from app.llm_provider import (
+    apply_provider_response_options,
+    build_qwen_chat_completion_kwargs,
+    resolve_llm_provider_config,
+)
 from app.skill_selection.llm_client import _extract_output_text, supports_temperature
 
 logger = logging.getLogger("job_focus_llm_client")
@@ -95,8 +99,22 @@ def build_job_focus_instructions() -> str:
 def _usage_metadata(response: Any) -> dict[str, int]:
     usage = getattr(response, "usage", None)
     return {
-        "prompt_tokens": int(getattr(usage, "input_tokens", 0) or 0),
-        "completion_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "prompt_tokens": int(
+            (
+                getattr(usage, "input_tokens", None)
+                if getattr(usage, "input_tokens", None) is not None
+                else getattr(usage, "prompt_tokens", 0)
+            )
+            or 0
+        ),
+        "completion_tokens": int(
+            (
+                getattr(usage, "output_tokens", None)
+                if getattr(usage, "output_tokens", None) is not None
+                else getattr(usage, "completion_tokens", 0)
+            )
+            or 0
+        ),
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
     }
 
@@ -216,15 +234,25 @@ def derive_job_focus_with_llm(
         start=1,
     ):
         try:
-            create_kwargs = build_job_focus_response_create_kwargs(
-                model=effective_model,
-                instructions=instructions,
-                prompt_payload=prompt_payload,
-                schema=schema,
-                max_output_tokens=attempt_max_output_tokens,
-            )
-            apply_provider_response_options(create_kwargs, provider_config)
-            response = client.responses.create(**create_kwargs)
+            if provider_config.provider == "qwen":
+                create_kwargs = build_qwen_chat_completion_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema_name="job_focus",
+                    schema=schema,
+                )
+                response = client.chat.completions.create(**create_kwargs)
+            else:
+                create_kwargs = build_job_focus_response_create_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema=schema,
+                    max_output_tokens=attempt_max_output_tokens,
+                )
+                apply_provider_response_options(create_kwargs, provider_config)
+                response = client.responses.create(**create_kwargs)
         except Exception as exc:
             logger.exception(
                 "job_focus_llm_request_failed",

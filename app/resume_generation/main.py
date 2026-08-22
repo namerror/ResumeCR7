@@ -424,6 +424,7 @@ def run_resume_generation_pipeline(
         cache=cache,
         token_usage_monitor=token_usage_monitor,
         stage_response_records=stage_response_records,
+        config_path=resolved_config_path,
     )
     logger.info(
         "resume_generation_stage_complete",
@@ -495,6 +496,7 @@ def run_resume_generation_pipeline(
             cache=cache,
             token_usage_monitor=token_usage_monitor,
             stage_response_records=stage_response_records,
+            config_path=resolved_config_path,
         )
         bullet_points = section_bullet_points.project_bullet_points
         experience_bullet_points = section_bullet_points.experience_bullet_points
@@ -527,6 +529,7 @@ def run_resume_generation_pipeline(
             cache=cache,
             token_usage_monitor=token_usage_monitor,
             stage_response_records=stage_response_records,
+            config_path=resolved_config_path,
         )
         logger.info(
             "resume_generation_stage_complete",
@@ -556,6 +559,7 @@ def run_resume_generation_pipeline(
             cache=cache,
             token_usage_monitor=token_usage_monitor,
             stage_response_records=stage_response_records,
+            config_path=resolved_config_path,
         )
         logger.info(
             "resume_generation_stage_complete",
@@ -730,6 +734,7 @@ async def run_resume_generation_pipeline_async(
             cache=cache,
             stage_response_records=job_focus_stage_records,
             semaphore=llm_semaphore,
+            config_path=resolved_config_path,
         )
     )
     managed_tasks.append(job_focus_task)
@@ -771,6 +776,7 @@ async def run_resume_generation_pipeline_async(
                 config=config,
                 job_target=job_target,
                 skills_file=skills_file,
+                config_path=resolved_config_path,
                 cache=cache,
                 stage_response_records=skill_stage_records,
                 semaphore=llm_semaphore,
@@ -782,6 +788,7 @@ async def run_resume_generation_pipeline_async(
                 config=config,
                 job_target=job_target,
                 projects_file=projects_file,
+                config_path=resolved_config_path,
                 cache=cache,
                 stage_response_records=project_stage_records,
                 semaphore=llm_semaphore,
@@ -833,6 +840,7 @@ async def run_resume_generation_pipeline_async(
                     token_usage_monitor=None,
                     stage_response_records=section_bullet_stage_records,
                     semaphore=llm_semaphore,
+                    config_path=resolved_config_path,
                 )
             )
             managed_tasks.append(section_bullet_task)
@@ -893,6 +901,7 @@ async def run_resume_generation_pipeline_async(
                     stage_response_records=project_bullet_stage_records,
                     semaphore=bullet_semaphore,
                     llm_semaphore=llm_semaphore,
+                    config_path=resolved_config_path,
                 )
             )
             experience_bullet_task = asyncio.create_task(
@@ -905,6 +914,7 @@ async def run_resume_generation_pipeline_async(
                     stage_response_records=experience_bullet_stage_records,
                     semaphore=bullet_semaphore,
                     llm_semaphore=llm_semaphore,
+                    config_path=resolved_config_path,
                 )
             )
             managed_tasks.extend([project_bullet_task, experience_bullet_task])

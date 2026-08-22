@@ -13,7 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from app.bulletpoints_generation.models import BulletGenerationResponse
-from app.config import settings
+from app.config import QWEN_DEFAULT_BASE_URL, settings
 from app.job_focus_generation.models import JobFocus, JobFocusResponse
 from app.link_scanning.models import LinkScanHighlight, LinkScanResponse
 from app.main import app
@@ -64,6 +64,8 @@ from resume_generation import (
 )
 from resume_generation.cache import ResumeGenerationStageCache
 import resume_generation.enrich as resume_enrich
+import resume_generation.bullet_points as resume_bullet_points
+import resume_generation.job_focus as resume_job_focus
 import resume_generation.selection as resume_selection
 import resume_generation.pdf as resume_pdf
 from resume_generation.main import (
@@ -4380,6 +4382,96 @@ def test_resume_generation_pipeline_does_not_cache_skill_llm_fallback(
     ]
 
 
+def test_llm_cache_payloads_include_resolved_provider_identity(monkeypatch, tmp_path):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("QWEN_BASE_URL", raising=False)
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(settings, "QWEN_BASE_URL", QWEN_DEFAULT_BASE_URL)
+    openai_config_path = _write_yaml(
+        tmp_path / "openai-config.yaml",
+        _config_payload(
+            llm_provider="openai",
+            skill_selection={"method": "llm", "llm_model": "gpt-5-nano"},
+        ),
+    )
+    qwen_config_path = _write_yaml(
+        tmp_path / "qwen-config.yaml",
+        _config_payload(
+            llm_provider="qwen",
+            qwen={"base_url": "https://qwen.example/compatible-mode/v1"},
+            skill_selection={"method": "llm", "llm_model": "gpt-5-nano"},
+        ),
+    )
+    openai_skill_payload = {
+        "method": "llm",
+        "llm_model": "gpt-5-nano",
+        "job_role": "Backend Engineer",
+    }
+    qwen_selection_identity = {
+        "provider": "qwen",
+        "model": "qwen3.7-flash",
+        "base_url": "https://qwen.example/compatible-mode/v1",
+    }
+    qwen_generation_identity = {
+        "provider": "qwen",
+        "model": "qwen3.7-plus",
+        "base_url": "https://qwen.example/compatible-mode/v1",
+    }
+
+    assert resume_selection._selection_cache_payload(
+        openai_skill_payload,
+        stage="skill_selection",
+        config_path=openai_config_path,
+    )["llm_provider"] == {"provider": "openai", "model": "gpt-5-nano"}
+    assert resume_selection._selection_cache_payload(
+        openai_skill_payload,
+        stage="skill_selection",
+        config_path=qwen_config_path,
+    )["llm_provider"] == qwen_selection_identity
+    assert (
+        "llm_provider"
+        not in resume_selection._selection_cache_payload(
+            {"method": "baseline", "llm_model": "gpt-5-nano"},
+            stage="skill_selection",
+            config_path=qwen_config_path,
+        )
+    )
+    assert resume_job_focus._job_focus_cache_payload(
+        {
+            "title": "Backend Engineer",
+            "description": "Build APIs.",
+            "llm_model": "gpt-5-mini",
+        },
+        config_path=qwen_config_path,
+    )["llm_provider"] == qwen_generation_identity
+    assert resume_bullet_points._bullet_cache_payload(
+        {
+            "context": {"title": "Backend Engineer"},
+            "project": {"id": "resumecr7"},
+            "llm_model": "gpt-5-mini",
+        },
+        evidence_type="project",
+        config_path=qwen_config_path,
+    )["llm_provider"] == qwen_generation_identity
+
+    section_payload = resume_bullet_points._resume_section_bullet_cache_payload(
+        {
+            "context": {"title": "Backend Engineer"},
+            "projects": [],
+            "experiences": [],
+            "project_bullet_count_range": {"min": 2, "max": 4},
+            "experience_bullet_count_range": {"min": 1, "max": 2},
+            "llm_model": "gpt-5-mini",
+            "llm_max_output_tokens": 990,
+            "llm_output_token_budget": {"max": 3200},
+        },
+        config_path=qwen_config_path,
+    )
+    assert section_payload["llm_provider"] == qwen_generation_identity
+    assert "llm_max_output_tokens" not in section_payload
+    assert "llm_output_token_budget" not in section_payload
+
+
 def test_selection_context_bypasses_cached_skill_llm_fallback(monkeypatch, tmp_path):
     cache_path = tmp_path / "cache"
     config_path = _write_yaml(
@@ -4409,7 +4501,11 @@ def test_selection_context_bypasses_cached_skill_llm_fallback(monkeypatch, tmp_p
         skills_file=loaded_evidence["skills"],
         config=config,
     )
-    skill_cache_payload = resume_selection._selection_cache_payload(skill_payload)
+    skill_cache_payload = resume_selection._selection_cache_payload(
+        skill_payload,
+        stage="skill_selection",
+        config_path=config_path,
+    )
     skill_fetch_payload = resume_selection._canonical_selection_fetch_payload(
         skill_payload,
         full_top_n=resume_selection._skill_selection_full_top_n(skill_payload),

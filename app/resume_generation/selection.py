@@ -25,6 +25,7 @@ from app.job_focus_generation.service import (
     JobFocusGenerationError,
     derive_job_focus_service,
 )
+from app.llm_provider import LLMStage, resolve_llm_cache_identity
 from app.project_selection.models import ProjectSelectRequest
 from app.project_selection.service import select_projects_service
 from app.resume_evidence import ProjectRecord, ProjectsFile, SkillsFile, default_evidence_paths
@@ -175,12 +176,46 @@ def _exclude_none(data: BaseModel) -> dict[str, Any]:
     return data.model_dump(exclude_none=True)
 
 
-def _selection_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _selection_cache_payload(
+    payload: dict[str, Any],
+    *,
+    stage: LLMStage,
+    config_path: Path | str | None = None,
+) -> dict[str, Any]:
+    cache_payload = {
         key: value
         for key, value in payload.items()
         if key not in SELECTION_CACHE_IGNORED_FIELDS
     }
+    method = str(payload.get("method") or _selection_default_method(stage)).lower()
+    if method == "llm":
+        cache_payload["llm_provider"] = resolve_llm_cache_identity(
+            stage=stage,
+            requested_model=_string_or_none(payload.get("llm_model")),
+            default_openai_model=_selection_default_openai_model(stage),
+            config_path=config_path,
+        )
+    return cache_payload
+
+
+def _selection_default_method(stage: LLMStage) -> str:
+    if stage == "skill_selection":
+        return settings.SKILL_METHOD
+    if stage == "project_selection":
+        return settings.PROJ_METHOD
+    raise ValueError(f"Unsupported selection stage: {stage}")
+
+
+def _selection_default_openai_model(stage: LLMStage) -> str:
+    if stage == "skill_selection":
+        return settings.SKILL_LLM_MODEL
+    if stage == "project_selection":
+        return settings.PROJ_LLM_MODEL
+    raise ValueError(f"Unsupported selection stage: {stage}")
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _skill_selection_full_top_n(payload: dict[str, Any]) -> int:
@@ -678,7 +713,11 @@ def generate_selection_context(
             config=config,
             job_focus=job_focus,
         )
-        skill_cache_payload = _selection_cache_payload(skill_payload)
+        skill_cache_payload = _selection_cache_payload(
+            skill_payload,
+            stage="skill_selection",
+            config_path=resolved_config_path,
+        )
         skill_fetch_payload = _canonical_selection_fetch_payload(
             skill_payload,
             full_top_n=_skill_selection_full_top_n(skill_payload),
@@ -710,7 +749,11 @@ def generate_selection_context(
             config=config,
             job_focus=job_focus,
         )
-        project_cache_payload = _selection_cache_payload(project_payload)
+        project_cache_payload = _selection_cache_payload(
+            project_payload,
+            stage="project_selection",
+            config_path=resolved_config_path,
+        )
         project_fetch_payload = _canonical_selection_fetch_payload(
             project_payload,
             full_top_n=_project_selection_full_top_n(project_payload),
@@ -791,6 +834,7 @@ async def generate_skill_selection_async(
     config: ResumeGenerationConfig,
     job_target: JobTarget,
     skills_file: SkillsFile,
+    config_path: Path | str | None = None,
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
@@ -802,7 +846,11 @@ async def generate_skill_selection_async(
         config=config,
         job_focus=job_focus,
     )
-    skill_cache_payload = _selection_cache_payload(skill_payload)
+    skill_cache_payload = _selection_cache_payload(
+        skill_payload,
+        stage="skill_selection",
+        config_path=config_path,
+    )
     skill_fetch_payload = _canonical_selection_fetch_payload(
         skill_payload,
         full_top_n=_skill_selection_full_top_n(skill_payload),
@@ -856,6 +904,7 @@ async def generate_project_selection_async(
     config: ResumeGenerationConfig,
     job_target: JobTarget,
     projects_file: ProjectsFile,
+    config_path: Path | str | None = None,
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
@@ -867,7 +916,11 @@ async def generate_project_selection_async(
         config=config,
         job_focus=job_focus,
     )
-    project_cache_payload = _selection_cache_payload(project_payload)
+    project_cache_payload = _selection_cache_payload(
+        project_payload,
+        stage="project_selection",
+        config_path=config_path,
+    )
     project_fetch_payload = _canonical_selection_fetch_payload(
         project_payload,
         full_top_n=_project_selection_full_top_n(project_payload),
@@ -955,6 +1008,7 @@ async def generate_selection_context_async(
             config=config,
             job_target=job_target,
             skills_file=skills_file,
+            config_path=resolved_config_path,
             cache=cache,
             stage_response_records=skill_records,
             semaphore=semaphore,
@@ -964,6 +1018,7 @@ async def generate_selection_context_async(
             config=config,
             job_target=job_target,
             projects_file=projects_file,
+            config_path=resolved_config_path,
             cache=cache,
             stage_response_records=project_records,
             semaphore=semaphore,

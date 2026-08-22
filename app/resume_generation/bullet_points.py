@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable
 
 import httpx
 
 from app.config import settings
+from app.llm_provider import resolve_llm_cache_identity
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
 from app.resume_generation.cache import ResumeGenerationStageCache
 from app.resume_generation.models import (
@@ -77,6 +79,7 @@ def _bullet_cache_payload(
     payload: dict[str, Any],
     *,
     evidence_type: str,
+    config_path: Path | str | None = None,
 ) -> dict[str, Any]:
     evidence_payload = payload.get(evidence_type)
     return {
@@ -84,7 +87,25 @@ def _bullet_cache_payload(
         "evidence_type": evidence_type,
         evidence_type: evidence_payload,
         "llm_model": payload.get("llm_model", settings.BULLETPOINTS_LLM_MODEL),
+        "llm_provider": _bullet_llm_cache_identity(payload, config_path=config_path),
     }
+
+
+def _bullet_llm_cache_identity(
+    payload: dict[str, Any],
+    *,
+    config_path: Path | str | None = None,
+) -> dict[str, Any]:
+    return resolve_llm_cache_identity(
+        stage="bulletpoints_generation",
+        requested_model=_string_or_none(payload.get("llm_model")),
+        default_openai_model=settings.BULLETPOINTS_LLM_MODEL,
+        config_path=config_path,
+    )
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _bullet_fetch_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -106,7 +127,11 @@ def _shape_bullet_response(
     return shaped
 
 
-def _resume_section_bullet_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _resume_section_bullet_cache_payload(
+    payload: dict[str, Any],
+    *,
+    config_path: Path | str | None = None,
+) -> dict[str, Any]:
     return {
         "strategy": "section_batch",
         "context": payload.get("context"),
@@ -115,8 +140,7 @@ def _resume_section_bullet_cache_payload(payload: dict[str, Any]) -> dict[str, A
         "project_bullet_count_range": payload.get("project_bullet_count_range"),
         "experience_bullet_count_range": payload.get("experience_bullet_count_range"),
         "llm_model": payload.get("llm_model", settings.BULLETPOINTS_LLM_MODEL),
-        "llm_max_output_tokens": payload.get("llm_max_output_tokens"),
-        "llm_output_token_budget": payload.get("llm_output_token_budget"),
+        "llm_provider": _bullet_llm_cache_identity(payload, config_path=config_path),
     }
 
 
@@ -339,6 +363,7 @@ def generate_resume_section_bullet_points(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
+    config_path: Path | str | None = None,
 ) -> ResumeSectionBulletPointResults:
     payload = _resume_section_bullet_payload(
         selected_projects=selected_projects,
@@ -359,7 +384,10 @@ def generate_resume_section_bullet_points(
             client=client,
             endpoint="/generate-resume-section-bulletpoints",
             payload=payload,
-            cache_payload=_resume_section_bullet_cache_payload(payload),
+            cache_payload=_resume_section_bullet_cache_payload(
+                payload,
+                config_path=config_path,
+            ),
             fetch_payload=_resume_section_bullet_fetch_payload(payload),
             should_use_cached=lambda data, request_payload=payload: (
                 _section_bullet_counts_match_request(
@@ -386,6 +414,7 @@ async def generate_resume_section_bullet_points_async(
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    config_path: Path | str | None = None,
 ) -> ResumeSectionBulletPointResults:
     payload = _resume_section_bullet_payload(
         selected_projects=selected_projects,
@@ -407,7 +436,10 @@ async def generate_resume_section_bullet_points_async(
                 client=client,
                 endpoint="/generate-resume-section-bulletpoints",
                 payload=payload,
-                cache_payload=_resume_section_bullet_cache_payload(payload),
+                cache_payload=_resume_section_bullet_cache_payload(
+                    payload,
+                    config_path=config_path,
+                ),
                 fetch_payload=_resume_section_bullet_fetch_payload(payload),
                 should_use_cached=lambda data, request_payload=payload: (
                     _section_bullet_counts_match_request(
@@ -426,7 +458,10 @@ async def generate_resume_section_bullet_points_async(
                     client=client,
                     endpoint="/generate-resume-section-bulletpoints",
                     payload=payload,
-                    cache_payload=_resume_section_bullet_cache_payload(payload),
+                    cache_payload=_resume_section_bullet_cache_payload(
+                        payload,
+                        config_path=config_path,
+                    ),
                     fetch_payload=_resume_section_bullet_fetch_payload(payload),
                     should_use_cached=lambda data, request_payload=payload: (
                         _section_bullet_counts_match_request(
@@ -451,6 +486,7 @@ def generate_project_bullet_points(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
+    config_path: Path | str | None = None,
 ) -> list[ProjectBulletPointResult]:
     bullet_config = _exclude_none(config.project_bullet_point_generation)
 
@@ -476,6 +512,7 @@ def generate_project_bullet_points(
                 cache_payload=_bullet_cache_payload(
                     payload,
                     evidence_type="project",
+                    config_path=config_path,
                 ),
                 fetch_payload=_bullet_fetch_payload(payload),
                 namespace=project.id,
@@ -509,6 +546,7 @@ async def generate_project_bullet_points_async(
     stage_response_records: list[dict] | None = None,
     semaphore: asyncio.Semaphore | None = None,
     llm_semaphore: asyncio.Semaphore | None = None,
+    config_path: Path | str | None = None,
 ) -> list[ProjectBulletPointResult]:
     bullet_config = _exclude_none(config.project_bullet_point_generation)
     projects = list(selected_projects)
@@ -552,6 +590,7 @@ async def generate_project_bullet_points_async(
             cache_payload=_bullet_cache_payload(
                 payload,
                 evidence_type="project",
+                config_path=config_path,
             ),
             fetch_payload=_bullet_fetch_payload(payload),
             namespace=project.id,
@@ -598,6 +637,7 @@ def generate_experience_bullet_points(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict] | None = None,
+    config_path: Path | str | None = None,
 ) -> list[ExperienceBulletPointResult]:
     bullet_config = _exclude_none(config.experience_bullet_point_generation)
 
@@ -625,6 +665,7 @@ def generate_experience_bullet_points(
                 cache_payload=_bullet_cache_payload(
                     payload,
                     evidence_type="experience",
+                    config_path=config_path,
                 ),
                 fetch_payload=_bullet_fetch_payload(payload),
                 namespace=item.id,
@@ -658,6 +699,7 @@ async def generate_experience_bullet_points_async(
     stage_response_records: list[dict] | None = None,
     semaphore: asyncio.Semaphore | None = None,
     llm_semaphore: asyncio.Semaphore | None = None,
+    config_path: Path | str | None = None,
 ) -> list[ExperienceBulletPointResult]:
     bullet_config = _exclude_none(config.experience_bullet_point_generation)
     active_experience = [item for item in experience if item.active]
@@ -701,6 +743,7 @@ async def generate_experience_bullet_points_async(
             cache_payload=_bullet_cache_payload(
                 payload,
                 evidence_type="experience",
+                config_path=config_path,
             ),
             fetch_payload=_bullet_fetch_payload(payload),
             namespace=item.id,

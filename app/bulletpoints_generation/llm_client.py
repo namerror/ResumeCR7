@@ -17,7 +17,11 @@ from app.bulletpoints_generation.models import (
     ProjectBulletPointSet,
 )
 from app.config import settings
-from app.llm_provider import apply_provider_response_options, resolve_llm_provider_config
+from app.llm_provider import (
+    apply_provider_response_options,
+    build_qwen_chat_completion_kwargs,
+    resolve_llm_provider_config,
+)
 from app.skill_selection.llm_client import _extract_output_text
 from app.skill_selection.llm_client import supports_temperature
 from app.resume_evidence.models import ExperienceRecord, ProjectRecord
@@ -376,8 +380,22 @@ def _build_evidence_payload(
 def _usage_metadata(response: Any) -> dict[str, int]:
     usage = getattr(response, "usage", None)
     return {
-        "prompt_tokens": int(getattr(usage, "input_tokens", 0) or 0),
-        "completion_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "prompt_tokens": int(
+            (
+                getattr(usage, "input_tokens", None)
+                if getattr(usage, "input_tokens", None) is not None
+                else getattr(usage, "prompt_tokens", 0)
+            )
+            or 0
+        ),
+        "completion_tokens": int(
+            (
+                getattr(usage, "output_tokens", None)
+                if getattr(usage, "output_tokens", None) is not None
+                else getattr(usage, "completion_tokens", 0)
+            )
+            or 0
+        ),
         "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
     }
 
@@ -761,16 +779,26 @@ def generate_bulletpoints_with_llm(
         start=1,
     ):
         try:
-            create_kwargs = build_bulletpoint_response_create_kwargs(
-                model=effective_model,
-                instructions=instructions,
-                prompt_payload=prompt_payload,
-                schema=schema,
-                max_output_tokens=attempt_max_output_tokens,
-                schema_name=f"{evidence_type}_bullet_points",
-            )
-            apply_provider_response_options(create_kwargs, provider_config)
-            response = client.responses.create(**create_kwargs)
+            if provider_config.provider == "qwen":
+                create_kwargs = build_qwen_chat_completion_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema_name=f"{evidence_type}_bullet_points",
+                    schema=schema,
+                )
+                response = client.chat.completions.create(**create_kwargs)
+            else:
+                create_kwargs = build_bulletpoint_response_create_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema=schema,
+                    max_output_tokens=attempt_max_output_tokens,
+                    schema_name=f"{evidence_type}_bullet_points",
+                )
+                apply_provider_response_options(create_kwargs, provider_config)
+                response = client.responses.create(**create_kwargs)
         except Exception as exc:
             attempt_metadata = {
                 "attempt": attempt_index,
@@ -956,16 +984,26 @@ def generate_resume_section_bulletpoints_with_llm(
         start=1,
     ):
         try:
-            create_kwargs = build_bulletpoint_response_create_kwargs(
-                model=effective_model,
-                instructions=instructions,
-                prompt_payload=prompt_payload,
-                schema=schema,
-                max_output_tokens=attempt_max_output_tokens,
-                schema_name="resume_section_bullet_points",
-            )
-            apply_provider_response_options(create_kwargs, provider_config)
-            response = client.responses.create(**create_kwargs)
+            if provider_config.provider == "qwen":
+                create_kwargs = build_qwen_chat_completion_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema_name="resume_section_bullet_points",
+                    schema=schema,
+                )
+                response = client.chat.completions.create(**create_kwargs)
+            else:
+                create_kwargs = build_bulletpoint_response_create_kwargs(
+                    model=effective_model,
+                    instructions=instructions,
+                    prompt_payload=prompt_payload,
+                    schema=schema,
+                    max_output_tokens=attempt_max_output_tokens,
+                    schema_name="resume_section_bullet_points",
+                )
+                apply_provider_response_options(create_kwargs, provider_config)
+                response = client.responses.create(**create_kwargs)
         except Exception as exc:
             attempt_metadata = {
                 "attempt": attempt_index,
@@ -1156,16 +1194,26 @@ async def generate_bulletpoints_with_llm_async(
             start=1,
         ):
             try:
-                create_kwargs = build_bulletpoint_response_create_kwargs(
-                    model=effective_model,
-                    instructions=instructions,
-                    prompt_payload=prompt_payload,
-                    schema=schema,
-                    max_output_tokens=attempt_max_output_tokens,
-                    schema_name=f"{evidence_type}_bullet_points",
-                )
-                apply_provider_response_options(create_kwargs, provider_config)
-                response = await client.responses.create(**create_kwargs)
+                if provider_config.provider == "qwen":
+                    create_kwargs = build_qwen_chat_completion_kwargs(
+                        model=effective_model,
+                        instructions=instructions,
+                        prompt_payload=prompt_payload,
+                        schema_name=f"{evidence_type}_bullet_points",
+                        schema=schema,
+                    )
+                    response = await client.chat.completions.create(**create_kwargs)
+                else:
+                    create_kwargs = build_bulletpoint_response_create_kwargs(
+                        model=effective_model,
+                        instructions=instructions,
+                        prompt_payload=prompt_payload,
+                        schema=schema,
+                        max_output_tokens=attempt_max_output_tokens,
+                        schema_name=f"{evidence_type}_bullet_points",
+                    )
+                    apply_provider_response_options(create_kwargs, provider_config)
+                    response = await client.responses.create(**create_kwargs)
             except Exception as exc:
                 attempt_metadata = {
                     "attempt": attempt_index,
@@ -1354,16 +1402,26 @@ async def generate_resume_section_bulletpoints_with_llm_async(
             start=1,
         ):
             try:
-                create_kwargs = build_bulletpoint_response_create_kwargs(
-                    model=effective_model,
-                    instructions=instructions,
-                    prompt_payload=prompt_payload,
-                    schema=schema,
-                    max_output_tokens=attempt_max_output_tokens,
-                    schema_name="resume_section_bullet_points",
-                )
-                apply_provider_response_options(create_kwargs, provider_config)
-                response = await client.responses.create(**create_kwargs)
+                if provider_config.provider == "qwen":
+                    create_kwargs = build_qwen_chat_completion_kwargs(
+                        model=effective_model,
+                        instructions=instructions,
+                        prompt_payload=prompt_payload,
+                        schema_name="resume_section_bullet_points",
+                        schema=schema,
+                    )
+                    response = await client.chat.completions.create(**create_kwargs)
+                else:
+                    create_kwargs = build_bulletpoint_response_create_kwargs(
+                        model=effective_model,
+                        instructions=instructions,
+                        prompt_payload=prompt_payload,
+                        schema=schema,
+                        max_output_tokens=attempt_max_output_tokens,
+                        schema_name="resume_section_bullet_points",
+                    )
+                    apply_provider_response_options(create_kwargs, provider_config)
+                    response = await client.responses.create(**create_kwargs)
             except Exception as exc:
                 attempt_metadata = {
                     "attempt": attempt_index,

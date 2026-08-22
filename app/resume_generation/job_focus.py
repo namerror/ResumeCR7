@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.config import settings
+from app.llm_provider import resolve_llm_cache_identity
 from app.job_focus_generation.models import JobFocusResponse
 from app.resume_generation.cache import ResumeGenerationStageCache
 from app.resume_generation.models import JobFocusResult, JobTarget, ResumeGenerationConfig
@@ -25,13 +27,27 @@ def _job_focus_dev_mode(payload: dict[str, Any]) -> bool:
     return bool(payload.get("dev_mode", settings.DEV_MODE))
 
 
-def _job_focus_cache_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _job_focus_cache_payload(
+    payload: dict[str, Any],
+    *,
+    config_path: Path | str | None = None,
+) -> dict[str, Any]:
     return {
         "prompt_schema_version": JOB_FOCUS_PROMPT_SCHEMA_VERSION,
         "title": payload.get("title"),
         "description": payload.get("description"),
         "llm_model": payload.get("llm_model", settings.JOB_FOCUS_LLM_MODEL),
+        "llm_provider": resolve_llm_cache_identity(
+            stage="job_focus_generation",
+            requested_model=_string_or_none(payload.get("llm_model")),
+            default_openai_model=settings.JOB_FOCUS_LLM_MODEL,
+            config_path=config_path,
+        ),
     }
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _job_focus_fetch_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -60,6 +76,7 @@ def derive_job_focus(
     cache: ResumeGenerationStageCache | None = None,
     token_usage_monitor: ResumeGenerationTokenUsageMonitor | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
+    config_path: Path | str | None = None,
 ) -> JobFocusResult:
     focus_config = _exclude_none(config.job_focus_generation)
     payload = {
@@ -76,7 +93,7 @@ def derive_job_focus(
             client=client,
             endpoint="/derive-job-focus",
             payload=payload,
-            cache_payload=_job_focus_cache_payload(payload),
+            cache_payload=_job_focus_cache_payload(payload, config_path=config_path),
             fetch_payload=_job_focus_fetch_payload(payload),
             token_usage_monitor=token_usage_monitor,
             stage_response_records=stage_response_records,
@@ -95,6 +112,7 @@ async def derive_job_focus_async(
     cache: ResumeGenerationStageCache | None = None,
     stage_response_records: list[dict[str, Any]] | None = None,
     semaphore: asyncio.Semaphore | None = None,
+    config_path: Path | str | None = None,
 ) -> JobFocusResult:
     focus_config = _exclude_none(config.job_focus_generation)
     payload = {
@@ -112,7 +130,7 @@ async def derive_job_focus_async(
                 client=client,
                 endpoint="/derive-job-focus",
                 payload=payload,
-                cache_payload=_job_focus_cache_payload(payload),
+                cache_payload=_job_focus_cache_payload(payload, config_path=config_path),
                 fetch_payload=_job_focus_fetch_payload(payload),
                 token_usage_monitor=None,
                 stage_response_records=stage_response_records,
@@ -125,7 +143,7 @@ async def derive_job_focus_async(
                     client=client,
                     endpoint="/derive-job-focus",
                     payload=payload,
-                    cache_payload=_job_focus_cache_payload(payload),
+                    cache_payload=_job_focus_cache_payload(payload, config_path=config_path),
                     fetch_payload=_job_focus_fetch_payload(payload),
                     token_usage_monitor=None,
                     stage_response_records=stage_response_records,

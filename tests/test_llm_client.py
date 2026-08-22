@@ -90,17 +90,28 @@ def test_score_skills_with_llm_uses_qwen_provider(monkeypatch):
     captured = {}
 
     class DummyResponses:
+        def create(self, **_kwargs):
+            raise AssertionError("Qwen strict JSON calls should use Chat Completions")
+
+    class DummyChatCompletions:
         def create(self, **kwargs):
             captured["kwargs"] = kwargs
             return SimpleNamespace(
-                output_text='{"technology":{"React":3},"programming":{},"concepts":{}}',
-                usage=SimpleNamespace(input_tokens=12, output_tokens=8, total_tokens=20),
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content='{"technology":{"React":3},"programming":{},"concepts":{}}'
+                        )
+                    )
+                ],
+                usage=SimpleNamespace(prompt_tokens=12, completion_tokens=8, total_tokens=20),
             )
 
     class DummyOpenAI:
         def __init__(self, **kwargs):
             captured["init"] = kwargs
             self.responses = DummyResponses()
+            self.chat = SimpleNamespace(completions=DummyChatCompletions())
 
     monkeypatch.setenv("LLM_PROVIDER", "qwen")
     monkeypatch.setattr(llm_client.settings, "LLM_PROVIDER", "qwen")
@@ -124,10 +135,20 @@ def test_score_skills_with_llm_uses_qwen_provider(monkeypatch):
         "api_key": "qwen-key",
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     }
-    assert captured["kwargs"]["model"] == "qwen3.6-flash"
-    assert captured["kwargs"]["extra_body"] == {"enable_thinking": False}
+    kwargs = captured["kwargs"]
+    assert kwargs["model"] == "qwen3.7-flash"
+    assert kwargs["temperature"] == 0
+    assert kwargs["messages"][0]["role"] == "system"
+    assert kwargs["messages"][1]["role"] == "user"
+    assert kwargs["response_format"]["type"] == "json_schema"
+    assert kwargs["response_format"]["json_schema"]["name"] == "skill_scores"
+    assert kwargs["response_format"]["json_schema"]["strict"] is True
+    assert "extra_body" not in kwargs
+    assert "max_output_tokens" not in kwargs
     assert result.metadata["provider"] == "qwen"
-    assert result.metadata["model"] == "qwen3.6-flash"
+    assert result.metadata["model"] == "qwen3.7-flash"
+    assert result.metadata["prompt_tokens"] == 12
+    assert result.metadata["completion_tokens"] == 8
 
 
 def test_score_skills_with_llm_omits_default_max_output_tokens(monkeypatch):
