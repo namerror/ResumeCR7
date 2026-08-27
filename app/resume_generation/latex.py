@@ -150,9 +150,21 @@ _LATEX_ESCAPES = {
     "_": r"\_",
     "{": r"\{",
     "}": r"\}",
-    "~": r"\textasciitilde{}",
+    "~": r"$\sim$",
     "^": r"\textasciicircum{}",
     "\\": r"\textbackslash{}",
+}
+
+_LATEX_HREF_TARGET_ESCAPES = {
+    "%": r"\%",
+    "#": r"\#",
+    "&": r"\&",
+    "_": r"\_",
+    "{": r"\%7B",
+    "}": r"\%7D",
+    "\\": r"\%5C",
+    "~": r"\%7E",
+    " ": r"\%20",
 }
 
 _LATEX_TEXT_REPLACEMENTS = {
@@ -210,6 +222,11 @@ def sanitize_latex_text(text: str) -> str:
 def latex_escape(text: str) -> str:
     sanitized = sanitize_latex_text(text)
     return "".join(_LATEX_ESCAPES.get(char, char) for char in sanitized)
+
+
+def latex_href_target(url: str) -> str:
+    sanitized = sanitize_latex_text(url)
+    return "".join(_LATEX_HREF_TARGET_ESCAPES.get(char, char) for char in sanitized)
 
 
 def display_url(url: str) -> str:
@@ -273,17 +290,11 @@ def render_heading(top: ResumeTopSection) -> str:
     ]
     profile_items: list[str] = []
     if top.linkedin:
-        profile_items.append(
-            rf"{{\seticon{{faLinkedin}} \underline{{{latex_escape(display_url(top.linkedin))}}}}}"
-        )
+        profile_items.append(_render_profile_link("faLinkedin", top.linkedin))
     if top.github:
-        profile_items.append(
-            rf"{{\seticon{{faGithub}} \underline{{{latex_escape(display_url(top.github))}}}}}"
-        )
+        profile_items.append(_render_profile_link("faGithub", top.github))
     if top.website:
-        profile_items.append(
-            rf"{{\seticon{{faGlobe}} \underline{{{latex_escape(display_url(top.website))}}}}}"
-        )
+        profile_items.append(_render_profile_link("faGlobe", top.website))
 
     header_items = contact_items + profile_items
     header_separator = r"\hspace{0.75em}"
@@ -301,6 +312,12 @@ def render_heading(top: ResumeTopSection) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _render_profile_link(icon: str, url: str) -> str:
+    target = latex_href_target(url)
+    label = latex_escape(display_url(url))
+    return rf"{{\seticon{{{icon}}} \href{{{target}}}{{\underline{{{label}}}}}}}"
 
 
 def render_education(items: list[ResumeEducationItem]) -> str:

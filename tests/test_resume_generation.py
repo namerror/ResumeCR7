@@ -2458,7 +2458,7 @@ def test_write_resume_result_artifact_writes_human_readable_json(tmp_path):
 def test_latex_escape_escapes_reserved_characters():
     assert latex_escape("&%$_#{}") == r"\&\%\$\_\#\{\}"
     assert latex_escape("Path \\ value ~ caret ^") == (
-        r"Path \textbackslash{} value \textasciitilde{} caret \textasciicircum{}"
+        r"Path \textbackslash{} value $\sim$ caret \textasciicircum{}"
     )
 
 
@@ -2496,7 +2496,12 @@ def test_render_resume_latex_uses_template_sections_and_runtime_result():
     assert r"\textbf{\Large \scshape Example Candidate}" in rendered
     assert r"{\seticon{faEnvelope} candidate\_name@example.com}" in rendered
     assert r"{\seticon{faPhone} +1 555-0100}" in rendered
-    assert r"{\seticon{faGithub} \underline{github.com/example-candidate}}" in rendered
+    assert (
+        r"{\seticon{faGithub} "
+        r"\href{https://github.com/example-candidate}"
+        r"{\underline{github.com/example-candidate}}}"
+        in rendered
+    )
     assert "faLinkedin" not in rendered
     assert "faGlobe" not in rendered
     assert r"{Example \& University}{2020 -- 2024}" in rendered
@@ -2546,13 +2551,36 @@ def test_render_resume_latex_keeps_contact_and_profiles_on_one_header_line():
         r"\resumeHeaderLine{{\seticon{faEnvelope} candidate\_name@example.com}"
         r"\hspace{0.75em}{\seticon{faPhone} +1 555-0100}"
         r"\hspace{0.75em}{\seticon{faLinkedin} "
-        r"\underline{linkedin.com/in/example-candidate}}"
+        r"\href{https://www.linkedin.com/in/example-candidate/}"
+        r"{\underline{linkedin.com/in/example-candidate}}}"
         r"\hspace{0.75em}{\seticon{faGithub} "
-        r"\underline{github.com/example-candidate}}"
-        r"\hspace{0.75em}{\seticon{faGlobe} \underline{example.dev}}}"
+        r"\href{https://github.com/example-candidate}"
+        r"{\underline{github.com/example-candidate}}}"
+        r"\hspace{0.75em}{\seticon{faGlobe} "
+        r"\href{https://www.example.dev/}{\underline{example.dev}}}}"
     )
     assert r"\\quad" not in header_line
     assert r"\resizebox{\textwidth}{!}{\usebox{\resumeHeaderBox}}" in rendered
+
+
+def test_render_resume_latex_escapes_profile_href_targets_separately_from_labels():
+    payload = _sample_intermediate_resume_result().model_dump()
+    payload["top"].update(
+        {
+            "github": None,
+            "website": "https://www.example.dev/~me/resume_v1?ref=a&tag=100%25#top",
+        }
+    )
+    resume_result = IntermediateResumeResult.model_validate(payload)
+
+    rendered = render_resume_latex(resume_result)
+
+    assert (
+        r"\href{https://www.example.dev/\%7Eme/resume\_v1?ref=a\&tag=100\%25\#top}"
+        r"{\underline{example.dev/$\sim$me/resume\_v1?ref=a\&tag=100\%25\#top}}"
+        in rendered
+    )
+    assert r"\textasciitilde{}" not in rendered
 
 
 def test_render_resume_latex_uses_wrapping_heading_columns_for_long_skill_suffixes():
